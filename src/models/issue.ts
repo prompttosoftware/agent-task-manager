@@ -1,11 +1,9 @@
 // src/models/issue.ts
 
 export interface Issue {
-  id: number;
-  title: string;
+  id: string;
+  summary: string;
   description: string;
   status: string;
-  assignee?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  // Add other relevant fields like assignee, priority, etc.
 }
