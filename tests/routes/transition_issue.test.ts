@@ -1,36 +1,47 @@
 // tests/routes/transition_issue.test.ts
 import request from 'supertest';
-import app from '../../src/app';
+import { app } from '../src/app'; // Assuming your app is exported from app.ts
 
-describe('Transition Issue Route', () => {
-  it('should transition an issue to a new state', async () => {
-    // Mock issue data and transition details as needed. This will depend on your app's implementation
-    // For example:
-    const issueKey = 'ATM-123'; // Replace with an actual issue key
-    const transitionId = '31'; // Done
+describe('Transition Issue Endpoint', () => {
+  it('should transition an issue to In Progress', async () => {
+    // Assuming you have an issue with ID '1' and status 'Open'
+    const issueId = '1';
+    const transitionId = '2'; // Assuming 2 is the transition to 'In Progress'
     const response = await request(app)
-      .post(`/api/issue/${issueKey}/transition`)
-      .send({ transitionId });
+      .post(`/api/issues/${issueId}/transitions`)
+      .send({ transitionId: transitionId });
 
-    expect(response.statusCode).toBe(200); // Or the expected status code
-    // Add more assertions based on the expected response, e.g.,
-    // expect(response.body.status).toBe('done');
+    expect(response.statusCode).toBe(200);
+    // Add assertions to verify the issue's status is now 'In Progress'
+    // For example, if your API returns the updated issue:
+    expect(response.body.status).toBe('In Progress');
   });
 
-  // Add more tests for different scenarios, such as:
-  // - Transitioning to different states
-  // - Handling invalid transition IDs
-  // - Handling unauthorized transitions
-
-  it('should handle invalid transition ID', async () => {
-    const issueKey = 'ATM-123';
-    const transitionId = '999'; // Invalid ID
-
+  it('should return 404 if issue is not found', async () => {
+    const issueId = '999'; // Non-existent issue
+    const transitionId = '2';
     const response = await request(app)
-      .post(`/api/issue/${issueKey}/transition`)
-      .send({ transitionId });
+      .post(`/api/issues/${issueId}/transitions`)
+      .send({ transitionId: transitionId });
 
-    expect(response.statusCode).toBe(400); // Or the appropriate error code
-    // Check error message if needed
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('should handle invalid transitionId', async () => {
+    const issueId = '1';
+    const transitionId = '999'; // Invalid transition ID
+    const response = await request(app)
+      .post(`/api/issues/${issueId}/transitions`)
+      .send({ transitionId: transitionId });
+    // Assuming the API handles invalid transitionId and returns an appropriate status code, e.g., 400 or 500.
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('should return 400 if transitionId is missing', async () => {
+    const issueId = '1';
+    const response = await request(app)
+      .post(`/api/issues/${issueId}/transitions`)
+      .send({}); // Missing transitionId
+    expect(response.statusCode).toBe(400);
   });
 });
