@@ -16,7 +16,6 @@ const executeCommand = (command: string, cwd?: string) => {
     }
 };
 
-
 describe('npm init -y', () => {
     beforeAll(() => {
         // Ensure test project directory exists
