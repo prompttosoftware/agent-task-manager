@@ -1,27 +1,32 @@
 // tests/models/board.test.ts
+import { Board, Label } from '../src/models/board';
 
-import { Board } from '../../src/models/board';
-import { Issue } from '../../src/models/issue';
+describe('Board Model', () => {
+  it('should define the Board interface', () => {
+    const board: Board = {
+      id: '1',
+      name: 'Test Board',
+      labels: [],
+    };
+    expect(board).toBeDefined();
+    expect(board.id).toBe('1');
+    expect(board.name).toBe('Test Board');
+  });
 
-test('Board interface should have the correct properties', () => {
-  const issue: Issue = {
-    id: 1,
-    title: 'Test Issue',
-    description: 'This is a test issue',
-    status: 'Open',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const board: Board = {
-    id: 1,
-    name: 'Test Board',
-    issues: [issue],
-    columns: ['To Do', 'In Progress', 'Done'],
-  };
-
-  expect(board.id).toBe(1);
-  expect(board.name).toBe('Test Board');
-  expect(board.issues.length).toBe(1);
-  expect(board.columns).toEqual(['To Do', 'In Progress', 'Done']);
+  it('should define the Label interface within Board', () => {
+    const label: Label = {
+      id: '1',
+      name: 'Test Label',
+      color: '#FFFFFF',
+    };
+    const board: Board = {
+      id: '1',
+      name: 'Test Board',
+      labels: [label],
+    };
+    expect(board.labels[0]).toBe(label);
+    expect(board.labels[0].id).toBe('1');
+    expect(board.labels[0].name).toBe('Test Label');
+    expect(board.labels[0].color).toBe('#FFFFFF');
+  });
 });
