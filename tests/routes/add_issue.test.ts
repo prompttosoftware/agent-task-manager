@@ -1,60 +1,46 @@
 // tests/routes/add_issue.test.ts
-
 import request from 'supertest';
 import app from '../../src/app'; // Assuming your app instance is exported
 
-// Mock the issue model or any dependencies here
+describe('Add new issue endpoint', () => {
+  it('should successfully create a new issue and return the issue key', async () => {
+    const newIssueData = {
+      // Provide valid data to create an issue.  Adjust these fields based on your API's requirements
+      // For example:
+      // projectKey: 'ATM',
+      // issueType: 'Task',
+      // summary: 'Test Issue Creation',
+      // description: 'This is a test issue',
+    };
 
-describe('Add Issue Route', () => {
-  it('should create a new issue with valid data', async () => {
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual route
-      .send({ // Replace with your expected request body
-        summary: 'Test Issue',
-        description: 'This is a test issue',
-        // Add other required fields here
-      });
+      .post('/api/issues') // Replace with your actual endpoint
+      .send(newIssueData);
 
-    expect(response.statusCode).toBe(201); // Or whatever status code indicates success
-    // Add assertions to check the response body, e.g.,
-    // expect(response.body.summary).toBe('Test Issue');
+    expect(response.statusCode).toBe(201); // Or the appropriate status code for successful creation
+    expect(response.body).toHaveProperty('issueKey');
+
+    const issueKey = response.body.issueKey;
+
+    // Verify issue details by retrieving it (requires a GET endpoint for retrieving issues)
+    const getResponse = await request(app).get(`/api/issues/${issueKey}`); // Replace with your actual GET endpoint
+    expect(getResponse.statusCode).toBe(200);
+    // Add more detailed assertions based on your issue model
+    // For example, check if the summary matches, etc.
+    // expect(getResponse.body.summary).toBe(newIssueData.summary);
   });
 
-  it('should return an error with invalid data', async () => {
+  // Add more tests for different scenarios like invalid requests, error handling, etc.
+  it('should return an error for an invalid request', async () => {
+    const invalidIssueData = {
+      // Provide invalid data that would cause a failure
+    };
+
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual route
-      .send({ // Send invalid data
-        // Missing required fields, or invalid data types
-      });
+      .post('/api/issues') // Replace with your actual endpoint
+      .send(invalidIssueData);
 
     expect(response.statusCode).toBeGreaterThanOrEqual(400); // Expect a client error
-    // Add assertions to check the error response, e.g.,
-    // expect(response.body.message).toBe('Invalid input');
+    // You might want to assert on the error message or structure as well.
   });
-
-  it('should retrieve an issue by summary', async () => {
-    const createResponse = await request(app)
-      .post('/api/issues') // Replace with your actual create issue route
-      .send({ // Replace with your expected request body
-        summary: 'Retrieve Me', // Unique summary for retrieval
-        description: 'This issue should be retrieved'
-        // Add other required fields here
-      });
-
-    expect(createResponse.statusCode).toBe(201);
-    const createdIssue = createResponse.body;
-    const retrieveResponse = await request(app)
-      .get(`/api/issues?summary=${createdIssue.summary}`); // Replace with your actual retrieve issue route
-
-    expect(retrieveResponse.statusCode).toBe(200); // Or appropriate success code
-    const retrievedIssue = retrieveResponse.body;
-
-    expect(retrievedIssue.summary).toBe(createdIssue.summary);
-    expect(retrievedIssue.description).toBe(createdIssue.description);
-    // Add more assertions to verify other fields
-  });
-  // Add more test cases for different scenarios, e.g.,
-  // - Missing required fields
-  // - Invalid data types
-  // - Authentication/authorization errors
 });
