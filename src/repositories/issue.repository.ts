@@ -1,26 +1,52 @@
 // src/repositories/issue.repository.ts
 import { Issue } from '../models/issue.model';
+import sequelize from '../config/database.config';
+import { DataTypes, Model } from 'sequelize';
 
 export class IssueRepository {
+
+    private issueModel =  IssueModel;
+
   async create(issueData: Partial<Issue>): Promise<Issue> {
-    // Implement database interaction here
-    const newIssue: Issue = { id: 1, ...issueData } as Issue;
-    return newIssue;
+      const issue = await this.issueModel.create(issueData);
+      return issue.toJSON() as Issue;
   }
 
   async findById(id: number): Promise<Issue | null> {
-    // Implement database interaction here
-    const issue: Issue | undefined = { id: 1 } as Issue;
-    return issue || null;
+    const issue = await this.issueModel.findByPk(id);
+    return issue?.toJSON() as Issue | null;
   }
 
   async update(id: number, issueData: Partial<Issue>): Promise<Issue | null> {
-    // Implement database interaction here
-    const updatedIssue: Issue = { id, ...issueData } as Issue;
-    return updatedIssue;
+    const [rowsAffected, [updatedIssue]] = await this.issueModel.update(issueData, { where: { id }, returning: true });
+    return updatedIssue?.toJSON() as Issue | null;
   }
 
   async delete(id: number): Promise<void> {
-    // Implement database interaction here
+    await this.issueModel.destroy({ where: { id } });
   }
 }
+
+class IssueModel extends Model {
+    declare id: number;
+    declare summary: string;
+}
+
+IssueModel.init(
+    {
+        id: {
+            type: DataTypes.INTEGER,
+            autoIncrement: true,
+            primaryKey: true,
+        },
+        summary: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+    },
+    {
+        sequelize,
+        modelName: 'Issue',
+        timestamps: false,
+    }
+);

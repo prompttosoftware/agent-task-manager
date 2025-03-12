@@ -1,54 +1,64 @@
 // src/controllers/issue.controller.ts
 import { Request, Response } from 'express';
+import { IssueService } from '../services/issue.service';
+import { IssueRepository } from '../repositories/issue.repository';
+import { Issue } from '../models/issue.model';
 
 export class IssueController {
-  async findIssue(req: Request, res: Response) {
-    // Implementation for GET /issue/{issueNumber}
-    res.status(501).send({ message: 'Not implemented' });
+  private issueService: IssueService;
+
+  constructor() {
+    this.issueService = new IssueService(new IssueRepository());
   }
 
-  async getIssuesForBoard(req: Request, res: Response) {
-    // Implementation for GET /board/{boardId}/issue
-    res.status(501).send({ message: 'Not implemented' });
+  async createIssue(req: Request, res: Response) {
+    try {
+      const issueData: Partial<Issue> = req.body;
+      const issue = await this.issueService.createIssue(issueData);
+      res.status(201).json(issue);
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Failed to create issue' });
+    }
   }
 
-  async transitionIssue(req: Request, res: Response) {
-    // Implementation for POST /issue/{issueKey}/transitions
-    res.status(501).send({ message: 'Not implemented' });
+  async getIssueById(req: Request, res: Response) {
+    try {
+      const issueId = parseInt(req.params.id, 10);
+      const issue = await this.issueService.getIssueById(issueId);
+      if (!issue) {
+        return res.status(404).json({ message: 'Issue not found' });
+      }
+      res.status(200).json(issue);
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Failed to get issue' });
+    }
   }
 
-  async addAttachment(req: Request, res: Response) {
-    // Implementation for POST /issue/{issueKey}/attachments
-    res.status(501).send({ message: 'Not implemented' });
-  }
-
-  async linkIssues(req: Request, res: Response) {
-    // Implementation for POST /issueLink
-    res.status(501).send({ message: 'Not implemented' });
-  }
-
-  async updateAssignee(req: Request, res: Response) {
-    // Implementation for PUT /issue/{issueKey}/assignee
-    res.status(501).send({ message: 'Not implemented' });
-  }
-
-  async addNewIssue(req: Request, res: Response) {
-    // Implementation for POST /issue
-    res.status(501).send({ message: 'Not implemented' });
+  async updateIssue(req: Request, res: Response) {
+    try {
+      const issueId = parseInt(req.params.id, 10);
+      const issueData: Partial<Issue> = req.body;
+      const issue = await this.issueService.updateIssue(issueId, issueData);
+      if (!issue) {
+        return res.status(404).json({ message: 'Issue not found' });
+      }
+      res.status(200).json(issue);
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Failed to update issue' });
+    }
   }
 
   async deleteIssue(req: Request, res: Response) {
-    // Implementation for DELETE /issue/{issueKey}
-    res.status(501).send({ message: 'Not implemented' });
-  }
-
-  async listTransitions(req: Request, res: Response) {
-    // Implementation for GET /issue/{issueKey}/transitions
-    res.status(501).send({ message: 'Not implemented' });
-  }
-
-  async getIssueCreateMetadata(req: Request, res: Response) {
-    // Implementation for GET /issue/createmeta
-    res.status(501).send({ message: 'Not implemented' });
+    try {
+      const issueId = parseInt(req.params.id, 10);
+      await this.issueService.deleteIssue(issueId);
+      res.status(204).send(); // No Content
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Failed to delete issue' });
+    }
   }
 }
