@@ -1,2 +1,17 @@
-# agent-task-manager
-Local task manager designed to mimic simplified Jira api responses for local hosting and speed.
+# Agent Task Manager
+
+## Installation
+
+```bash
+npm install
+```
+
+## Usage
+
+```bash
+npm start
+```
+
+## API Documentation
+
+(To be completed in the next iteration)
