@@ -1,14 +1,10 @@
 // src/models/board.ts
 
-export interface Label {
-  id: string;
-  name: string;
-  color: string;
-}
+import { Issue } from './issue';
 
 export interface Board {
   id: string;
   name: string;
-  labels: Label[];
-  // Add other board properties here
+  issues: Issue[];
+  // Add other relevant fields like columns, etc.
 }
