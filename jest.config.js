@@ -1,7 +1,7 @@
 // jest.config.js
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
-  preset: 'ts-jest/presets/default-esm',
+  preset: 'ts-jest',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
   globals: {
@@ -10,11 +10,12 @@ module.exports = {
     }
   },
   moduleNameMapper: {
-    '^(\\.\\.?\\/.*)\\.js$': '$1'
+    '^(\\.\\.?\\/.*)\\js$': '$1'
   },
-  transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', {
-      useESM: true
-    }]
-  }
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  testMatch: ['**/tests/**/*.test.(ts|js)'],
+  roots: ['<rootDir>/tests'],
+  // Add this line if you have any source code in the src directory
+  // and want Jest to consider those files for coverage
+  collectCoverageFrom: ["src/**/*.{ts,tsx}"],
 };
