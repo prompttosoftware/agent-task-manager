@@ -1,17 +1,16 @@
 // tests/routes/get_issue_create_metadata.test.ts
+
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app is exported from src/app.ts
+import app from '../../src/app'; // Assuming your app is exported from src/app.ts or similar
 
-describe('GET /rest/api/2/issue/createmeta', () => {
-  it('should return 200 and issue create metadata', async () => {
-    const response = await request(app)
-      .get('/rest/api/2/issue/createmeta')
-      .set('Accept', 'application/json');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toBeDefined();
-    // Add more specific assertions based on the expected structure of the metadata
+describe('Get Issue Create Metadata Route', () => {
+  it('should return a 200 status code', async () => {
+    const response = await request(app).get('/api/issues/metadata');
+    expect(response.statusCode).toBe(200);
   });
 
-  // Add more tests for different scenarios, e.g., with project keys, issue type names, etc.
+  it('should return metadata for issue creation', async () => {
+    const response = await request(app).get('/api/issues/metadata');
+    expect(response.body).toHaveProperty('projects');
+  });
 });

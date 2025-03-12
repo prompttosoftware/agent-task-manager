@@ -1,25 +1,16 @@
 // tests/routes/transition_issue.test.ts
+
 import request from 'supertest';
-import { app } from '../../src/app'; // Assuming you have an app.ts file
+import app from '../../src/app'; // Assuming your app is exported from src/app.ts or similar
 
-describe('Transition Issue Endpoint', () => {
-  it('should return 200 OK when transitioning an issue', async () => {
-    const issueKey = 'ATM-1'; // Replace with a valid issue key
-    const transitionId = '21'; // Replace with a valid transition ID
-
-    const response = await request(app)
-      .post(`/api/issues/${issueKey}/transitions`) // Adjust the route as needed
-      .send({ transitionId })
-      .expect(200);
-
-    expect(response.body).toBeDefined();
-    // Add more assertions based on the expected response, e.g.,
-    // expect(response.body.status).toBe('In Progress');
+describe('Transition Issue Route', () => {
+  it('should return a 200 status code on successful transition', async () => {
+    const response = await request(app).post('/api/issues/issue-123/transition').send({ transitionId: '31' });
+    expect(response.statusCode).toBe(200);
   });
 
-  // Add more test cases for different scenarios, e.g.,
-  // - Invalid issue key
-  // - Invalid transition ID
-  // - Unauthorized access
-  // - Validation errors
+  it('should return a success message', async () => {
+    const response = await request(app).post('/api/issues/issue-123/transition').send({ transitionId: '31' });
+    expect(response.body).toHaveProperty('message', 'Issue transitioned successfully');
+  });
 });
