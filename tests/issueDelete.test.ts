@@ -1,22 +1,32 @@
 // tests/issueDelete.test.ts
-import request from 'supertest';
-import { app } from '../src/app'; // Assuming your app is exported from app.ts
+import { deleteIssue } from '../src/services/issueService'; // Assuming you have a deleteIssue function
 
-describe('DELETE /issues/:id', () => {
-  it('should respond with 204 if the issue is successfully deleted', async () => {
-    const issueId = '123'; // Replace with a valid issue ID for testing.  Consider creating a test issue.
-    const response = await request(app).delete(`/issues/${issueId}`);
+// Mock the attachment deletion function (replace with your actual implementation if it exists)
+jest.mock('../src/services/issueService', () => ({
+    ...jest.requireActual('../src/services/issueService'),
+    deleteIssue: jest.fn().mockImplementation(async (issueKey: string) => {
+        // Simulate issue deletion, but do NOT delete attachments (this will make the test fail)
+        // In a real implementation, this is where the attachment deletion would happen.
+        return true; // Indicate success, but attachments are NOT deleted
+    }),
+}));
 
-    expect(response.statusCode).toBe(204);
-    // Optionally, check the response body if there is one.
-  });
 
-    it('should respond with 404 if the issue is not found', async () => {
-    const issueId = 'nonexistent-issue'; // Replace with a non-existent issue ID.
-    const response = await request(app).delete(`/issues/${issueId}`);
+describe('Issue Deletion with Attachment Handling', () => {
+    it('should delete attachments when an issue is deleted', async () => {
+        const issueKey = 'ATM-123'; // Replace with a valid issue key for testing
 
-    expect(response.statusCode).toBe(404);
-  });
+        // Mock the attachment service or however attachments are handled (replace with your actual implementation)
+        const mockDeleteAttachment = jest.fn();
+        jest.mock('../src/services/attachmentService', () => ({
+            deleteAttachment: mockDeleteAttachment,
+        }));
 
-  // Add more tests for error scenarios, invalid IDs, etc.
+        // Act: Delete the issue
+        await deleteIssue(issueKey);
+
+        // Assert: Check if the attachment deletion was called (it shouldn't be for now)
+        // The test should fail because attachment deletion is not implemented yet.
+        expect(mockDeleteAttachment).toHaveBeenCalled();
+    });
 });
