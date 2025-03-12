@@ -1,24 +1,21 @@
 // src/routes.ts
-import { Router } from 'express';
+import express from 'express';
 import { IssueController } from './controllers/issue.controller';
+import { WebhookController } from './controllers/webhook.controller';
 
-const router = Router();
+const router = express.Router();
+
+// Issue routes
 const issueController = new IssueController();
+router.post('/issues', issueController.createIssue);
+router.get('/issues', issueController.getAllIssues);
+router.get('/issues/:issueId', issueController.getIssue);
+router.put('/issues/:issueId', issueController.updateIssue);
 
-// Issue Management Endpoints
-router.get('/issue/:issueNumber', issueController.findIssue);
-router.get('/board/:boardId/issue', issueController.getIssuesForBoard);
-router.post('/issue/:issueKey/transitions', issueController.transitionIssue);
-router.post('/issue/:issueKey/attachments', issueController.addAttachment);
-router.post('/issueLink', issueController.linkIssues);
-router.put('/issue/:issueKey/assignee', issueController.updateAssignee);
-router.post('/issue', issueController.addNewIssue);
-router.delete('/issue/:issueKey', issueController.deleteIssue);
-router.get('/issue/:issueKey/transitions', issueController.listTransitions);
-router.get('/issue/createmeta', issueController.getIssueCreateMetadata);
-
-router.get('/', (req, res) => {
-  res.send('Hello, World!');
-});
+// Webhook routes
+const webhookController = new WebhookController();
+router.post('/webhook', webhookController.registerWebhook);
+router.get('/webhook', webhookController.listWebhooks);
+router.delete('/webhook/:webhookId', webhookController.deleteWebhook);
 
 export default router;
