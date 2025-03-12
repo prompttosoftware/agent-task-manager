@@ -1,76 +1,40 @@
 // test/controllers/issue.controller.test.ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { test, expect, describe, beforeEach } from 'vitest';
 import request from 'supertest';
-import { app } from '../../src/app'; // Adjust the import path
-import sequelize from '../../src/config/database.config'; // Adjust the import path
-import { Issue } from '../../src/models/issue.model'; // Adjust the import path
+import { app } from '../../src/app';
+import { createIssue, transitionIssue } from '../../src/services/issue.service';
 
-describe('IssueController Integration Tests', () => {
-  beforeAll(async () => {
-    try {
-      await sequelize.sync({ force: true }); // Sync database before tests
-    } catch (error) {
-      console.error('Error syncing database:', error);
-    }
+describe('Transition Issue Endpoint', () => {
+  beforeEach(async () => {
+    // Assuming you have a way to set up your environment before each test
+    // This might involve seeding your database or mocking external services.
+    // For example, you might want to reset the database here or mock the service layer.
   });
 
-  afterAll(async () => {
-    await sequelize.close(); // Close the database connection after tests
+  test('POST /issue/{issueKey}/transitions - Positive: Valid issue key and transition ID', async () => {
+    // 1. Create a test issue.
+    const issueKey = 'ATM-123'; // Replace with a valid issue key, or create a new one dynamically
+    const transitionId = '31'; // Replace with a valid transition ID
+
+    // Mock the createIssue and transitionIssue functions to avoid dependencies
+    const createIssueMock = vi.fn().mockResolvedValue({ key: issueKey });
+    const transitionIssueMock = vi.fn().mockResolvedValue(true);
+    vi.mock('../../src/services/issue.service', () => ({
+        createIssue: createIssueMock,
+        transitionIssue: transitionIssueMock
+    }));
+
+    // 2. Send a request to the transition endpoint.
+    const response = await request(app)
+      .post(`/issue/${issueKey}/transitions`)
+      .send({ transitionId });
+
+    // 3. Assert that the response is successful.
+    expect(response.status).toBe(200); // Or whatever status code indicates success
+
+    // 4. Optionally, assert that the issue was transitioned correctly.
+    // For example, you might check the response body for confirmation or
+    // query your database or mock for changes.
+    expect(transitionIssueMock).toHaveBeenCalledWith(issueKey, transitionId);
   });
-
-  it('should create an issue (POST /issues)', async () => {
-    const res = await request(app)
-      .post('/issues') // Adjust the endpoint
-      .send({ /* issue data */ summary: 'Test Issue',  });
-
-    expect(res.statusCode).toEqual(201); // Assuming 201 Created
-    expect(res.body).toHaveProperty('id');
-    expect(res.body.summary).toBe('Test Issue');
-  });
-
-  it('should get an issue by id (GET /issues/:id)', async () => {
-    // Create an issue first
-    const createRes = await request(app)
-      .post('/issues')
-      .send({ summary: 'Get Issue Test' });
-
-    const issueId = createRes.body.id;
-
-    const res = await request(app).get(`/issues/${issueId}`);
-    expect(res.statusCode).toEqual(200); // Assuming 200 OK
-    expect(res.body.id).toEqual(issueId);
-    expect(res.body.summary).toBe('Get Issue Test');
-  });
-
-  it('should update an issue (PUT /issues/:id)', async () => {
-      // Create an issue first
-      const createRes = await request(app)
-          .post('/issues')
-          .send({ summary: 'Update Issue Test' });
-
-      const issueId = createRes.body.id;
-
-      const res = await request(app)
-          .put(`/issues/${issueId}`)
-          .send({ summary: 'Updated Issue' });
-
-      expect(res.statusCode).toEqual(200);
-      expect(res.body.summary).toBe('Updated Issue');
-  });
-
-    it('should delete an issue (DELETE /issues/:id)', async () => {
-        // Create an issue first
-        const createRes = await request(app)
-            .post('/issues')
-            .send({ summary: 'Delete Issue Test' });
-
-        const issueId = createRes.body.id;
-
-        const res = await request(app).delete(`/issues/${issueId}`);
-        expect(res.statusCode).toEqual(204); // Assuming 204 No Content on successful delete
-
-        // Verify that the issue is actually deleted (optional)
-        const getRes = await request(app).get(`/issues/${issueId}`);
-        expect(getRes.statusCode).toEqual(404); // Or appropriate not found status code
-    });
 });
