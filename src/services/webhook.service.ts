@@ -5,31 +5,37 @@ import { Issue } from '../models/issue.model';
 import { WebhookRepository } from '../repositories/webhook.repository';
 import { IssueService } from './issue.service';
 import { Project } from '../models/project.model';
+import fetch from 'node-fetch';
 
 @Injectable()
 export class WebhookService {
   constructor(private readonly webhookRepository: WebhookRepository, private readonly issueService: IssueService) {}
 
   async triggerWebhook(event: string, issue: Issue, previousIssueStatus?: string): Promise<void> {
-    // 1. Fetch subscribed webhooks for the event
-    const webhooks = await this.webhookRepository.findWebhooksByEvent(event);
+    try {
+      // 1. Fetch subscribed webhooks for the event
+      const webhooks = await this.webhookRepository.findWebhooksByEvent(event);
 
-    // 2. Filter webhooks based on projectKey, issueType, issueStatus, and previousIssueStatus
-    const filteredWebhooks = this.filterWebhooks(webhooks, issue, previousIssueStatus, event);
+      // 2. Filter webhooks based on projectKey, issueType, issueStatus, and previousIssueStatus
+      const filteredWebhooks = this.filterWebhooks(webhooks, issue, previousIssueStatus, event);
 
-    // 3. Construct and send webhook payloads asynchronously
-    filteredWebhooks.forEach(async (webhook) => {
-      try {
-        const payload = this.constructPayload(event, issue, previousIssueStatus);
-        await this.sendWebhook(webhook.url, payload);
-        // Log success
-        console.log(`Webhook triggered successfully for event ${event} and URL: ${webhook.url}`);
-      } catch (error) {
-        // Log failure
-        console.error(`Webhook failed for event ${event} and URL: ${webhook.url}:`, error);
-        // Implement retry mechanism here
-      }
-    });
+      // 3. Construct and send webhook payloads asynchronously
+      filteredWebhooks.forEach(async (webhook) => {
+        try {
+          const payload = this.constructPayload(event, issue, previousIssueStatus);
+          await this.sendWebhook(webhook.url, payload);
+          // Log success
+          console.log(`Webhook triggered successfully for event ${event} and URL: ${webhook.url}`);
+        } catch (error) {
+          // Log failure
+          console.error(`Webhook failed for event ${event} and URL: ${webhook.url}:`, error);
+          // Implement retry mechanism here
+          // Consider using a library like 'p-retry' for more robust retries
+        }
+      });
+    } catch (error) {
+      console.error(`Error triggering webhooks for event ${event}:`, error);
+    }
   }
 
   private filterWebhooks(webhooks: any[], issue: Issue, previousIssueStatus?: string, event?: string): any[] {
@@ -49,10 +55,10 @@ export class WebhookService {
       if (webhook.issueStatus && webhook.issueStatus !== issue.status) {
         return false;
       }
-      
+
       // Previous Issue Status filter (only for transitions)
       if (previousIssueStatus && webhook.previousIssueStatus && webhook.previousIssueStatus !== previousIssueStatus) {
-          return false;
+        return false;
       }
 
       return true;
@@ -71,13 +77,13 @@ export class WebhookService {
     };
 
     if (event === 'issue_updated' || event === 'issue_transitioned') {
-        //Add changelog. Implement changelog logic in issueService
-        if (previousIssueStatus !== undefined) {
-          const changeLog = this.issueService.getChangelog(issue, previousIssueStatus);
-          if(changeLog) {
-            payload.changelog = changeLog;
-          }
+      //Add changelog. Implement changelog logic in issueService
+      if (previousIssueStatus !== undefined) {
+        const changeLog = this.issueService.getChangelog(issue, previousIssueStatus);
+        if(changeLog) {
+          payload.changelog = changeLog;
         }
+      }
     }
 
     return payload;
