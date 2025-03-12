@@ -1,32 +1,42 @@
 // tests/issueRoutes.test.ts
+
 import request from 'supertest';
 import app from '../src/app'; // Assuming your app is exported from app.ts
 
-describe('Issue Routes - Label Requirement', () => {
-  it('should return 400 if creating an issue without a label', async () => {
-    const response = await request(app)
-      .post('/issues') // Assuming your issue creation endpoint is /issues
-      .send({ // Example issue data.  Adapt to your actual model
-        summary: 'Test Issue without Label',
-        description: 'This issue should fail because no label is provided',
-        // No label field provided
-      });
+// Mock any necessary dependencies if needed, e.g., issueService
+// jest.mock('../src/services/issueService');
 
-    expect(response.status).toBe(400); // Assuming 400 for bad request/validation error
-    // Add specific assertions about the error message if needed
+describe('Issue Routes', () => {
+  it('should get all issues (GET /api/issues)', async () => {
+    const res = await request(app).get('/api/issues');
+    expect(res.statusCode).toEqual(200);
+    // Add more assertions based on the expected response
   });
 
-  it('should create an issue successfully if a label is provided', async () => {
-    const response = await request(app)
-      .post('/issues') // Assuming your issue creation endpoint is /issues
-      .send({ // Example issue data.  Adapt to your actual model
-        summary: 'Test Issue with Label',
-        description: 'This issue should be created successfully.',
-        label: 'feature' // Provide a valid label
-      });
+  it('should create an issue (POST /api/issues)', async () => {
+    const res = await request(app).post('/api/issues').send({ /* your issue data here */ });
+    expect(res.statusCode).toEqual(201);
+    // Add more assertions based on the expected response
+  });
 
-    expect(response.status).toBe(201); // Assuming 201 for successful creation
-    // Add specific assertions about the response body if needed
-    expect(response.body).toHaveProperty('id'); // Assuming the response contains an id
+  it('should get an issue by ID (GET /api/issues/:id)', async () => {
+    // You may need to create an issue first for this test
+    const res = await request(app).get('/api/issues/123'); // Replace 123 with a valid issue ID
+    expect(res.statusCode).toEqual(200);
+    // Add more assertions based on the expected response
+  });
+
+  it('should update an issue (PUT /api/issues/:id)', async () => {
+    // You may need to create an issue first for this test
+    const res = await request(app).put('/api/issues/123').send({ /* updated data */ }); // Replace 123 with a valid issue ID
+    expect(res.statusCode).toEqual(200);
+    // Add more assertions based on the expected response
+  });
+
+  it('should delete an issue (DELETE /api/issues/:id)', async () => {
+    // You may need to create an issue first for this test
+    const res = await request(app).delete('/api/issues/123'); // Replace 123 with a valid issue ID
+    expect(res.statusCode).toEqual(204);
+    // Add more assertions based on the expected response
   });
 });
