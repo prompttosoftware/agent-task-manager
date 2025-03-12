@@ -13,15 +13,15 @@ describe('tsconfig.json', () => {
   it('should have correct compilerOptions', () => {
     const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
     expect(tsconfig.compilerOptions).toBeDefined();
-    expect(tsconfig.compilerOptions.target).toBeDefined();
-    expect(tsconfig.compilerOptions.module).toBeDefined();
-    expect(tsconfig.compilerOptions.outDir).toBeDefined();
-    expect(tsconfig.compilerOptions.esModuleInterop).toBeDefined();
+    expect(tsconfig.compilerOptions.target).toBe('es2020');
+    expect(tsconfig.compilerOptions.module).toBe('commonjs');
+    expect(tsconfig.compilerOptions.outDir).toBe('dist');
+    expect(tsconfig.compilerOptions.esModuleInterop).toBe(true);
   });
 
   it('should have include and exclude properties', () => {
     const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
-    expect(tsconfig.include).toBeDefined();
-    expect(tsconfig.exclude).toBeDefined();
+    expect(tsconfig.include).toEqual(['src']);
+    expect(tsconfig.exclude).toEqual(['node_modules']);
   });
 });
