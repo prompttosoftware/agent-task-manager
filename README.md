@@ -1,2 +1,3 @@
 # Agent Task Manager
-This is a placeholder README file.
+
+This is a simple project managed by an AI agent.
