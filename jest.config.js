@@ -1,15 +1,14 @@
 // jest.config.js
 /** @type {import('jest').Config} */
 const config = {
-  preset: 'ts-jest/presets/default-esm',
+  preset: 'ts-jest',
   testEnvironment: 'node',
   transform: {
-    '^.+\\.(ts|tsx)?$': 'ts-jest',
+    '^.+\\.ts$': 'ts-jest'
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testMatch: ['<rootDir>/tests/**/*.test.(ts|tsx|js)'],
-  transformIgnorePatterns: ["/node_modules/", "\\.js$"],
-  collectCoverage: false,
+  moduleFileExtensions: ['ts', 'js', 'json', 'node'],
+  testMatch: ['<rootDir>/tests/**/*.test.ts'],
+  collectCoverage: false
 };
 
 module.exports = config
