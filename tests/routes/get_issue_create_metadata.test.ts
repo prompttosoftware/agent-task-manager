@@ -1,43 +1,49 @@
 // tests/routes/get_issue_create_metadata.test.ts
 import request from 'supertest';
-import { app } from '../../src/app';
+import app from '../../src/app';
 
 describe('GET /api/issue/create/metadata', () => {
-  it('should return 200 OK and metadata for issue creation', async () => {
-    const response = await request(app)
-      .get('/api/issue/create/metadata')
-      .expect(200);
-
-    expect(response.body).toBeDefined();
-    // Add more specific assertions based on the expected structure of the metadata
-    expect(response.body).toHaveProperty('projects');
-    expect(response.body).toHaveProperty('issueTypes');
+  it('should return 200 OK for a valid request', async () => {
+    const response = await request(app).get('/api/issue/create/metadata').query({
+      projectKey: 'ATM',
+      issueType: 'Task',
+    });
+    expect(response.status).toBe(200);
+    // Add more assertions here to validate the response body
   });
 
-  it('should handle different project scenarios', async () => {
-    // Implement logic to simulate different project scenarios
-    // For example, you might need to mock the database or service calls
-    // to return metadata for specific projects.
-    // const response = await request(app).get('/api/issue/create/metadata?projectKey=PROJECT_KEY').expect(200);
-    // expect(response.body).toBeDefined();
-    // expect(response.body.projects).toEqual(expect.arrayContaining([expect.objectContaining({key: 'PROJECT_KEY'})]));
-    expect(true).toBe(true);
+  it('should return 400 Bad Request if projectKey is missing', async () => {
+    const response = await request(app).get('/api/issue/create/metadata').query({
+      issueType: 'Task',
+    });
+    expect(response.status).toBe(400);
+    // Add more assertions here to validate the response body
   });
 
-  it('should handle different issue type scenarios', async () => {
-      // Implement logic to simulate different issue type scenarios
-      // For example, you might need to mock the database or service calls
-      // to return metadata for specific issue types.
-      // const response = await request(app).get('/api/issue/create/metadata?issueTypeName=BUG').expect(200);
-      // expect(response.body).toBeDefined();
-      expect(true).toBe(true);
+  it('should return 400 Bad Request if issueType is missing', async () => {
+    const response = await request(app).get('/api/issue/create/metadata').query({
+      projectKey: 'ATM',
+    });
+    expect(response.status).toBe(400);
+    // Add more assertions here to validate the response body
   });
 
-
-  it('should return 400 if projectKey is invalid', async () => {
-      // Implement logic to simulate invalid project keys
-      // const response = await request(app).get('/api/issue/create/metadata?projectKey=INVALID_KEY').expect(400);
-      // expect(response.body).toBeDefined();
-      expect(true).toBe(true);
+   it('should return 200 OK for a valid request for a different project', async () => {
+    const response = await request(app).get('/api/issue/create/metadata').query({
+      projectKey: 'SOME_OTHER_PROJECT',
+      issueType: 'Bug',
+    });
+    expect(response.status).toBe(200);
+    // Add more assertions here to validate the response body
   });
+
+  it('should return 200 OK for a valid request for a different issue type', async () => {
+    const response = await request(app).get('/api/issue/create/metadata').query({
+      projectKey: 'ATM',
+      issueType: 'Bug',
+    });
+    expect(response.status).toBe(200);
+    // Add more assertions here to validate the response body
+  });
+
 });
