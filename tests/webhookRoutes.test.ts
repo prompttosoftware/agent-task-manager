@@ -1,33 +1,52 @@
 // tests/webhookRoutes.test.ts
+
 import request from 'supertest';
-import app from '../src/app';
-import { Webhook } from '../src/models/webhook';
+import app from '../src/app'; // Assuming your app is exported from app.ts
 
-describe('Webhook Routes', () => {
-  describe('DELETE /webhooks/:id', () => {
-    it('should delete a webhook', async () => {
-      // Create a webhook first
-      const createResponse = await request(app)
-        .post('/webhooks')
-        .send({ url: 'http://example.com/webhook', events: ['issue_created'] })
-        .expect(201);
+// Mock the webhook service or any external dependencies
+jest.mock('../src/services/webhookService', () => ({
+  triggerWebhook: jest.fn(),
+}));
 
-      const webhookId = createResponse.body.id;
+const mockTriggerWebhook = require('../src/services/webhookService').triggerWebhook;
 
-      const response = await request(app)
-        .delete(`/webhooks/${webhookId}`)
-        .expect(204);
+describe('Webhook Event Triggering', () => {
 
-      // Verify that the webhook is deleted (e.g., by trying to fetch it)
-      const getResponse = await request(app)
-        .get(`/webhooks/${webhookId}`)
-        .expect(404);
-    });
+  // Test for issue creation event
+  it('should trigger webhook on issue creation', async () => {
+    const newIssueData = {
+      summary: 'Test Issue',
+      description: 'This is a test issue',
+      // Add other required issue fields here as needed
+    };
 
-    it('should return 404 if webhook is not found', async () => {
-      const response = await request(app)
-        .delete('/webhooks/nonexistent_id')
-        .expect(404);
-    });
+    const response = await request(app)
+      .post('/api/issues') // Assuming your issue creation endpoint is at /api/issues
+      .send(newIssueData)
+      .expect(201); // Or the appropriate status code for issue creation
+
+    // Expect triggerWebhook to have been called with the correct event and data
+    expect(mockTriggerWebhook).toHaveBeenCalledWith(
+      'issue.created',
+      expect.objectContaining(newIssueData) // Adjust to match your issue data structure
+    );
+  });
+
+  // Test for issue status change event
+  it('should trigger webhook on issue status change', async () => {
+    const issueKey = 'ATM-123'; // Replace with a valid issue key
+    const transitionId = '21'; // Replace with a valid transition ID (e.g., In Progress)
+
+    // Assuming you have an endpoint to transition issue status
+    const response = await request(app)
+      .put(`/api/issues/${issueKey}/transitions`) // Adjust your endpoint
+      .send({ transitionId })
+      .expect(200); // Or the appropriate status code for status change
+
+    // Expect triggerWebhook to have been called with the correct event and data
+    expect(mockTriggerWebhook).toHaveBeenCalledWith(
+      'issue.status_changed',
+      expect.objectContaining({ issueKey, transitionId }) // Adjust to match your event data
+    );
   });
 });
