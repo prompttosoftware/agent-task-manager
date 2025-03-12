@@ -1,39 +1,33 @@
 // tests/routes/add_issue.test.ts
-
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app instance is exported
+import app from '../../src/app'; // Assuming your app is exported from app.ts
 
-// Mock the issue model or any dependencies here
-
-describe('Add Issue Route', () => {
+describe('POST /issue', () => {
   it('should create a new issue with valid data', async () => {
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual route
-      .send({ // Replace with your expected request body
+      .post('/issue') // Assuming your route is /issue
+      .send({
         summary: 'Test Issue',
         description: 'This is a test issue',
-        // Add other required fields here
+        // Add any other required fields here
       });
 
-    expect(response.statusCode).toBe(201); // Or whatever status code indicates success
-    // Add assertions to check the response body, e.g.,
-    // expect(response.body.summary).toBe('Test Issue');
+    expect(response.statusCode).toBe(201); // Or whatever status code your route returns on success
+    expect(response.body).toHaveProperty('id'); // Assuming your route returns the issue ID
+    // Add more assertions to validate the response body as needed
   });
 
-  it('should return an error with invalid data', async () => {
+  it('should return an error if required fields are missing', async () => {
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual route
-      .send({ // Send invalid data
-        // Missing required fields, or invalid data types
+      .post('/issue')
+      .send({ // Missing summary
+        description: 'This is a test issue'
       });
 
-    expect(response.statusCode).toBeGreaterThanOrEqual(400); // Expect a client error
-    // Add assertions to check the error response, e.g.,
-    // expect(response.body.message).toBe('Invalid input');
+    expect(response.statusCode).toBe(400); // Or the appropriate error status code
+    expect(response.body).toHaveProperty('error'); // Check for an error message
+    // Add more assertions to validate the error response
   });
 
-  // Add more test cases for different scenarios, e.g.,
-  // - Missing required fields
-  // - Invalid data types
-  // - Authentication/authorization errors
+  // Add more tests for different error scenarios, data types, etc.
 });
