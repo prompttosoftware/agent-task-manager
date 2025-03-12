@@ -33,5 +33,15 @@ describe('Issue Link Endpoint', () => {
         // You might want to test specific error messages here too
     });
 
+   it('should handle board and label information during issue linking', async () => {
+        // Arrange: Create two issues with board and label data if required by your logic.
+        // Act: Send a request to link issues.
+        const response = await request(app)
+            .post('/api/issue/link')
+            .send({ /* Request body with issue keys, link type, board, and label data */ });
+        // Assert: Check the response status.
+        expect(response.status).toBe(200);
+        // Add more assertions based on the expected behavior of board and label data during linking.
+    });
   // Add more tests for different scenarios, like invalid issue keys, different link types, etc.
 });
