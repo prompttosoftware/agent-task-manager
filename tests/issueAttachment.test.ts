@@ -1,38 +1,29 @@
 // tests/issueAttachment.test.ts
+import request from 'supertest';
+import app from '../src/app';
 
-import { addAttachment } from '../src/controllers/issueController'; // Assuming this is where the function lives. Adjust the path if needed.
+describe('Issue Attachment API', () => {
+  it('should upload an attachment to an issue', async () => {
+    // Assuming you have an API endpoint like /issues/:issueKey/attachments
+    const issueKey = 'ATM-137'; // Replace with a valid issue key or create one for testing
+    const filePath = 'tests/test_attachment.txt'; // Path to a test attachment file
 
-// Mock the issueService (if needed)
-// jest.mock('../src/services/issueService');
+    // Create a dummy attachment file for testing
+    // Consider creating this programmatically during the test or setting it up during the beforeAll hook.
+    // This is for demonstration only.  You would need to create this file in your environment or use a mock.
+    // For example:
+    // fs.writeFileSync(filePath, 'This is a test attachment content.');
 
-describe('Add Attachment Endpoint', () => {
-  it('should return 200 OK when attachment is added successfully', async () => {
-    // Mock request and response objects
-    const req: any = {
-      params: { issueKey: 'ATM-126' }, // Assuming issue key is in params
-      file: { // Mock file upload data
-        originalname: 'test.txt',
-        buffer: Buffer.from('this is a test'),
-      },
-    };
-    const res: any = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
+    const response = await request(app)
+      .post(`/issues/${issueKey}/attachments`)
+      .attach('attachment', filePath) // 'attachment' is the field name expected by your API
+      .expect(200); // Or the expected status code upon successful upload
 
-    // Mock the issueService.addAttachment to simulate success. Adjust as needed.
-    // (issueService.addAttachment as jest.Mock).mockResolvedValue({ /* mock data */ });
-
-    // Call the controller function
-    await addAttachment(req, res);
-
-    // Assertions
-    expect(res.status).toHaveBeenCalledWith(501); // Expecting a 501 Not Implemented or 400
-    //expect(res.json).toHaveBeenCalledWith(/* expected response, e.g. { message: 'Attachment added' }*/);
+    // Assertions to verify the attachment was handled correctly.
+    expect(response.body).toBeDefined();
+    // Add more detailed assertions based on your API response
+    // e.g., check the attachment metadata, file name, etc.
   });
 
-  // Add more tests for different scenarios, e.g.,
-  // - attachment upload fails
-  // - invalid issue key
-  // - missing file
+  // Add more tests for error cases, file type validation, etc.
 });
