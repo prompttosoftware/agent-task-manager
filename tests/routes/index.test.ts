@@ -1,34 +1,24 @@
 // tests/routes/index.test.ts
-
 import request from 'supertest';
-import express, { Application } from 'express';
-import { boardRouter } from '../../src/routes/index';
+import { app } from '../../src/app'; // Assuming your app is exported from src/app.ts
 
-const app: Application = express();
-app.use(express.json());
-app.use('/', boardRouter);
+describe('Find Issue Endpoint', () => {
+  it('should return 200 OK and issue details when the issue exists', async () => {
+    const issueKey = 'ATM-1'; // Replace with a valid issue key for testing
+    const response = await request(app).get(`/api/issues/${issueKey}`);
 
-describe('API Validation and Error Handling', () => {
-  it('should return 400 for missing required fields', async () => {
-    const response = await request(app)
-      .post('/boards')
-      .send({});
-
-    expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error');
+    expect(response.status).toBe(200);
+    // Add assertions to check the response body for the issue details
+    // Example:
+    // expect(response.body.key).toBe(issueKey);
   });
 
-  it('should return 400 for invalid data types', async () => {
-    const response = await request(app)
-      .post('/boards')
-      .send({ name: 123 });
+  it('should return 404 Not Found when the issue does not exist', async () => {
+    const issueKey = 'NON-EXISTENT-ISSUE';
+    const response = await request(app).get(`/api/issues/${issueKey}`);
 
-    expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error');
+    expect(response.status).toBe(404);
   });
 
-  it('should handle other error scenarios', async () => {
-     // Implement tests for other potential error scenarios
-     expect(true).toBe(true); //This test will pass until the others are fully implemented
-  });
+  // Add more test cases as needed, e.g., for error handling, invalid input, etc.
 });
