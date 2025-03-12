@@ -1,35 +1,38 @@
 // tests/routes/update_assignee.test.ts
+
 import request from 'supertest';
-import { app } from '../../src/app';
+import app from '../../src/app'; // Assuming your app is exported from src/app.ts or similar
+
+// Mock the issue and user data as needed
+const mockIssueId = 'ATM-123';
+const mockUserId = 'user123';
 
 describe('Update Assignee Route', () => {
   it('should assign a user to an issue', async () => {
-    // Mock the necessary dependencies if needed (e.g., issue service, user service)
-    // Example:
-    // const mockIssueService = {
-    //   updateIssue: jest.fn().mockResolvedValue({ /* mock issue data */ }),
-    // };
-    // jest.mock('../../src/services/issueService', () => ({ IssueService: mockIssueService }));
-
     const response = await request(app)
-      .put('/issues/123/assignee') // Assuming a route like this
-      .send({ userId: 'user1' });
+      .put(`/api/issues/${mockIssueId}/assignee`)
+      .send({ userId: mockUserId });
 
-    expect(response.statusCode).toBe(200);
-    // Add more assertions to validate the response, e.g., the updated issue data
-    // expect(mockIssueService.updateIssue).toHaveBeenCalledWith(123, { assigneeId: 'user1' });
+    expect(response.statusCode).toBe(200); // Assuming success is 200 OK, adjust if needed
+    // Add more assertions here to verify the assignee was updated correctly,
+    // e.g., check the response body or database state.
   });
 
   it('should unassign a user from an issue', async () => {
-    // Mock the necessary dependencies if needed
-
     const response = await request(app)
-      .put('/issues/123/assignee') // Assuming the same route for unassigning
-      .send({ userId: null }); // Or an appropriate value to indicate unassignment
+      .delete(`/api/issues/${mockIssueId}/assignee`)
+      .send({ userId: mockUserId });
 
-    expect(response.statusCode).toBe(200);
-    // Add more assertions to validate the response
+    expect(response.statusCode).toBe(200); // Adjust if needed
+    // Add more assertions here to verify the assignee was removed correctly.
   });
 
   // Add more tests for error cases, invalid input, etc.
+  it('should return 400 if userId is missing', async () => {
+    const response = await request(app)
+      .put(`/api/issues/${mockIssueId}/assignee`)
+      .send({});
+    expect(response.statusCode).toBe(400);
+  });
+
 });

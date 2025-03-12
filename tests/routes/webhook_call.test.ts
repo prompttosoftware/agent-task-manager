@@ -1,25 +1,36 @@
 // tests/routes/webhook_call.test.ts
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app is exported from app.ts
+import app from '../../src/app';
+import { createWebhook, processWebhookEvent } from '../../src/routes/webhook_call'; // Assuming these functions exist
 
 describe('Webhook Call Route', () => {
-  it('should return 200 for a successful webhook call', async () => {
-    const response = await request(app)
-      .post('/api/webhooks/calls') // Replace with your actual route
-      .send({ /* your webhook payload here */ }); // Example payload, adapt it to your webhook's expected format
+  it('should return a 200 status code on successful webhook call', async () => {
+    // Mock the createWebhook function to avoid actual webhook creation
+    const mockCreateWebhook = jest.fn().mockResolvedValue({ success: true });
+    (createWebhook as jest.Mock) = mockCreateWebhook;
 
+    const response = await request(app).post('/api/webhook/call').send({ /* Example webhook data */ });
     expect(response.statusCode).toBe(200);
-    // Add more assertions based on the expected response body or side effects
+    expect(mockCreateWebhook).toHaveBeenCalled(); // Verify createWebhook was called
   });
 
-  it('should handle errors gracefully', async () => {
-    const response = await request(app)
-      .post('/api/webhooks/calls') // Replace with your actual route
-      .send({ /* invalid payload to trigger an error */ });
+  it('should process webhook events correctly', async () => {
+    // Mock the processWebhookEvent function
+    const mockProcessWebhookEvent = jest.fn().mockResolvedValue({ success: true });
+    (processWebhookEvent as jest.Mock) = mockProcessWebhookEvent;
 
-    expect(response.statusCode).toBeGreaterThanOrEqual(400);
-    // Add assertions to check the error response
+    const response = await request(app).post('/api/webhook/call').send({ /* Example webhook data */ });
+    expect(response.statusCode).toBe(200);
+    expect(mockProcessWebhookEvent).toHaveBeenCalled(); // Verify processWebhookEvent was called
   });
 
-  // Add more tests for different scenarios, e.g., different event types, authentication, etc.
+  it('should handle errors during webhook processing', async () => {
+    // Mock processWebhookEvent to simulate an error
+    const mockProcessWebhookEvent = jest.fn().mockRejectedValue(new Error('Processing failed'));
+    (processWebhookEvent as jest.Mock) = mockProcessWebhookEvent;
+
+    const response = await request(app).post('/api/webhook/call').send({ /* Example webhook data */ });
+    expect(response.statusCode).toBe(500); // Or whatever error code is appropriate
+    expect(mockProcessWebhookEvent).toHaveBeenCalled();
+  });
 });
