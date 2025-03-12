@@ -1,8 +1,8 @@
 // src/models/webhook.ts
 
 export interface Webhook {
-  id: string;
+  id: number;
   url: string;
   events: string[];
-  // Add other relevant fields like headers, etc.
+  active: boolean;
 }

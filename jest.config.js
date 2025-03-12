@@ -1,14 +1,12 @@
 // jest.config.js
 /** @type {import('jest').Config} */
 const config = {
-  preset: 'ts-jest', // Use the default ts-jest preset
+  preset: 'ts-jest',
   testEnvironment: 'node',
+  testMatch: ['<rootDir>/tests/**/*.test.(ts|tsx|js)'],
   transform: {
-    '^.+\\.ts$': 'ts-jest'
-  },
-  moduleFileExtensions: ['ts', 'js', 'json', 'node'],
-  testMatch: ['<rootDir>/tests/**/*.test.ts'],
-  collectCoverage: false
+    '^.+\.ts$': 'ts-jest'
+  }
 };
 
-module.exports = config
+module.exports = config;
