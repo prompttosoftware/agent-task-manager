@@ -1,24 +1,32 @@
 // tests/routes/index.test.ts
 import request from 'supertest';
-import { app } from '../../src/app'; // Assuming your app is exported from src/app.ts
+import app from '../../src/app'; // Assuming your app is exported from app.ts or similar
 
-describe('Find Issue Endpoint', () => {
-  it('should return 200 OK and issue details when the issue exists', async () => {
-    const issueKey = 'ATM-1'; // Replace with a valid issue key for testing
-    const response = await request(app).get(`/api/issues/${issueKey}`);
+describe('GET /api/boards/{boardId}/issues', () => {
+  it('should return 200 OK and an array of issues for a valid board ID', async () => {
+    // Assuming you have a board with ID '123'
+    const boardId = '123';
+    const response = await request(app).get(`/api/boards/${boardId}/issues`);
 
     expect(response.status).toBe(200);
-    // Add assertions to check the response body for the issue details
-    // Example:
-    // expect(response.body.key).toBe(issueKey);
+    expect(response.body).toBeInstanceOf(Array);
+    // Add more specific assertions based on the expected issue data structure.
+    // For example: expect(response.body[0]).toHaveProperty('id');
   });
 
-  it('should return 404 Not Found when the issue does not exist', async () => {
-    const issueKey = 'NON-EXISTENT-ISSUE';
-    const response = await request(app).get(`/api/issues/${issueKey}`);
+  it('should return 404 Not Found for a non-existent board ID', async () => {
+    const boardId = 'nonexistent';
+    const response = await request(app).get(`/api/boards/${boardId}/issues`);
 
     expect(response.status).toBe(404);
+    // You might want to check for a specific error message in the response body.
   });
 
-  // Add more test cases as needed, e.g., for error handling, invalid input, etc.
+  it('should return 400 Bad Request if boardId is invalid', async () => {
+    const boardId = 'invalid-id'; // Or an empty string ''
+    const response = await request(app).get(`/api/boards/${boardId}/issues`);
+
+    expect(response.status).toBe(400);
+    // You might want to check for a specific error message in the response body.
+  });
 });
