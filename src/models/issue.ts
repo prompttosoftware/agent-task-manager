@@ -2,10 +2,8 @@
 
 export interface Issue {
   id: string;
-  boardId: string;
   summary: string;
   description: string;
-  assignee?: string;
   status: string;
-  // Add other relevant fields as needed
+  // Add other relevant fields like assignee, priority, etc.
 }
