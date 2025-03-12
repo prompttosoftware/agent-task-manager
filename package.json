@@ -1,22 +1,22 @@
 {
   "name": "agent-task-manager",
-  "version": "0.0.1",
-  "description": "Agent Task Manager",
-  "main": "dist/app.js",
+  "version": "0.1.0",
+  "description": "A task manager agent.",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/app.js",
-    "test": "jest"
+    "start": "node dist/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Benjamin Moen",
   "license": "MIT",
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.3.3"
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
   },
   "dependencies": {
-    "express": "^4.18.2"
-  }
+    "@types/express": "^5.0.0",
+    "express": "^4.21.2"
+  },
+  "keywords": []
 }
