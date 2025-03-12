@@ -1,40 +1,32 @@
 // test/controllers/issue.controller.test.ts
-import { test, expect, describe, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../../src/app';
-import { createIssue, transitionIssue } from '../../src/services/issue.service';
+import { issueService } from '../../src/services/issue.service';
 
-describe('Transition Issue Endpoint', () => {
-  beforeEach(async () => {
-    // Assuming you have a way to set up your environment before each test
-    // This might involve seeding your database or mocking external services.
-    // For example, you might want to reset the database here or mock the service layer.
+// Mock the issueService to isolate the controller tests
+vi.mock('../../src/services/issue.service');
+
+describe('Issue Controller - Transitions', () => {
+  beforeEach(() => {
+    vi.resetAllMocks(); // Reset all mocks before each test
   });
 
-  test('POST /issue/{issueKey}/transitions - Positive: Valid issue key and transition ID', async () => {
-    // 1. Create a test issue.
-    const issueKey = 'ATM-123'; // Replace with a valid issue key, or create a new one dynamically
-    const transitionId = '31'; // Replace with a valid transition ID
+  it('should return 400 Bad Request for invalid transition ID', async () => {
+    // Mock the issueService to simulate an error
+    vi.mocked(issueService.transitionIssue).mockRejectedValue(new Error('Invalid transition ID'));
 
-    // Mock the createIssue and transitionIssue functions to avoid dependencies
-    const createIssueMock = vi.fn().mockResolvedValue({ key: issueKey });
-    const transitionIssueMock = vi.fn().mockResolvedValue(true);
-    vi.mock('../../src/services/issue.service', () => ({
-        createIssue: createIssueMock,
-        transitionIssue: transitionIssueMock
-    }));
+    const issueKey = 'ATM-123'; // Example issue key
+    const invalidTransitionId = '9999'; // Example invalid ID
 
-    // 2. Send a request to the transition endpoint.
     const response = await request(app)
       .post(`/issue/${issueKey}/transitions`)
-      .send({ transitionId });
+      .send({ transitionId: invalidTransitionId })
+      .set('Accept', 'application/json');
 
-    // 3. Assert that the response is successful.
-    expect(response.status).toBe(200); // Or whatever status code indicates success
-
-    // 4. Optionally, assert that the issue was transitioned correctly.
-    // For example, you might check the response body for confirmation or
-    // query your database or mock for changes.
-    expect(transitionIssueMock).toHaveBeenCalledWith(issueKey, transitionId);
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual(expect.objectContaining({ // Check for the error message
+      message: expect.stringContaining('Invalid transition ID')
+    }));
   });
 });
