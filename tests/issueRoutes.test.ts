@@ -52,4 +52,18 @@ describe('Issue Routes', () => {
         expect(response.statusCode).toBe(200);
         // Add assertions to check the response body if needed.
     });
+
+  it('should return 200 when finding an existing issue', async () => {
+    // Assuming the find issue endpoint is GET /issues/:issueKey
+    const issueKey = 'ATM-123'; // Replace with a valid issue key
+    const response = await request(app).get(`/issues/${issueKey}`);
+    expect(response.statusCode).toBe(200);
+    // Optionally, add assertions to check the response body for the issue details
+  });
+
+  it('should return 404 when finding a non-existent issue', async () => {
+    const issueKey = 'NON-EXISTENT-ISSUE';
+    const response = await request(app).get(`/issues/${issueKey}`);
+    expect(response.statusCode).toBe(404);
+  });
 });
