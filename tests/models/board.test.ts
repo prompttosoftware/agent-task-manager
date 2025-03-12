@@ -1,22 +1,27 @@
 // tests/models/board.test.ts
+
 import { Board } from '../../src/models/board';
 import { Issue } from '../../src/models/issue';
 
-test('Board interface should have required properties', () => {
+test('Board interface should have the correct properties', () => {
   const issue: Issue = {
-    id: '123',
-    summary: 'Test Issue',
+    id: 1,
+    title: 'Test Issue',
     description: 'This is a test issue',
     status: 'Open',
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   const board: Board = {
-    id: 'board-1',
+    id: 1,
     name: 'Test Board',
     issues: [issue],
+    columns: ['To Do', 'In Progress', 'Done'],
   };
 
-  expect(board.id).toBe('board-1');
+  expect(board.id).toBe(1);
   expect(board.name).toBe('Test Board');
-  expect(board.issues[0].id).toBe('123');
+  expect(board.issues.length).toBe(1);
+  expect(board.columns).toEqual(['To Do', 'In Progress', 'Done']);
 });
