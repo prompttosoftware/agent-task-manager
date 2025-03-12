@@ -1,36 +1,74 @@
 // tests/routes/transition_issue.test.ts
 import request from 'supertest';
-import app from '../../src/app';
+import app from '../../src/app'; // Assuming your app is exported from src/app.ts or similar
 
-describe('Transition Issue Route', () => {
-  it('should transition an issue to a new state', async () => {
-    // Mock issue data and transition details as needed. This will depend on your app's implementation
-    // For example:
-    const issueKey = 'ATM-123'; // Replace with an actual issue key
-    const transitionId = '31'; // Done
+// Mock the necessary modules and dependencies
+jest.mock('../../src/models/issue');
+const issueModel = require('../../src/models/issue');
+
+describe('Issue Transition API', () => {
+  const issueKey = 'ATM-123'; // Example issue key
+
+  // Helper function to mock the issue model's transition method
+  const mockTransition = (transitionResult: any) => {
+    (issueModel.transitionIssue as jest.Mock).mockResolvedValue(transitionResult);
+  };
+
+  it('should successfully transition an issue to the next state', async () => {
+    mockTransition({ status: 'In Progress' });
+
     const response = await request(app)
       .post(`/api/issue/${issueKey}/transition`)
-      .send({ transitionId });
+      .send({ transitionId: 21 }); // Example transition ID
 
-    expect(response.statusCode).toBe(200); // Or the expected status code
-    // Add more assertions based on the expected response, e.g.,
-    // expect(response.body.status).toBe('done');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: 'In Progress' });
+    expect(issueModel.transitionIssue).toHaveBeenCalledWith(issueKey, 21, undefined);
   });
 
-  // Add more tests for different scenarios, such as:
-  // - Transitioning to different states
-  // - Handling invalid transition IDs
-  // - Handling unauthorized transitions
-
-  it('should handle invalid transition ID', async () => {
-    const issueKey = 'ATM-123';
-    const transitionId = '999'; // Invalid ID
+  it('should handle invalid transition IDs', async () => {
+    mockTransition(null);
 
     const response = await request(app)
       .post(`/api/issue/${issueKey}/transition`)
-      .send({ transitionId });
+      .send({ transitionId: 999 }); // Invalid transition ID
 
-    expect(response.statusCode).toBe(400); // Or the appropriate error code
-    // Check error message if needed
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Invalid transition' });
+  });
+
+  it('should handle unauthorized transitions', async () => {
+    mockTransition(null);
+
+    // Mock user authentication to simulate lack of permissions
+    const response = await request(app)
+      .post(`/api/issue/${issueKey}/transition`)
+      .send({ transitionId: 21 }); // Valid transition ID
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'Unauthorized' });
+  });
+
+    it('should verify the issue state is correctly updated after a successful transition', async () => {
+    mockTransition({ status: 'Done' });
+
+    const response = await request(app)
+      .post(`/api/issue/${issueKey}/transition`)
+      .send({ transitionId: 31 }); // Example transition ID to 'Done'
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: 'Done' });
+    expect(issueModel.transitionIssue).toHaveBeenCalledWith(issueKey, 31, undefined);
+  });
+
+  it('should handle errors during the transition process', async () => {
+    (issueModel.transitionIssue as jest.Mock).mockRejectedValue(new Error('Database error'));
+
+    const response = await request(app)
+      .post(`/api/issue/${issueKey}/transition`)
+      .send({ transitionId: 21 });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
   });
 });
