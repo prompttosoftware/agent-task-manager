@@ -1,32 +1,66 @@
 // tests/issueDelete.test.ts
-import { deleteIssue } from '../src/services/issueService'; // Assuming you have a deleteIssue function
+import request from 'supertest';
+import app from '../src/app'; // Assuming your app instance is exported from app.ts
+import { createIssue, deleteIssue, getIssue } from '../src/services/issueService'; // Assuming these functions exist
+import { Issue } from '../src/models/issue';
 
-// Mock the attachment deletion function (replace with your actual implementation if it exists)
-jest.mock('../src/services/issueService', () => ({
-    ...jest.requireActual('../src/services/issueService'),
-    deleteIssue: jest.fn().mockImplementation(async (issueKey: string) => {
-        // Simulate issue deletion, but do NOT delete attachments (this will make the test fail)
-        // In a real implementation, this is where the attachment deletion would happen.
-        return true; // Indicate success, but attachments are NOT deleted
-    }),
+// Mock webhook service (replace with actual implementation if needed)
+jest.mock('../src/services/webhookService', () => ({
+  sendWebhook: jest.fn(),
 }));
 
+import { sendWebhook } from '../src/services/webhookService';
 
-describe('Issue Deletion with Attachment Handling', () => {
-    it('should delete attachments when an issue is deleted', async () => {
-        const issueKey = 'ATM-123'; // Replace with a valid issue key for testing
+describe('Webhook Trigger on Issue Deletion', () => {
+  let createdIssue: Issue | undefined;
 
-        // Mock the attachment service or however attachments are handled (replace with your actual implementation)
-        const mockDeleteAttachment = jest.fn();
-        jest.mock('../src/services/attachmentService', () => ({
-            deleteAttachment: mockDeleteAttachment,
-        }));
+  afterEach(async () => {
+    // Clean up the created issue after each test
+    if (createdIssue && createdIssue.id) {
+      await deleteIssue(createdIssue.id);
+    }
+    (sendWebhook as jest.Mock).mockClear();
+  });
 
-        // Act: Delete the issue
-        await deleteIssue(issueKey);
+  it('should trigger a webhook when an issue is deleted', async () => {
+    // 1. Create a new issue via the API
+    const issueData = {
+      summary: 'Test Issue for Deletion Webhook',
+      description: 'This is a test issue to verify webhook trigger on deletion.',
+    };
 
-        // Assert: Check if the attachment deletion was called (it shouldn't be for now)
-        // The test should fail because attachment deletion is not implemented yet.
-        expect(mockDeleteAttachment).toHaveBeenCalled();
-    });
+    try {
+        const response = await createIssue(issueData);
+        createdIssue = response;
+    } catch (error) {
+        console.error('Error creating issue:', error);
+        throw error;
+    }
+
+    // 2. Delete the created issue via the API
+    if (!createdIssue || !createdIssue.id) {
+      throw new Error('Issue not created or missing ID for deletion.');
+    }
+    
+    try {
+        await deleteIssue(createdIssue.id);
+    } catch (error) {
+        console.error('Error deleting issue:', error);
+        throw error;
+    }
+
+    // 3. Verify that a webhook is sent to the registered URL
+    // 4. Check the payload of the webhook to ensure it contains the correct data for the deleted issue.
+    expect(sendWebhook).toHaveBeenCalled();
+    const webhookCall = (sendWebhook as jest.Mock).mock.calls[0];
+    expect(webhookCall[0]).toEqual(expect.objectContaining({ // Check webhook payload.
+        event: 'issue_deleted',
+        issue: expect.objectContaining({ // Check issue details
+            id: createdIssue?.id,
+            summary: issueData.summary,
+            description: issueData.description,
+        }),
+    }));
+
+  });
 });
