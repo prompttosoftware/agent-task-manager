@@ -1,12 +1,18 @@
 // test/file_structure/app.test.ts
-import { describe, it, expect } from 'vitest';
+import { expect, test } from 'vitest';
 import * as fs from 'fs';
-import * as path from 'path';
+import { execSync } from 'child_process';
 
-const testDir = 'src';
+test('app.ts file exists', () => {
+  const filePath = 'src/app.ts';
+  expect(fs.existsSync(filePath)).toBe(true);
+});
 
-describe('App Directory Structure', () => {
-  it('should have app.ts', () => {
-    expect(fs.existsSync(path.join(testDir, 'app.ts'))).toBe(true);
-  });
+test('app.ts compiles without errors', () => {
+  try {
+    execSync('npx tsc src/app.ts --noEmit', { stdio: 'pipe' });
+  } catch (error: any) {
+    console.error(error.stdout?.toString() || error.stderr?.toString());
+    expect(error).toBe(undefined);
+  }
 });
