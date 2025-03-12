@@ -2,22 +2,41 @@
 
 ## Installation
 
-```bash
-npm install
-```
+1.  Clone the repository: `git clone <repository_url>`
+2.  Navigate to the project directory: `cd agent-task-manager`
+3.  Install dependencies: `npm install`
 
 ## Usage
 
-```bash
-npm start
-```
+1.  Start the server: `npm start`
+2.  Access the API endpoints. See API documentation below.
 
 ## API Documentation
 
-*   `/issues` - GET: list issues, POST: create an issue
-*   `/issues/{issueKey}` - GET: get issue by key, PUT: update issue by key, DELETE: delete issue by key
-*   `/issues/{issueKey}/transitions` - GET: list available transitions for an issue
-*   `/issues/{issueKey}/transitions` - POST: perform a transition on an issue
-*   `/webhooks` - POST: receive webhook events
+### Webhooks
 
-More detailed documentation to follow.
+*   `POST /webhooks` - Creates a new webhook.
+*   `GET /webhooks` - Retrieves all webhooks.
+*   `GET /webhooks/{webhookId}` - Retrieves a specific webhook by ID.
+*   `PUT /webhooks/{webhookId}` - Updates a specific webhook.
+*   `DELETE /webhooks/{webhookId}` - Deletes a specific webhook.
+
+### Issues
+
+*   `POST /issues` - Creates a new issue.
+*   `GET /issues` - Retrieves all issues.
+*   `GET /issues/{issueId}` - Retrieves a specific issue by ID.
+*   `PUT /issues/{issueId}` - Updates a specific issue.
+*   `DELETE /issues/{issueId}` - Deletes a specific issue.
+*   `POST /issues/{issueId}/attachments` - Adds an attachment to an issue.
+*   `GET /issues/{issueId}/transitions` - Lists available transitions for an issue.
+*   `POST /issues/{issueId}/transitions` - Transitions an issue.
+
+### Boards
+
+*   `GET /boards` - Retrieves all boards.
+*   `GET /boards/{boardId}` - Retrieves a specific board by ID.
+*   `PUT /boards/{boardId}` - Updates a specific board.
+*   `POST /boards/{boardId}/issues` - Adds an issue to a board.
+*   `DELETE /boards/{boardId}/issues/{issueId}` - Removes an issue from a board.
+
