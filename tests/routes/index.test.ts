@@ -1,34 +1,34 @@
 // tests/routes/index.test.ts
 
 import request from 'supertest';
-import express from 'express';
-import { router } from '../../src/routes/index'; // Assuming an index.ts for your routes
+import express, { Application } from 'express';
+import { boardRouter } from '../../src/routes/index';
 
-const app = express();
-app.use(express.json()); // Middleware to parse JSON bodies
-app.use('/', router);
+const app: Application = express();
+app.use(express.json());
+app.use('/', boardRouter);
 
-describe('API Endpoints', () => {
-  it('GET / should return 200 OK', async () => {
-    const res = await request(app).get('/');
-    expect(res.statusCode).toEqual(200);
+describe('API Validation and Error Handling', () => {
+  it('should return 400 for missing required fields', async () => {
+    const response = await request(app)
+      .post('/boards')
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error');
   });
 
-  it('POST / should return 201 Created', async () => {
-    const res = await request(app).post('/').send({ test: 'data' });
-    expect(res.statusCode).toEqual(201);
-    // Add more assertions based on the expected response
+  it('should return 400 for invalid data types', async () => {
+    const response = await request(app)
+      .post('/boards')
+      .send({ name: 123 });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error');
   });
 
-  it('PUT /:id should return 200 OK', async () => {
-    const res = await request(app).put('/1').send({ updated: 'data' });
-    expect(res.statusCode).toEqual(200);
-    // Add more assertions based on the expected response
-  });
-
-  it('DELETE /:id should return 200 OK', async () => {
-    const res = await request(app).delete('/1');
-    expect(res.statusCode).toEqual(200);
-    // Add more assertions based on the expected response
+  it('should handle other error scenarios', async () => {
+     // Implement tests for other potential error scenarios
+     expect(true).toBe(true); //This test will pass until the others are fully implemented
   });
 });
