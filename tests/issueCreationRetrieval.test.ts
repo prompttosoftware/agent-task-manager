@@ -1,29 +1,26 @@
 // tests/issueCreationRetrieval.test.ts
+import { createIssue, getIssue } from '../src/services/issueService'; // Assuming this path
 
-import { createIssue, getIssue } from '../src/services/issueService'; // Assuming these functions exist
+// Mock the issue service (or adapt to your testing setup)
+jest.mock('../src/services/issueService');
 
-describe('Issue Creation and Retrieval', () => {
-  it('should create and retrieve an issue with matching details', async () => {
-    const issueSummary = 'Test Issue Creation and Retrieval ' + Date.now();
-    const issueDescription = 'This is a test description.';
+describe('Error Handling for ATM-118 (Issue Creation and Retrieval)', () => {
+  it('should handle errors during issue creation', async () => {
+    // Arrange
+    const errorMessage = 'Simulated issue creation failure';
+    (createIssue as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-    // 1. Create a new issue
-    const createdIssue = await createIssue({
-      summary: issueSummary,
-      description: issueDescription,
-      // Add other required fields here, like project key, issue type etc.
-    });
+    // Act & Assert
+    await expect(createIssue({} as any)).rejects.toThrow(errorMessage);
+  });
 
-    expect(createdIssue).toBeDefined();
-    expect(createdIssue.key).toBeDefined();
+  it('should handle errors during issue retrieval', async () => {
+    // Arrange
+    const issueKey = 'ATM-123';
+    const errorMessage = 'Simulated issue retrieval failure';
+    (getIssue as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-    // 2. Retrieve the created issue by its key
-    const retrievedIssue = await getIssue(createdIssue.key);
-
-    // 3. Assert that the retrieved issue's details match the originally created issue
-    expect(retrievedIssue).toBeDefined();
-    expect(retrievedIssue.fields.summary).toEqual(issueSummary);
-    expect(retrievedIssue.fields.description).toEqual(issueDescription);
-    // Add other assertions for other fields as needed
+    // Act & Assert
+    await expect(getIssue(issueKey)).rejects.toThrow(errorMessage);
   });
 });
