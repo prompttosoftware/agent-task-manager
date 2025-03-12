@@ -2,21 +2,18 @@
 
 import { Issue } from '../../src/models/issue';
 
-test('Issue interface should have the correct properties', () => {
-  const issue: Issue = {
-    id: 1,
-    title: 'Test Issue',
-    description: 'This is a test issue',
-    status: 'Open',
-    assignee: 'testUser',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  expect(issue.id).toBe(1);
-  expect(issue.title).toBe('Test Issue');
-  expect(issue.description).toBe('This is a test issue');
-  expect(issue.status).toBe('Open');
-  expect(issue.assignee).toBe('testUser');
-  expect(issue.createdAt).toBeInstanceOf(Date);
-  expect(issue.updatedAt).toBeInstanceOf(Date);
+describe('Issue Model', () => {
+  it('should create an Issue instance', () => {
+    const issue = new Issue('issue-id', 'issue-summary', 'issue-description');
+    expect(issue.id).toBe('issue-id');
+    expect(issue.summary).toBe('issue-summary');
+    expect(issue.description).toBe('issue-description');
+  });
+
+  it('should have default properties', () => {
+    const issue = new Issue('issue-id', 'issue-summary', 'issue-description');
+    expect(issue.status).toBeUndefined();
+    expect(issue.assignee).toBeUndefined();
+    expect(issue.attachments).toEqual([]);
+  });
 });
