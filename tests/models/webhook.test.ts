@@ -1,44 +1,17 @@
 // tests/models/webhook.test.ts
-import { Webhook } from '../../src/models/webhook.model';
 
-describe('Webhook Model', () => {
-  it('should have a name', () => {
-    const webhook = new Webhook({
-      name: 'Test Webhook',
-      url: 'https://example.com/webhook',
-      events: ['issue_created'],
-      filters: { issue: { project: ['PROJECT-1'] } },
-    });
-    expect(webhook.name).toBe('Test Webhook');
-  });
+import { Webhook } from '../../src/models/webhook';
 
-  it('should have a URL', () => {
-    const webhook = new Webhook({
-      name: 'Test Webhook',
-      url: 'https://example.com/webhook',
-      events: ['issue_created'],
-      filters: { issue: { project: ['PROJECT-1'] } },
-    });
-    expect(webhook.url).toBe('https://example.com/webhook');
-  });
+test('Webhook interface should have the correct properties', () => {
+  const webhook: Webhook = {
+    id: 1,
+    url: 'http://example.com/webhook',
+    events: ['issue_created', 'issue_updated'],
+    active: true,
+  };
 
-  it('should have events', () => {
-    const webhook = new Webhook({
-      name: 'Test Webhook',
-      url: 'https://example.com/webhook',
-      events: ['issue_created'],
-      filters: { issue: { project: ['PROJECT-1'] } },
-    });
-    expect(webhook.events).toEqual(['issue_created']);
-  });
-
-  it('should have filters', () => {
-    const webhook = new Webhook({
-      name: 'Test Webhook',
-      url: 'https://example.com/webhook',
-      events: ['issue_created'],
-      filters: { issue: { project: ['PROJECT-1'] } },
-    });
-    expect(webhook.filters).toEqual({ issue: { project: ['PROJECT-1'] } });
-  });
+  expect(webhook.id).toBe(1);
+  expect(webhook.url).toBe('http://example.com/webhook');
+  expect(webhook.events).toEqual(['issue_created', 'issue_updated']);
+  expect(webhook.active).toBe(true);
 });
