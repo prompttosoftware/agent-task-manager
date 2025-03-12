@@ -3,8 +3,8 @@
 import { Issue } from './issue';
 
 export interface Board {
-  id: string;
+  id: number;
   name: string;
   issues: Issue[];
-  // Add other relevant fields like columns, etc.
+  columns: string[];
 }
