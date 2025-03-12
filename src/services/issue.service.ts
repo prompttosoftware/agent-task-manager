@@ -1,52 +1,61 @@
 // src/services/issue.service.ts
+
+import { Injectable } from '@nestjs/common';
+import { IssueRepository } from '../repositories/issue.repository';
+import { WebhookService } from './webhook.service';
+import { Issue } from '../models/issue.model';
+
+@Injectable()
 export class IssueService {
-  async findIssue(issueNumber: string) {
-    // Implementation for finding an issue
-    return { message: 'Not implemented' };
+  constructor(private readonly issueRepository: IssueRepository, private readonly webhookService: WebhookService) {}
+
+  async createIssue(issueData: any): Promise<Issue> {
+    const issue = await this.issueRepository.create(issueData);
+    await this.webhookService.triggerWebhook('issue_created', issue);
+    return issue;
   }
 
-  async getIssuesForBoard(boardId: string) {
-    // Implementation for getting issues for a board
-    return { message: 'Not implemented' };
+  async updateIssue(issueKey: string, updateData: any): Promise<Issue | undefined> {
+    const existingIssue = await this.issueRepository.findByKey(issueKey);
+    if (!existingIssue) {
+      return undefined;
+    }
+
+    const previousStatus = existingIssue.status;
+
+    const updatedIssue = await this.issueRepository.update(issueKey, updateData);
+    if (updatedIssue && updatedIssue.status !== previousStatus) {
+      await this.webhookService.triggerWebhook('issue_transitioned', updatedIssue, previousStatus);
+    } else if (updatedIssue) {
+        await this.webhookService.triggerWebhook('issue_updated', updatedIssue, previousStatus);
+    }
+
+    return updatedIssue;
   }
 
-  async transitionIssue(issueKey: string, transitionId: string, comment?: string) {
-    // Implementation for transitioning an issue
-    return { message: 'Not implemented' };
+  async deleteIssue(issueKey: string): Promise<void> {
+    const issue = await this.issueRepository.findByKey(issueKey);
+    if(issue) {
+        await this.issueRepository.delete(issueKey);
+        await this.webhookService.triggerWebhook('issue_deleted', issue);
+    }
   }
 
-  async addAttachment(issueKey: string, filePath: string) {
-    // Implementation for adding an attachment to an issue
-    return { message: 'Not implemented' };
-  }
-
-  async linkIssues(sourceIssueKey: string, destinationIssueKey: string, linkType: string) {
-    // Implementation for linking issues
-    return { message: 'Not implemented' };
-  }
-
-  async updateAssignee(issueKey: string, assignee: string) {
-    // Implementation for updating the assignee of an issue
-    return { message: 'Not implemented' };
-  }
-
-  async addNewIssue(projectKey: string, issueType: string, summary: string, description: string, assignee?: string) {
-    // Implementation for adding a new issue
-    return { message: 'Not implemented' };
-  }
-
-  async deleteIssue(issueKey: string) {
-    // Implementation for deleting an issue
-    return { message: 'Not implemented' };
-  }
-
-  async listTransitions(issueKey: string) {
-    // Implementation for listing transitions for an issue
-    return { message: 'Not implemented' };
-  }
-
-  async getIssueCreateMetadata(projectKeys?: string[], issueTypeNames?: string[]) {
-    // Implementation for getting issue create metadata
-    return { message: 'Not implemented' };
+  getChangelog(issue: Issue, previousStatus: string) {
+      if(issue.status !== previousStatus) {
+          return {
+            items: [
+              {
+                field: 'status',
+                fieldtype: 'jira',
+                from: previousStatus,
+                fromString: previousStatus,
+                to: issue.status,
+                toString: issue.status
+              }
+            ]
+          }
+      }
+      return null;
   }
 }
