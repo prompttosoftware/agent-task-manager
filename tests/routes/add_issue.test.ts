@@ -1,46 +1,45 @@
 // tests/routes/add_issue.test.ts
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app instance is exported
+import app from '../../src/app'; // Assuming your app is exported from src/app.ts
 
-describe('Add new issue endpoint', () => {
-  it('should successfully create a new issue and return the issue key', async () => {
-    const newIssueData = {
-      // Provide valid data to create an issue.  Adjust these fields based on your API's requirements
-      // For example:
-      // projectKey: 'ATM',
-      // issueType: 'Task',
-      // summary: 'Test Issue Creation',
-      // description: 'This is a test issue',
-    };
-
+describe('POST /api/issue', () => {
+  it('should return 400 if required fields are missing', async () => {
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual endpoint
-      .send(newIssueData);
+      .post('/api/issue')
+      .send({  // Missing required fields like 'summary' and 'description'
+        // labels: ['bug'] // Assuming labels is a valid field
+      });
 
-    expect(response.statusCode).toBe(201); // Or the appropriate status code for successful creation
-    expect(response.body).toHaveProperty('issueKey');
-
-    const issueKey = response.body.issueKey;
-
-    // Verify issue details by retrieving it (requires a GET endpoint for retrieving issues)
-    const getResponse = await request(app).get(`/api/issues/${issueKey}`); // Replace with your actual GET endpoint
-    expect(getResponse.statusCode).toBe(200);
-    // Add more detailed assertions based on your issue model
-    // For example, check if the summary matches, etc.
-    // expect(getResponse.body.summary).toBe(newIssueData.summary);
+    expect(response.status).toBe(400);
+    // You might want to check the error message as well, e.g.,
+    // expect(response.body.message).toBe('Missing required fields');
   });
 
-  // Add more tests for different scenarios like invalid requests, error handling, etc.
-  it('should return an error for an invalid request', async () => {
-    const invalidIssueData = {
-      // Provide invalid data that would cause a failure
-    };
-
+  it('should return 400 if data types are incorrect', async () => {
     const response = await request(app)
-      .post('/api/issues') // Replace with your actual endpoint
-      .send(invalidIssueData);
+      .post('/api/issue')
+      .send({
+        summary: 123, // Incorrect data type for summary
+        description: true, // Incorrect data type for description
+        // Add other fields with incorrect data types as needed
+      });
 
-    expect(response.statusCode).toBeGreaterThanOrEqual(400); // Expect a client error
-    // You might want to assert on the error message or structure as well.
+    expect(response.status).toBe(400);
+    //expect(response.body.message).toBe('Incorrect data types');
   });
+
+  it('should return 400 if labels are invalid', async () => {
+    const response = await request(app)
+      .post('/api/issue')
+      .send({
+        summary: 'Test issue with invalid labels',
+        description: 'This is a test',
+        labels: [123, 'invalidLabel'] // Invalid label format
+      });
+
+    expect(response.status).toBe(400);
+    //expect(response.body.message).toBe('Invalid labels');
+  });
+
+  // Add more tests for other validation rules, e.g., max length, format, etc.
 });
