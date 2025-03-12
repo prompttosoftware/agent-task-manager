@@ -15,5 +15,6 @@
   },
   "dependencies": {
     "express": "latest"
-  }
+  },
+  "keywords": []
 }
