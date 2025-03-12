@@ -1,5 +1,5 @@
 // test/npm-init.test.ts
-import { test, expect, describe, afterAll } from 'vitest';
+import { test, expect, describe, afterAll, beforeAll } from 'vitest';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
