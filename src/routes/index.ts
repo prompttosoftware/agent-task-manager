@@ -1,9 +1,11 @@
 // src/routes/index.ts
 import express from 'express';
-import * as issueController from '../controllers/issueController';
+import issueRoutes from './issueRoutes';
+import webhookRoutes from './webhookRoutes';
 
 const router = express.Router();
 
-router.get('/issue/:issueKey/transitions', issueController.getIssueTransitions);
+router.use('/issues', issueRoutes);
+router.use('/webhooks', webhookRoutes);
 
 export default router;

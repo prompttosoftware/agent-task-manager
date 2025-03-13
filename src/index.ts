@@ -1,12 +1,17 @@
 // src/index.ts
 import express from 'express';
-import routes from './routes';
+import bodyParser from 'body-parser';
+import issueRoutes from './routes/index';
+import * as dataService from './services/dataService';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
-app.use(express.json());
-app.use('/', routes);
+app.use(bodyParser.json());
+
+dataService.initializeBoards();
+
+app.use('/', issueRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

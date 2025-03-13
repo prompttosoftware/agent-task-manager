@@ -1,21 +1,20 @@
 // src/services/webhookService.ts
 
-// In-memory storage for webhooks (replace with a database in a real application)
-const webhooks: { [key: string]: any } = {};
+import * as dataService from './dataService';
+import { Webhook } from '../data/inMemoryStorage';
 
-export const deleteWebhook = async (webhookID: string): Promise<void> => {
-  if (!isValidWebhookID(webhookID)) {
-    throw new Error('Invalid webhookID');
-  }
-
-  if (!webhooks[webhookID]) {
-    throw new Error('Webhook not found');
-  }
-
-  delete webhooks[webhookID];
+export const registerWebhook = (webhook: Webhook): Webhook => {
+  return dataService.registerWebhook(webhook);
 };
 
-const isValidWebhookID = (webhookID: string): boolean => {
-  // Simple validation: alphanumeric characters only
-  return /^[a-zA-Z0-9]+$/.test(webhookID);
+export const listWebhooks = (): Webhook[] => {
+  return dataService.listWebhooks();
+};
+
+export const deleteWebhook = (id: string): boolean => {
+  return dataService.deleteWebhook(id);
+};
+
+export const triggerWebhook = (eventName: string, data: any): void => {
+  dataService.triggerWebhook(eventName, data);
 };

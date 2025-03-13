@@ -1,37 +1,24 @@
 // src/services/issueService.ts
 
-export async function getIssueTransitions(issueKey: string) {
-    // Mock issue data and workflow
-    const issue = {
-        'TASK-1': { status: 'To Do' },
-        'TASK-2': { status: 'In Progress' },
-        'TASK-3': { status: 'Done' }
-    };
+import * as dataService from './dataService';
+import { Issue } from '../data/inMemoryStorage';
 
-    if (!issue[issueKey]) {
-        throw new Error('Issue not found');
-    }
+export const createIssue = (issue: Issue): Issue => {
+  return dataService.createIssue(issue);
+};
 
-    const currentStatus = issue[issueKey].status;
-    let transitions: any[] = [];
+export const getIssueByKey = (key: string): Issue | undefined => {
+  return dataService.getIssueByKey(key);
+};
 
-    switch (currentStatus) {
-        case 'To Do':
-            transitions = [
-                { id: '21', name: 'In Progress' }
-            ];
-            break;
-        case 'In Progress':
-            transitions = [
-                { id: '31', name: 'Done' }
-            ];
-            break;
-        case 'Done':
-            transitions = []; // No transitions from Done
-            break;
-        default:
-            transitions = []; // Default case, no transitions
-    }
+export const getAllIssues = (): Issue[] => {
+  return dataService.getAllIssues();
+};
 
-    return transitions;
+export const updateIssue = (key: string, updatedFields: Partial<Issue>): Issue | undefined => {
+    return dataService.updateIssue(key, updatedFields);
 }
+
+export const deleteIssue = (key: string): boolean => {
+  return dataService.deleteIssue(key);
+};
