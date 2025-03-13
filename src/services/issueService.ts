@@ -1,77 +1,41 @@
 // src/services/issueService.ts
+import { v4 as uuidv4 } from 'uuid';
 
-// In-memory data (replace with database in a real application)
-const issues = [
-  {
-    id: '1',
-    key: 'TASK-1',
-    properties: {},
-    fields: {
-      issuetype: { id: '1', description: 'Task', name: 'Task', subtask: false, hierarchyLevel: 0 },
-      project: { id: '1', key: 'TASK', name: 'Task Project' },
-      priority: { name: 'High', id: '1' },
-      labels: ['backend', 'api'],
-      issuelinks: [],
-      status: { name: 'Open', id: '1' },
-      description: 'Implement GET /issue/{issueNumber}',
-      summary: 'Implement API Endpoint: GET /issue/{issueNumber} (Find Issue)',
-      subtasks: [],
-      progress: { progress: 50, total: 100 },
-    },
-  },
-  {
-    id: '2',
-    key: 'BUG-1',
-    properties: {},
-    fields: {
-      issuetype: { id: '2', description: 'Bug', name: 'Bug', subtask: false, hierarchyLevel: 0 },
-      project: { id: '2', key: 'BUG', name: 'Bug Project' },
-      priority: { name: 'High', id: '1' },
-      labels: ['frontend', 'ui'],
-      issuelinks: [],
-      status: { name: 'Open', id: '1' },
-      description: 'Fix button alignment issue',
-      summary: 'Button alignment issue',
-      subtasks: [],
-      progress: { progress: 100, total: 100 },
-    },
-  },
-];
+interface Issue {
+  issueKey: string;
+  summary: string;
+  description: string;
+  issueType: string;
+  attachments: string[];
+}
 
-function parseIssueNumber(issueNumber: string): { projectKey: string, issueId: string } | null {
-    const match = issueNumber.match(/^([A-Z]+)-(\d+)$/);
-    if (!match) {
-        return null;
-    }
-    return {
-        projectKey: match[1],
-        issueId: match[2]
+const issues: { [key: string]: Issue } = {};
+
+export class IssueService {
+  async createIssue(summary: string, description: string, issueType: string): Promise<Issue> {
+    const issueKey = `TASK-${uuidv4()}`.slice(0, 12).toUpperCase();
+    const issue: Issue = {
+      issueKey,
+      summary,
+      description,
+      issueType,
+      attachments: []
     };
-}
-
-export async function getIssueService(issueNumber: string, fieldsParam?: string) {
-  const parsedIssueNumber = parseIssueNumber(issueNumber);
-  if (!parsedIssueNumber) {
-    throw new Error('Invalid issue number format');
+    issues[issueKey] = issue;
+    return issue;
   }
 
-  const issue = issues.find((issue) => issue.key === issueNumber);
-
-  if (!issue) {
-    return null;
+  async getIssue(issueKey: string): Promise<Issue | undefined> {
+    return issues[issueKey];
   }
 
-  if (fieldsParam) {
-    const fieldsToReturn = fieldsParam.split(',');
-    const filteredIssue: any = { ...issue }; // Create a copy to avoid modifying the original
-    filteredIssue.fields = {};
-    for (const field of fieldsToReturn) {
-        if (issue.fields && issue.fields[field as keyof typeof issue.fields]) {
-            filteredIssue.fields[field] = issue.fields[field as keyof typeof issue.fields];
-        }
+  async addAttachment(issueKey: string, filePath: string): Promise<void> {
+    const issue = issues[issueKey];
+    if (!issue) {
+      throw new Error('Issue not found');
     }
-    return filteredIssue;
+    issue.attachments.push(filePath);
   }
-
-  return issue;
 }
+
+export const issueService = new IssueService();
