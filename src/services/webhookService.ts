@@ -1,36 +1,21 @@
 // src/services/webhookService.ts
-import { v4 as uuidv4 } from 'uuid';
 
-interface Webhook {
-  id: string;
-  name: string;
-  url: string;
-  events: string[];
-  filters?: {
-    projectKey?: string;
-    issueType?: string;
-    issueStatus?: string;
-    previousIssueStatus?: string;
-  };
-}
+// In-memory storage for webhooks (replace with a database in a real application)
+const webhooks: { [key: string]: any } = {};
 
-const webhooks: Webhook[] = [];
-
-export async function registerWebhook(webhookData: any): Promise<Webhook> {
-  const { name, url, events, filters } = webhookData;
-
-  if (!name || !url || !events || !Array.isArray(events) || events.length === 0) {
-    throw new Error('Bad Request');
+export const deleteWebhook = async (webhookID: string): Promise<void> => {
+  if (!isValidWebhookID(webhookID)) {
+    throw new Error('Invalid webhookID');
   }
 
-  const newWebhook: Webhook = {
-    id: uuidv4(),
-    name,
-    url,
-    events,
-    filters,
-  };
+  if (!webhooks[webhookID]) {
+    throw new Error('Webhook not found');
+  }
 
-  webhooks.push(newWebhook);
-  return newWebhook;
-}
+  delete webhooks[webhookID];
+};
+
+const isValidWebhookID = (webhookID: string): boolean => {
+  // Simple validation: alphanumeric characters only
+  return /^[a-zA-Z0-9]+$/.test(webhookID);
+};
