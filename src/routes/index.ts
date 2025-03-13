@@ -1,9 +1,9 @@
 // src/routes/index.ts
 import express from 'express';
-import * as issueController from '../controllers/issueController';
-
+import { createWebhook } from '../controllers/webhookController';
 const router = express.Router();
 
-router.post('/issue', issueController.createIssue);
+// Issue Routes
+router.post('/webhook', createWebhook);
 
 export default router;
