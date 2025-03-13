@@ -1,24 +1,34 @@
 // src/services/issueService.ts
+import { v4 as uuidv4 } from 'uuid';
 
-import { Issue } from '../models/issue';
+interface Issue {
+  id: string;
+  key: string;
+  fields: {
+    summary: string;
+    issuetype: { name: string };
+    labels: string[];
+  };
+}
 
-let issues: { [key: string]: Issue } = {
-  'TASK-1': {
-    issueKey: 'TASK-1',
-    summary: 'Example Task',
-    description: 'This is an example task.',
-    assignee: null,
-  },
-};
+let issues: Issue[] = []; // In-memory storage
 
-export const getIssue = (issueKey: string): Issue | undefined => {
-  return issues[issueKey];
-};
-
-export const updateIssueAssignee = (issueKey: string, agentId: string): boolean => {
-  if (!issues[issueKey]) {
-    return false;
+export async function createIssue(issueData: any): Promise<Issue> {
+  // Validate the issue data (basic example)
+  if (!issueData || !issueData.fields || !issueData.fields.summary || !issueData.fields.issuetype || !issueData.fields.labels) {
+    throw new Error('Invalid issue data.  Missing required fields.');
   }
-  issues[issueKey].assignee = agentId;
-  return true;
-};
+
+  const newIssue: Issue = {
+    id: uuidv4(),
+    key: `ATM-${issues.length + 1}`, // Generate a simple key
+    fields: {
+      summary: issueData.fields.summary,
+      issuetype: { name: issueData.fields.issuetype.name },
+      labels: issueData.fields.labels,
+    },
+  };
+
+  issues.push(newIssue);
+  return newIssue;
+}

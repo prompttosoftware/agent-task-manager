@@ -1,10 +1,9 @@
 // src/routes/index.ts
-
-import { Router } from 'express';
+import express from 'express';
 import * as issueController from '../controllers/issueController';
 
-const router = Router();
+const router = express.Router();
 
-router.put('/issue/:issueKey/assignee', issueController.updateIssueAssignee);
+router.post('/issue', issueController.createIssue);
 
 export default router;
