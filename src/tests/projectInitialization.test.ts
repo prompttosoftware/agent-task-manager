@@ -1,18 +1,19 @@
 // src/tests/projectInitialization.test.ts
-import { test, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { describe, it, expect } from 'vitest';
 
-test('package.json exists and contains required fields', () => {
-  const packageJsonPath = resolve(process.cwd(), 'package.json');
-  expect(existsSync(packageJsonPath)).toBe(true);
+const packageJsonPath = resolve(__dirname, '../package.json');
 
-  if (existsSync(packageJsonPath)) {
+describe('Package.json Dependencies', () => {
+  it('should include express, @types/express, body-parser, and uuid as dependencies', () => {
     const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
     const packageJson = JSON.parse(packageJsonContent);
 
-    expect(packageJson).toHaveProperty('name');
-    expect(packageJson).toHaveProperty('version');
-    // Add more assertions as needed to check other required fields
-  }
+    expect(packageJson.dependencies).toBeDefined();
+    expect(packageJson.dependencies).toHaveProperty('express');
+    expect(packageJson.dependencies).toHaveProperty('@types/express');
+    expect(packageJson.dependencies).toHaveProperty('body-parser');
+    expect(packageJson.dependencies).toHaveProperty('uuid');
+  });
 });
