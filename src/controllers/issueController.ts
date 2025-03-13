@@ -1,24 +1,76 @@
 // src/controllers/issueController.ts
 import { Request, Response } from 'express';
-import { getIssueService } from '../services/issueService';
+import { issueService } from '../services/issueService';
+import multer from 'multer';
+import path from 'path';
 
-export async function getIssue(req: Request, res: Response) {
-  const issueNumber = req.params.issueNumber;
-  const fieldsParam = req.query.fields as string | undefined;
-
-  try {
-    const issue = await getIssueService(issueNumber, fieldsParam);
-
-    if (!issue) {
-      return res.status(404).json({ message: 'Issue not found' });
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/';
+    // Create the uploads directory if it doesn't exist
+    if (!require('fs').existsSync(uploadDir)) {
+      require('fs').mkdirSync(uploadDir);
     }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
 
-    res.status(200).json(issue);
-  } catch (error: any) {
-    if (error.message === 'Invalid issue number format') {
-      return res.status(400).json({ message: 'Bad Request: Invalid issue number format' });
+const upload = multer({ storage: storage });
+
+export class IssueController {
+  async createIssue(req: Request, res: Response) {
+    try {
+      const { summary, description, issueType } = req.body;
+      const issue = await issueService.createIssue(summary, description, issueType);
+      res.status(201).json(issue);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
-    console.error(error);
-    res.status(500).json({ message: 'Internal Server Error' });
+  }
+
+  async getIssue(req: Request, res: Response) {
+    try {
+      const { issueKey } = req.params;
+      const issue = await issueService.getIssue(issueKey);
+      if (!issue) {
+        return res.status(404).json({ message: 'Issue not found' });
+      }
+      res.json(issue);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  async addAttachment(req: Request, res: Response) {
+    try {
+      const { issueKey } = req.params;
+      // @ts-ignore
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      const issue = await issueService.getIssue(issueKey);
+      if (!issue) {
+        return res.status(404).json({ message: 'Issue not found' });
+      }
+
+      const attachmentPath = file.path;
+      await issueService.addAttachment(issueKey, attachmentPath);
+
+      res.status(201).json({ message: 'Attachment added', filePath: attachmentPath });
+    } catch (error: any) {
+      if (error.message === 'Issue not found') {
+        return res.status(404).json({ message: 'Issue not found' });
+      }
+      res.status(400).json({ message: error.message });
+    }
   }
 }
+
+export const issueController = new IssueController();
