@@ -1,20 +1,21 @@
 // src/controllers/webhookController.ts
 import { Request, Response } from 'express';
-import { registerWebhook } from '../services/webhookService';
+import { deleteWebhook } from '../services/webhookService';
 
-export async function createWebhook(req: Request, res: Response) {
+export const deleteWebhookHandler = async (req: Request, res: Response) => {
+  const { webhookID } = req.params;
+
   try {
-    const webhook = await registerWebhook(req.body);
-    res.status(201).json({
-      name: webhook.name,
-      id: webhook.id
-    });
+    await deleteWebhook(webhookID);
+    res.status(204).send(); // No Content
   } catch (error: any) {
-    if (error.message === 'Bad Request') {
-      res.status(400).json({ message: error.message });
+    if (error.message === 'Webhook not found') {
+      res.status(404).json({ message: 'Webhook not found' });
+    } else if (error.message === 'Invalid webhookID') {
+      res.status(400).json({ message: 'Invalid webhookID format' });
     } else {
       console.error(error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
-}
+};
