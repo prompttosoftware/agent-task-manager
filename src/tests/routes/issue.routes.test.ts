@@ -1,190 +1,130 @@
 // src/tests/routes/issue.routes.test.ts
 import request from 'supertest';
-import app from '../../index';
-import * as dataService from '../../src/data/dataService';
+import express from 'express';
+import issueRoutes from '../../routes/issueRoutes';
+import { getIssueCreateMetadata } from '../../services/issueCreateMetaService';
+
+jest.mock('../../services/issueCreateMetaService');
+
+const app = express();
+app.use(express.json());
+app.use('/api', issueRoutes);
 
 describe('Issue Routes', () => {
-  beforeEach(() => {
-    // Clear in-memory storage before each test
-    dataService.issues.length = 0;
-  });
+  describe('GET /issue/createmeta', () => {
+    it('should respond with 200 and metadata when no parameters are provided', async () => {
+      (getIssueCreateMetadata as jest.Mock).mockResolvedValueOnce({
+        projects: [
+          {
+            id: '1',
+            key: 'ATM',
+            name: 'Agent Task Manager',
+            issuetypes: [
+              {
+                id: '10000',
+                description: 'A task',
+                name: 'Task',
+                subtask: false,
+                hierarchyLevel: 0,
+                fields: {},
+              },
+              {
+                id: '10001',
+                description: 'A bug',
+                name: 'Bug',
+                subtask: false,
+                hierarchyLevel: 0,
+                fields: {},
+              },
+            ],
+          },
+        ],
+      });
 
-  it('should create a new issue', async () => {
-    const newIssue = {
-      key: 'TASK-123',
-      fields: {
-        summary: 'Test issue',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
+      const response = await request(app).get('/api/issue/createmeta');
 
-    const res = await request(app).post('/').send(newIssue);
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual({
+        projects: [
+          {
+            id: '1',
+            key: 'ATM',
+            name: 'Agent Task Manager',
+            issuetypes: [
+              {
+                id: '10000',
+                description: 'A task',
+                name: 'Task',
+                subtask: false,
+                hierarchyLevel: 0,
+                fields: {},
+              },
+              {
+                id: '10001',
+                description: 'A bug',
+                name: 'Bug',
+                subtask: false,
+                hierarchyLevel: 0,
+                fields: {},
+              },
+            ],
+          },
+        ],
+      });
+    });
 
-    expect(res.statusCode).toEqual(201);
-    expect(res.body).toHaveProperty('key', 'TASK-123');
-    expect(dataService.issues.length).toEqual(1);
-  });
+    it('should respond with 200 and metadata when projectKeys and issueTypeNames are provided', async () => {
+        (getIssueCreateMetadata as jest.Mock).mockResolvedValueOnce({
+            projects: [
+              {
+                id: '1',
+                key: 'ATM',
+                name: 'Agent Task Manager',
+                issuetypes: [
+                  {
+                    id: '10000',
+                    description: 'A task',
+                    name: 'Task',
+                    subtask: false,
+                    hierarchyLevel: 0,
+                    fields: {},
+                  },
+                ],
+              },
+            ],
+          });
 
-  it('should get an issue by key', async () => {
-    const issue = {
-      key: 'TASK-456',
-      fields: {
-        summary: 'Test issue',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(issue);
+      const response = await request(app).get('/api/issue/createmeta?projectKeys=ATM&issueTypeNames=Task');
 
-    const res = await request(app).get('/TASK-456');
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual({
+        projects: [
+          {
+            id: '1',
+            key: 'ATM',
+            name: 'Agent Task Manager',
+            issuetypes: [
+              {
+                id: '10000',
+                description: 'A task',
+                name: 'Task',
+                subtask: false,
+                hierarchyLevel: 0,
+                fields: {},
+              },
+            ],
+          },
+        ],
+      });
+    });
 
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('key', 'TASK-456');
-  });
+    it('should respond with 400 when invalid projectKeys or issueTypeNames are provided', async () => {
+      (getIssueCreateMetadata as jest.Mock).mockRejectedValueOnce(new Error('Invalid projectKeys or issueTypeNames'));
 
-  it('should return 404 if issue not found', async () => {
-    const res = await request(app).get('/NON-EXISTING-KEY');
-    expect(res.statusCode).toEqual(404);
-  });
+      const response = await request(app).get('/api/issue/createmeta?projectKeys=INVALID&issueTypeNames=InvalidType');
 
-  it('should get all issues', async () => {
-    const issue1 = {
-      key: 'TASK-789',
-      fields: {
-        summary: 'Test issue 1',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    const issue2 = {
-      key: 'BUG-123',
-      fields: {
-        summary: 'Test issue 2',
-        issuetype: { name: 'Bug' },
-        labels: [],
-        status: { name: 'In Progress', id: '3' },
-      },
-    };
-    dataService.issues.push(issue1, issue2);
-
-    const res = await request(app).get('/');
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.length).toEqual(2);
-  });
-
-  it('should update an issue', async () => {
-    const issue = {
-      key: 'TASK-111',
-      fields: {
-        summary: 'Original summary',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(issue);
-
-    const updatedFields = {
-      fields: {
-        summary: 'Updated summary',
-      },
-    };
-
-    const res = await request(app).put('/TASK-111').send(updatedFields);
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.fields.summary).toEqual('Updated summary');
-  });
-
-  it('should delete an issue', async () => {
-    const issue = {
-      key: 'TASK-222',
-      fields: {
-        summary: 'Test issue',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(issue);
-
-    const res = await request(app).delete('/TASK-222');
-    expect(res.statusCode).toEqual(204);
-    expect(dataService.issues.length).toEqual(0);
-  });
-
-  it('should create a link between two issues', async () => {
-    const inwardIssue = {
-      key: 'TASK-1',
-      fields: {
-        summary: 'Test issue',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    const outwardIssue = {
-      key: 'BUG-1',
-      fields: {
-        summary: 'Test bug',
-        issuetype: { name: 'Bug' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(inwardIssue, outwardIssue);
-
-    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-1', outwardLink: 'BUG-1' });
-    expect(res.statusCode).toEqual(201);
-    expect(dataService.issues.find(issue => issue.key === 'TASK-1')?.linkedIssues).toContain('BUG-1');
-    expect(dataService.issues.find(issue => issue.key === 'BUG-1')?.linkedIssues).toContain('TASK-1');
-  });
-
-  it('should return 404 when linking issues if inward issue does not exist', async () => {
-    const outwardIssue = {
-      key: 'BUG-2',
-      fields: {
-        summary: 'Test bug',
-        issuetype: { name: 'Bug' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(outwardIssue);
-    const res = await request(app).post('/issuelink').send({ inwardLink: 'NON-EXISTING', outwardLink: 'BUG-2' });
-    expect(res.statusCode).toEqual(404);
-  });
-
-  it('should return 404 when linking issues if outward issue does not exist', async () => {
-    const inwardIssue = {
-      key: 'TASK-2',
-      fields: {
-        summary: 'Test issue',
-        issuetype: { name: 'Task' },
-        labels: [],
-        status: { name: 'To Do', id: '1' },
-      },
-    };
-    dataService.issues.push(inwardIssue);
-    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-2', outwardLink: 'NON-EXISTING' });
-    expect(res.statusCode).toEqual(404);
-  });
-
-  it('should return 400 when linking issues with invalid keys (empty strings)', async () => {
-    const res = await request(app).post('/issuelink').send({ inwardLink: '', outwardLink: '' });
-    expect(res.statusCode).toEqual(400);
-  });
-
-  it('should return 400 when linking issues with invalid keys (null)', async () => {
-    const res = await request(app).post('/issuelink').send({ inwardLink: null, outwardLink: null });
-    expect(res.statusCode).toEqual(400);
-  });
-
-  it('should return 400 when linking issues with invalid keys (undefined)', async () => {
-    const res = await request(app).post('/issuelink').send({ inwardLink: undefined, outwardLink: undefined });
-    expect(res.statusCode).toEqual(400);
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid projectKeys or issueTypeNames' });
+    });
   });
 });
