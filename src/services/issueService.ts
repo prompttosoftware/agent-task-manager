@@ -1,34 +1,37 @@
 // src/services/issueService.ts
-import { v4 as uuidv4 } from 'uuid';
 
-interface Issue {
-  id: string;
-  key: string;
-  fields: {
-    summary: string;
-    issuetype: { name: string };
-    labels: string[];
-  };
-}
+export async function getIssueTransitions(issueKey: string) {
+    // Mock issue data and workflow
+    const issue = {
+        'TASK-1': { status: 'To Do' },
+        'TASK-2': { status: 'In Progress' },
+        'TASK-3': { status: 'Done' }
+    };
 
-let issues: Issue[] = []; // In-memory storage
+    if (!issue[issueKey]) {
+        throw new Error('Issue not found');
+    }
 
-export async function createIssue(issueData: any): Promise<Issue> {
-  // Validate the issue data (basic example)
-  if (!issueData || !issueData.fields || !issueData.fields.summary || !issueData.fields.issuetype || !issueData.fields.labels) {
-    throw new Error('Invalid issue data.  Missing required fields.');
-  }
+    const currentStatus = issue[issueKey].status;
+    let transitions: any[] = [];
 
-  const newIssue: Issue = {
-    id: uuidv4(),
-    key: `ATM-${issues.length + 1}`, // Generate a simple key
-    fields: {
-      summary: issueData.fields.summary,
-      issuetype: { name: issueData.fields.issuetype.name },
-      labels: issueData.fields.labels,
-    },
-  };
+    switch (currentStatus) {
+        case 'To Do':
+            transitions = [
+                { id: '21', name: 'In Progress' }
+            ];
+            break;
+        case 'In Progress':
+            transitions = [
+                { id: '31', name: 'Done' }
+            ];
+            break;
+        case 'Done':
+            transitions = []; // No transitions from Done
+            break;
+        default:
+            transitions = []; // Default case, no transitions
+    }
 
-  issues.push(newIssue);
-  return newIssue;
+    return transitions;
 }

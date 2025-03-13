@@ -2,12 +2,18 @@
 import { Request, Response } from 'express';
 import * as issueService from '../services/issueService';
 
-export async function createIssue(req: Request, res: Response) {
+export async function getIssueTransitions(req: Request, res: Response): Promise<void> {
+  const { issueKey } = req.params;
+
   try {
-    const newIssue = await issueService.createIssue(req.body);
-    res.status(201).json(newIssue);
+    const transitions = await issueService.getIssueTransitions(issueKey);
+    res.status(200).json({ transitions });
   } catch (error: any) {
-    console.error(error);
-    res.status(400).json({ error: error.message || 'Failed to create issue' });
+    if (error.message === 'Issue not found') {
+      res.status(404).json({ message: 'Issue not found' });
+    } else {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
   }
 }
