@@ -18,6 +18,8 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.8.2"
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
   }
 }
