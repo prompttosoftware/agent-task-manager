@@ -28,12 +28,5 @@ export const linkIssues = async (inwardKey: string, outwardKey: string): Promise
         throw new Error('Invalid issue keys');
     }
 
-    const inwardIssue = dataService.getIssueByKey(inwardKey);
-    const outwardIssue = dataService.getIssueByKey(outwardKey);
-
-    if (!inwardIssue || !outwardIssue) {
-        throw new Error('Issue not found');
-    }
-
-    dataService.addIssueLink(inwardKey, outwardKey);
+    dataService.linkIssues(inwardKey, outwardKey);
 };
