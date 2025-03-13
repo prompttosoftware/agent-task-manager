@@ -1,16 +1,9 @@
 // src/routes/index.ts
 import express from 'express';
-import { issueController } from '../controllers';
-import { createWebhookHandler, getWebhookHandler, deleteWebhookHandler } from '../controllers/webhookController';
+import * as issueController from '../controllers/issueController';
 
 const router = express.Router();
 
-// Issue routes
-router.get('/issues', issueController.getAllIssues);
-
-// Webhook routes
-router.post('/webhook', createWebhookHandler);
-router.get('/webhook/:webhookID', getWebhookHandler);
-router.delete('/webhook/:webhookID', deleteWebhookHandler);
+router.get('/issue/:issueKey/transitions', issueController.getIssueTransitions);
 
 export default router;
