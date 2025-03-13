@@ -1,7 +1,7 @@
 // src/tests/routes/issue.routes.test.ts
 import request from 'supertest';
 import app from '../../index';
-import * as dataService from '../../src/data/inMemoryStorage';
+import * as dataService from '../../src/data/dataService';
 
 describe('Issue Routes', () => {
   beforeEach(() => {
@@ -143,13 +143,48 @@ describe('Issue Routes', () => {
     expect(dataService.issues.find(issue => issue.key === 'BUG-1')?.linkedIssues).toContain('TASK-1');
   });
 
-  it('should return 404 when linking issues if one does not exist', async () => {
-    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-1', outwardLink: 'NON-EXISTING' });
+  it('should return 404 when linking issues if inward issue does not exist', async () => {
+    const outwardIssue = {
+      key: 'BUG-2',
+      fields: {
+        summary: 'Test bug',
+        issuetype: { name: 'Bug' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(outwardIssue);
+    const res = await request(app).post('/issuelink').send({ inwardLink: 'NON-EXISTING', outwardLink: 'BUG-2' });
     expect(res.statusCode).toEqual(404);
   });
 
-  it('should return 400 when linking issues with invalid keys', async () => {
+  it('should return 404 when linking issues if outward issue does not exist', async () => {
+    const inwardIssue = {
+      key: 'TASK-2',
+      fields: {
+        summary: 'Test issue',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(inwardIssue);
+    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-2', outwardLink: 'NON-EXISTING' });
+    expect(res.statusCode).toEqual(404);
+  });
+
+  it('should return 400 when linking issues with invalid keys (empty strings)', async () => {
     const res = await request(app).post('/issuelink').send({ inwardLink: '', outwardLink: '' });
+    expect(res.statusCode).toEqual(400);
+  });
+
+  it('should return 400 when linking issues with invalid keys (null)', async () => {
+    const res = await request(app).post('/issuelink').send({ inwardLink: null, outwardLink: null });
+    expect(res.statusCode).toEqual(400);
+  });
+
+  it('should return 400 when linking issues with invalid keys (undefined)', async () => {
+    const res = await request(app).post('/issuelink').send({ inwardLink: undefined, outwardLink: undefined });
     expect(res.statusCode).toEqual(400);
   });
 });
