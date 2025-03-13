@@ -1,38 +1,18 @@
 // src/routes/webhookRoutes.ts
+
 import express from 'express';
-import * as webhookService from '../services/webhookService';
+import { WebhookController } from '../controllers/webhookController';
 
 const router = express.Router();
+const webhookController = new WebhookController();
 
-router.post('/', (req, res) => {
-    try {
-        const webhook = webhookService.registerWebhook(req.body);
-        res.status(201).json(webhook);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-});
+// POST /webhook
+router.post('/', webhookController.registerWebhook);
 
-router.get('/', (req, res) => {
-    try {
-        const webhooks = webhookService.listWebhooks();
-        res.json(webhooks);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-});
+// GET /webhook
+router.get('/', webhookController.getWebhooks);
 
-router.delete('/:id', (req, res) => {
-    try {
-        const success = webhookService.deleteWebhook(req.params.id);
-        if (success) {
-            res.status(204).send();
-        } else {
-            res.status(404).json({ message: 'Webhook not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-});
+// DELETE /webhook/:webhookID
+router.delete('/:webhookID', webhookController.deleteWebhook);
 
 export default router;

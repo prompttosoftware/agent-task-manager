@@ -1,21 +1,50 @@
 // src/controllers/webhookController.ts
+
 import { Request, Response } from 'express';
-import { deleteWebhook } from '../services/webhookService';
+import { WebhookService } from '../services/webhookService';
 
-export const deleteWebhookHandler = async (req: Request, res: Response) => {
-  const { webhookID } = req.params;
+const webhookService = new WebhookService();
 
-  try {
-    await deleteWebhook(webhookID);
-    res.status(204).send(); // No Content
-  } catch (error: any) {
-    if (error.message === 'Webhook not found') {
-      res.status(404).json({ message: 'Webhook not found' });
-    } else if (error.message === 'Invalid webhookID') {
-      res.status(400).json({ message: 'Invalid webhookID format' });
-    } else {
+export class WebhookController {
+  // Webhook Registration: POST /webhook
+  registerWebhook(req: Request, res: Response) {
+    try {
+      const { name, url, events, filters } = req.body;
+      const webhook = webhookService.registerWebhook(name, url, events, filters);
+      res.status(201).json(webhook);
+    } catch (error:any) {
       console.error(error);
-      res.status(500).json({ message: 'Internal server error' });
+      res.status(500).json({ message: error.message || 'Internal Server Error' });
     }
   }
-};
+
+  // Webhook Listing: GET /webhook
+  getWebhooks(req: Request, res: Response) {
+    try {
+      const webhooks = webhookService.getWebhooks();
+      if (webhooks.length === 0) {
+        return res.status(204).send(); // No Content
+      }
+      res.status(200).json(webhooks);
+    } catch (error:any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Internal Server Error' });
+    }
+  }
+
+  // Webhook Deletion: DELETE /webhook/{webhookID}
+  deleteWebhook(req: Request, res: Response) {
+    try {
+      const { webhookID } = req.params;
+      const deleted = webhookService.deleteWebhook(webhookID);
+      if (deleted) {
+        res.status(204).send(); // No Content
+      } else {
+        res.status(404).json({ message: 'Webhook not found' });
+      }
+    } catch (error:any) {
+      console.error(error);
+      res.status(500).json({ message: error.message || 'Internal Server Error' });
+    }
+  }
+}
