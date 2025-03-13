@@ -1,67 +1,155 @@
 // src/tests/routes/issue.routes.test.ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import { app } from '../../index'; // Assuming you have an app instance
-import { InMemoryStorage } from '../../data/inMemoryStorage';
-import { DataService } from '../../services/dataService';
-import { IssueService } from '../../services/issueService';
+import app from '../../index';
+import * as dataService from '../../src/data/inMemoryStorage';
 
-const dataService = new DataService(new InMemoryStorage());
-const issueService = new IssueService(dataService);
-
-describe('Issue Routes Integration Tests', () => {
-  beforeAll(async () => {
-    // Seed in-memory data if needed
-    await issueService.createIssue({ summary: 'Test Issue', description: 'Test Description', assignee: 'testuser' });
+describe('Issue Routes', () => {
+  beforeEach(() => {
+    // Clear in-memory storage before each test
+    dataService.issues.length = 0;
   });
 
-  afterAll(async () => {
-    // Clean up in-memory data if needed
-    dataService.clear();
-  });
-
-  it('GET /api/issues should return a list of issues', async () => {
-    const res = await request(app).get('/api/issues');
-    expect(res.statusCode).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-  });
-
-  it('POST /api/issues should create a new issue', async () => {
+  it('should create a new issue', async () => {
     const newIssue = {
-      summary: 'New Test Issue',
-      description: 'New Test Description',
-      assignee: 'anotheruser',
+      key: 'TASK-123',
+      fields: {
+        summary: 'Test issue',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
     };
-    const res = await request(app).post('/api/issues').send(newIssue);
-    expect(res.statusCode).toBe(201);
-    expect(res.body).toHaveProperty('id');
-    expect(res.body.summary).toBe(newIssue.summary);
+
+    const res = await request(app).post('/').send(newIssue);
+
+    expect(res.statusCode).toEqual(201);
+    expect(res.body).toHaveProperty('key', 'TASK-123');
+    expect(dataService.issues.length).toEqual(1);
   });
 
-  it('GET /api/issues/:id should return a specific issue', async () => {
-    const allIssues = await request(app).get('/api/issues');
-    const issueId = allIssues.body[0].id;
-    const res = await request(app).get(`/api/issues/${issueId}`);
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toHaveProperty('id');
+  it('should get an issue by key', async () => {
+    const issue = {
+      key: 'TASK-456',
+      fields: {
+        summary: 'Test issue',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(issue);
+
+    const res = await request(app).get('/TASK-456');
+
+    expect(res.statusCode).toEqual(200);
+    expect(res.body).toHaveProperty('key', 'TASK-456');
   });
 
-  it('PUT /api/issues/:id should update an issue', async () => {
-    const allIssues = await request(app).get('/api/issues');
-    const issueId = allIssues.body[0].id;
-    const updatedIssue = { summary: 'Updated Test Issue' };
-    const res = await request(app).put(`/api/issues/${issueId}`).send(updatedIssue);
-    expect(res.statusCode).toBe(200);
-    expect(res.body.summary).toBe(updatedIssue.summary);
+  it('should return 404 if issue not found', async () => {
+    const res = await request(app).get('/NON-EXISTING-KEY');
+    expect(res.statusCode).toEqual(404);
   });
 
-  it('DELETE /api/issues/:id should delete an issue', async () => {
-    const allIssues = await request(app).get('/api/issues');
-    const issueId = allIssues.body[0].id;
-    const res = await request(app).delete(`/api/issues/${issueId}`);
-    expect(res.statusCode).toBe(204);
-    // Verify that the issue is actually deleted (optional)
-    const getRes = await request(app).get(`/api/issues/${issueId}`);
-    expect(getRes.statusCode).toBe(404);
+  it('should get all issues', async () => {
+    const issue1 = {
+      key: 'TASK-789',
+      fields: {
+        summary: 'Test issue 1',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    const issue2 = {
+      key: 'BUG-123',
+      fields: {
+        summary: 'Test issue 2',
+        issuetype: { name: 'Bug' },
+        labels: [],
+        status: { name: 'In Progress', id: '3' },
+      },
+    };
+    dataService.issues.push(issue1, issue2);
+
+    const res = await request(app).get('/');
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.length).toEqual(2);
+  });
+
+  it('should update an issue', async () => {
+    const issue = {
+      key: 'TASK-111',
+      fields: {
+        summary: 'Original summary',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(issue);
+
+    const updatedFields = {
+      fields: {
+        summary: 'Updated summary',
+      },
+    };
+
+    const res = await request(app).put('/TASK-111').send(updatedFields);
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.fields.summary).toEqual('Updated summary');
+  });
+
+  it('should delete an issue', async () => {
+    const issue = {
+      key: 'TASK-222',
+      fields: {
+        summary: 'Test issue',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(issue);
+
+    const res = await request(app).delete('/TASK-222');
+    expect(res.statusCode).toEqual(204);
+    expect(dataService.issues.length).toEqual(0);
+  });
+
+  it('should create a link between two issues', async () => {
+    const inwardIssue = {
+      key: 'TASK-1',
+      fields: {
+        summary: 'Test issue',
+        issuetype: { name: 'Task' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    const outwardIssue = {
+      key: 'BUG-1',
+      fields: {
+        summary: 'Test bug',
+        issuetype: { name: 'Bug' },
+        labels: [],
+        status: { name: 'To Do', id: '1' },
+      },
+    };
+    dataService.issues.push(inwardIssue, outwardIssue);
+
+    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-1', outwardLink: 'BUG-1' });
+    expect(res.statusCode).toEqual(201);
+    expect(dataService.issues.find(issue => issue.key === 'TASK-1')?.linkedIssues).toContain('BUG-1');
+    expect(dataService.issues.find(issue => issue.key === 'BUG-1')?.linkedIssues).toContain('TASK-1');
+  });
+
+  it('should return 404 when linking issues if one does not exist', async () => {
+    const res = await request(app).post('/issuelink').send({ inwardLink: 'TASK-1', outwardLink: 'NON-EXISTING' });
+    expect(res.statusCode).toEqual(404);
+  });
+
+  it('should return 400 when linking issues with invalid keys', async () => {
+    const res = await request(app).post('/issuelink').send({ inwardLink: '', outwardLink: '' });
+    expect(res.statusCode).toEqual(400);
   });
 });
