@@ -6,7 +6,16 @@ export interface IssueType {
   name: string;
   subtask: boolean;
   hierarchyLevel: number;
-  fields: any;
+  fields: {
+    [key: string]: {
+      type: string; // e.g., "string", "number", "array", "user", "project", "select"
+      required: boolean;
+      name: string;
+      description?: string;
+      allowedValues?: string[]; // For select fields
+      // Add other field-specific properties as needed
+    };
+  };
 }
 
 export interface Project {
@@ -28,7 +37,33 @@ const projects: Project[] = [
         name: 'Task',
         subtask: false,
         hierarchyLevel: 0,
-        fields: { /* Example fields metadata */ },
+        fields: {
+          summary: {
+            type: 'string',
+            required: true,
+            name: 'Summary',
+            description: 'Brief summary of the task',
+          },
+          description: {
+            type: 'string',
+            required: false,
+            name: 'Description',
+            description: 'Detailed description of the task',
+          },
+          assignee: {
+            type: 'user',
+            required: false,
+            name: 'Assignee',
+            description: 'The person responsible for the task',
+          },
+          priority: {
+            type: 'select',
+            required: true,
+            name: 'Priority',
+            description: 'The priority of the task',
+            allowedValues: ['Highest', 'High', 'Medium', 'Low', 'Lowest'],
+          },
+        },
       },
       {
         id: '10001',
@@ -36,7 +71,39 @@ const projects: Project[] = [
         name: 'Bug',
         subtask: false,
         hierarchyLevel: 0,
-        fields: { /* Example fields metadata */ },
+        fields: {
+          summary: {
+            type: 'string',
+            required: true,
+            name: 'Summary',
+            description: 'Brief summary of the bug',
+          },
+          description: {
+            type: 'string',
+            required: false,
+            name: 'Description',
+            description: 'Detailed description of the bug',
+          },
+          assignee: {
+            type: 'user',
+            required: false,
+            name: 'Assignee',
+            description: 'The person responsible for the bug fix',
+          },
+          priority: {
+            type: 'select',
+            required: true,
+            name: 'Priority',
+            description: 'The priority of the bug',
+            allowedValues: ['Highest', 'High', 'Medium', 'Low', 'Lowest'],
+          },
+          environment: {
+            type: 'string',
+            required: false,
+            name: 'Environment',
+            description: 'The environment where the bug was found',
+          },
+        },
       },
     ],
   },
