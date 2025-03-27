@@ -1,45 +1,51 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
-import { getIssuesForBoard } from './issueController';
+import { getIssuesForBoardController } from './issueController';
 import * as issueService from '../services/issueService';
-import express from 'express';
+import express, { Router } from 'express';
 
-// Mock the express module
-vi.mock('express', () => ({
-  __esModule: true,
-  json: vi.fn().mockImplementation(() => (req: Request, res: Response, next: NextFunction) => next()),
-  Router: vi.fn(() => ({
-    get: vi.fn()
-  }))
-}));
+// Mock the express module correctly
+vi.mock('express', () => {
+  const actual = vi.importActual('express');
+  return {
+    __esModule: true,
+    ...actual,
+    json: vi.fn().mockImplementation((data: any) => data),
+    status: vi.fn().mockImplementation(() => ({ json: vi.fn() })),
+    Router: vi.fn(() => ({
+      get: vi.fn(),
+    })),
+  };
+});
 
 describe('issueController', () => {
   it('should return issues for a valid board ID', async () => {
     const mockBoardId = 'validBoardId';
     const mockIssues = [{ id: '1', title: 'Issue 1' }];
-    vi.spyOn(issueService, 'getIssuesForBoard').mockResolvedValue(mockIssues);
+    vi.spyOn(issueService, 'getIssuesForBoardService').mockResolvedValue(mockIssues);
 
     const mockRequest = { params: { boardId: mockBoardId } } as unknown as Request;
     const mockResponse = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
 
-    await getIssuesForBoard(mockRequest, mockResponse, {} as NextFunction);
+    await getIssuesForBoardController(mockRequest, mockResponse, {} as NextFunction);
 
     expect(mockResponse.status).toHaveBeenCalledWith(200);
     expect(mockResponse.json).toHaveBeenCalledWith(mockIssues);
-    expect(issueService.getIssuesForBoard).toHaveBeenCalledWith(mockBoardId);
+    expect(issueService.getIssuesForBoardService).toHaveBeenCalledWith(mockBoardId);
   });
 
   it('should return a 404 for an invalid board ID', async () => {
     const mockBoardId = 'invalidBoardId';
-    vi.spyOn(issueService, 'getIssuesForBoard').mockRejectedValue(new Error('Board not found'));
+    const errorMessage = 'Board not found';
+    vi.spyOn(issueService, 'getIssuesForBoardService').mockRejectedValue(new Error(errorMessage));
 
     const mockRequest = { params: { boardId: mockBoardId } } as unknown as Request;
     const mockResponse = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
 
-    await getIssuesForBoard(mockRequest, mockResponse, {} as NextFunction);
+    await getIssuesForBoardController(mockRequest, mockResponse, {} as NextFunction);
 
     expect(mockResponse.status).toHaveBeenCalledWith(404);
-    expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Board not found' });
-    expect(issueService.getIssuesForBoard).toHaveBeenCalledWith(mockBoardId);
+    expect(mockResponse.json).toHaveBeenCalledWith({ error: errorMessage });
+    expect(issueService.getIssuesForBoardService).toHaveBeenCalledWith(mockBoardId);
   });
 });
