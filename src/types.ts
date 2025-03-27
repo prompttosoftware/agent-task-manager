@@ -11,13 +11,13 @@ export interface BoardStatus {
 }
 
 export interface Board {
-  id: string | number;
+  id: number;
   name: string;
   statuses: BoardStatus[];
 }
 
 export interface Issue {
-  id: string | number;
+  id: number;
   key: string;
   fields: {
     summary: string;
