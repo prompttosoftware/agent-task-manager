@@ -48,6 +48,12 @@ boards.set(1, {
 // Get issues for a specific board
 app.get('/board/:boardId/issues', getIssuesForBoardController);
 
+// Implement API endpoint for 'List boards'
+app.get('/boards', (req: Request, res: Response) => {
+    const boardList = Array.from(boards.values());
+    res.status(200).json(boardList);
+});
+
 // Create a new issue (basic implementation - add more fields as needed)
 app.post('/issues', (req: Request, res: Response) => {
     const { key, summary, boardId }: { key: string, summary: string, boardId: number } = req.body;
