@@ -1,16 +1,30 @@
 // Define types and interfaces for webhooks
 
-export interface WebhookPayload {
-  // Define the structure of the webhook payload here.  This will depend on the specific webhook service.
-  // Example:
-  url: string;
-  eventType: string;
-  // Add other relevant fields here, e.g., headers, secret, etc.
+export interface WebhookRegisterRequest {
+  callbackUrl: string;
+  secret?: string;
+  events: string[];
+}
+
+export interface WebhookRegisterResponse {
+  id: string;
+  callbackUrl: string;
+  events: string[];
+  status: string; // e.g., 'active', 'inactive'
+}
+
+export interface WebhookDeleteResponse {
+  id: string;
+  status: string; // e.g., 'deleted'
 }
 
 export interface Webhook {
-  id: number;
-  url: string;
-  eventType: string;
-  // Add other fields as needed
+  id: string;
+  callbackUrl: string;
+  events: string[];
+  status: string;
+}
+
+export interface WebhookListResponse {
+  webhooks: Webhook[];
 }
