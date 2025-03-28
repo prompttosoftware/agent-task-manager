@@ -23,3 +23,17 @@ export const createIssue = async (issueData: any): Promise<Issue> => {
   };
   return newIssue;
 };
+
+export const updateIssue = async (issueKey: string, updateData: any): Promise<Issue> => {
+  // Placeholder implementation
+  // In a real application, this would interact with a database
+    const updatedIssue: Issue = {
+        id: issueKey,
+        summary: updateData.summary || 'Updated Summary',
+        description: updateData.description || 'Updated Description',
+        type: updateData.type || 'Task',
+        project: updateData.project || 'ATM',
+        status: updateData.status || 'In Progress',
+    };
+    return updatedIssue;
+};
