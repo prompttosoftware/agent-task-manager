@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { WebhookService } from '../services/webhook.service';
-import { WebhookRegisterRequest, RegisterWebhookResponse, DeleteWebhookResponse, ListWebhooksResponse } from '../types/webhook.d';
+import { WebhookRegisterRequest, WebhookDeleteResponse, WebhookListResponse } from '../types/webhook.d';
 
 export class WebhookController {
   private webhookService: WebhookService;
@@ -9,54 +9,35 @@ export class WebhookController {
     this.webhookService = webhookService;
   }
 
-  async registerWebhook(req: Request, res: Response) {
+  async registerWebhook(req: Request, res: Response): Promise<void> {
     try {
-      const { callbackUrl, secret, events } = req.body;
-      const request: WebhookRegisterRequest = {
-        callbackUrl,
-        secret,
-        events,
-      };        
-      const response: RegisterWebhookResponse = await this.webhookService.registerWebhook(request);
-      res.status(201).json(response);
+      const requestBody: WebhookRegisterRequest = req.body;
+      const webhook = await this.webhookService.registerWebhook(requestBody);
+      res.status(201).json(webhook);
     } catch (error: any) {
       console.error('Error registering webhook:', error);
-      res.status(500).json({ error: error.message || 'Failed to register webhook' });
+      res.status(500).json({ message: error.message });
     }
   }
 
-  async deleteWebhook(req: Request, res: Response) {
+  async deleteWebhook(req: Request, res: Response): Promise<void> {
     try {
       const webhookId = req.params.webhookId;
-      const response: DeleteWebhookResponse = await this.webhookService.deleteWebhook(webhookId);
-      res.status(200).json(response);
+      const result: WebhookDeleteResponse = await this.webhookService.deleteWebhook(webhookId);
+      res.status(200).json(result);
     } catch (error: any) {
       console.error('Error deleting webhook:', error);
-      res.status(500).json({ error: error.message || 'Failed to delete webhook' });
+      res.status(500).json({ message: error.message });
     }
   }
 
-  async listWebhooks(req: Request, res: Response) {
+  async listWebhooks(req: Request, res: Response): Promise<void> {
     try {
-      const response: ListWebhooksResponse = await this.webhookService.listWebhooks();
-      res.status(200).json(response);
+      const webhooks: WebhookListResponse = await this.webhookService.listWebhooks();
+      res.status(200).json(webhooks);
     } catch (error: any) {
       console.error('Error listing webhooks:', error);
-      res.status(500).json({ error: error.message || 'Failed to list webhooks' });
+      res.status(500).json({ message: error.message });
     }
   }
 }
-
-// Instantiate WebhookController with the service
-import { createWebhook, deleteWebhook, listWebhooks } from '../services/webhook.service';
-const webhookService = {
-  registerWebhook: createWebhook,
-  deleteWebhook: deleteWebhook,
-  listWebhooks: listWebhooks
-}
-
-const webhookController = new WebhookController(webhookService);
-
-export const registerWebhook = webhookController.registerWebhook.bind(webhookController);
-export const deleteWebhook = webhookController.deleteWebhook.bind(webhookController);
-export const listWebhooks = webhookController.listWebhooks.bind(webhookController);
