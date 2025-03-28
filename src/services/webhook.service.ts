@@ -96,3 +96,10 @@ export interface WebhookQueueItem {
 //   return webhookQueue;
 // }
 
+export async function addWebhookPayloadToQueue(webhookId: string, payload: any): Promise<void> {
+  // Implement queueing logic here. This could involve using a message queue service like RabbitMQ,
+  // Redis, or a database table to store the payloads for later processing.
+  // For this example, we'll just log the payload.
+  console.log(`Adding webhook payload to queue for webhookId ${webhookId}:`, payload);
+  // In a real application, you would enqueue the payload.
+}
