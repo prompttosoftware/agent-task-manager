@@ -1,5 +1,9 @@
 import request from 'supertest';
-import app from '../index'; // Assuming your app is exported
+import { app } from './index'; // Assuming your app is exported
+import { StatusCategory } from './src/models/Board';
+
+// Assuming you have a way to get the app instance, e.g., export app from index.ts
+
 
 describe('GET /issue/createmeta', () => {
   it('responds with JSON data for issue create metadata', async () => {
@@ -342,3 +346,148 @@ describe('GET /issue/:issueId', () => {
   });
 });
 
+// GET /transitions - Implement List Transitions Endpoint
+describe('GET /transitions', () => {
+    it('responds with a list of transitions', async () => {
+        const response = await request(app).get('/transitions');
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toEqual({
+            'To Do': ['In Progress'],
+            'In Progress': ['Done']
+        });
+    });
+});
+
+// POST /issue/:issueId/transitions - Implement Transition Issue Endpoint
+describe('POST /issue/:issueId/transitions', () => {
+    it('transitions an issue to In Progress', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Transition Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const transitionResponse = await request(app)
+            .post(`/issue/${issueId}/transitions`)
+            .send({ transition: 'In Progress' });
+
+        expect(transitionResponse.statusCode).toBe(200);
+        expect(transitionResponse.body.fields.status.name).toBe('In Progress');
+    });
+
+    it('transitions an issue to Done', async () => {
+        // Create an issue and transition to In Progress first
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Transition Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        await request(app)
+            .post(`/issue/${issueId}/transitions`)
+            .send({ transition: 'In Progress' });
+
+        const transitionResponse = await request(app)
+            .post(`/issue/${issueId}/transitions`)
+            .send({ transition: 'Done' });
+
+        expect(transitionResponse.statusCode).toBe(200);
+        expect(transitionResponse.body.fields.status.name).toBe('Done');
+    });
+
+    it('returns 400 for invalid transition', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Transition Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const transitionResponse = await request(app)
+            .post(`/issue/${issueId}/transitions`)
+            .send({ transition: 'Invalid Transition' });
+
+        expect(transitionResponse.statusCode).toBe(400);
+    });
+
+    it('returns 404 if issue does not exist', async () => {
+        const transitionResponse = await request(app)
+            .post('/issue/nonexistent-id/transitions')
+            .send({ transition: 'In Progress' });
+
+        expect(transitionResponse.statusCode).toBe(404);
+    });
+
+    it('returns 400 if transition is missing', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Transition Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const transitionResponse = await request(app)
+            .post(`/issue/${issueId}/transitions`)
+            .send({});
+
+        expect(transitionResponse.statusCode).toBe(400);
+    });
+});
+
+// PUT /issue/:issueId/assignee - Implement Update Assignee Endpoint
+describe('PUT /issue/:issueId/assignee', () => {
+    it('updates the assignee of an issue', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Assignee Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const assigneeResponse = await request(app)
+            .put(`/issue/${issueId}/assignee`)
+            .send({ assignee: 'testUser' });
+
+        expect(assigneeResponse.statusCode).toBe(200);
+        expect(assigneeResponse.body.fields.assignee).toBe('testUser');
+    });
+
+    it('returns 404 if issue does not exist', async () => {
+        const assigneeResponse = await request(app)
+            .put('/issue/nonexistent-id/assignee')
+            .send({ assignee: 'testUser' });
+
+        expect(assigneeResponse.statusCode).toBe(404);
+    });
+
+    it('returns 400 if assignee is missing', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Assignee Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const assigneeResponse = await request(app)
+            .put(`/issue/${issueId}/assignee`)
+            .send({});
+
+        expect(assigneeResponse.statusCode).toBe(400);
+    });
+
+    it('returns 400 if assignee is invalid', async () => {
+        // Create an issue
+        const createResponse = await request(app)
+            .post('/issues')
+            .send({ summary: 'Assignee Test', issueType: 'Task' });
+        expect(createResponse.statusCode).toBe(201);
+        const issueId = createResponse.body.id;
+
+        const assigneeResponse = await request(app)
+            .put(`/issue/${issueId}/assignee`)
+            .send({ assignee: 123 });
+
+        expect(assigneeResponse.statusCode).toBe(400);
+    });
+});

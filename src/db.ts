@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { Attachment } from './models/attachment';
-import { Issue } from './models/Issue';
+import { Issue, IssueLink } from './models/Issue';
 
 export class Database {
   private db: any;
@@ -26,7 +26,9 @@ export class Database {
         id TEXT PRIMARY KEY,
         summary TEXT NOT NULL,
         statusCategory TEXT NOT NULL,
-        issueType TEXT
+        issueType TEXT,
+        assignee TEXT,
+        links TEXT -- Store issue links as JSON
       )`
     );
   }
@@ -66,18 +68,22 @@ export class Database {
       await this.init();
     }
     const rows = await this.db.all<Issue[]>(
-      'SELECT id, summary, statusCategory, issueType FROM issues WHERE statusCategory = ?', statusCategory
+      'SELECT id, summary, statusCategory, issueType, assignee, links FROM issues WHERE statusCategory = ?', statusCategory
     );
-    return rows;
+    return rows.map(row => ({
+        ...row,
+        links: row.links ? JSON.parse(row.links) : undefined
+    }));
   }
 
   async addIssue(issue: Issue) {
     if (!this.db) {
       await this.init();
     }
+    const links = issue.links ? JSON.stringify(issue.links) : null;
     await this.db.run(
-      'INSERT INTO issues (id, summary, statusCategory, issueType) VALUES (?, ?, ?, ?)',
-      issue.id, issue.summary, issue.statusCategory, issue.issueType
+      'INSERT INTO issues (id, summary, statusCategory, issueType, assignee, links) VALUES (?, ?, ?, ?, ?, ?)',
+      issue.id, issue.summary, issue.statusCategory, issue.issueType, issue.assignee, links
     );
   }
 
@@ -86,9 +92,12 @@ export class Database {
       await this.init();
     }
     const rows = await this.db.all<Issue[]>(
-      'SELECT id, summary, statusCategory, issueType FROM issues WHERE issueType = ?', 'Epic'
+      'SELECT id, summary, statusCategory, issueType, assignee, links FROM issues WHERE issueType = ?', 'Epic'
     );
-    return rows;
+    return rows.map(row => ({
+        ...row,
+        links: row.links ? JSON.parse(row.links) : undefined
+    }));
   }
 
   async getIssue(id: string): Promise<Issue | undefined> {
@@ -96,17 +105,21 @@ export class Database {
       await this.init();
     }
     const row = await this.db.get<Issue>(
-      'SELECT id, summary, statusCategory, issueType FROM issues WHERE id = ?', id
+      'SELECT id, summary, statusCategory, issueType, assignee, links FROM issues WHERE id = ?', id
     );
-    return row;
+    return row ? {
+      ...row,
+      links: row.links ? JSON.parse(row.links) : undefined
+    } : undefined;
   }
 
-  async updateIssue(id: string, summary: string): Promise<void> {
+  async updateIssue(id: string, summary: string, links?: IssueLink[]): Promise<void> {
     if (!this.db) {
       await this.init();
     }
+    const linksString = links ? JSON.stringify(links) : null;
     await this.db.run(
-      'UPDATE issues SET summary = ? WHERE id = ?', summary, id
+      'UPDATE issues SET summary = ?, links = ? WHERE id = ?', summary, linksString, id
     );
   }
 
@@ -115,9 +128,12 @@ export class Database {
       await this.init();
     }
     const rows = await this.db.all<Issue[]>(
-        'SELECT id, summary, statusCategory, issueType FROM issues WHERE summary LIKE ?', `%${query}%`
+        'SELECT id, summary, statusCategory, issueType, assignee, links FROM issues WHERE summary LIKE ?', `%${query}%`
     );
-    return rows;
+    return rows.map(row => ({
+        ...row,
+        links: row.links ? JSON.parse(row.links) : undefined
+    }));
   }
 
   async deleteIssue(id: string): Promise<void> {
@@ -126,6 +142,24 @@ export class Database {
     }
     await this.db.run(
       'DELETE FROM issues WHERE id = ?', id
+    );
+  }
+
+  async updateIssueStatus(id: string, statusCategory: string): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+    await this.db.run(
+      'UPDATE issues SET statusCategory = ? WHERE id = ?', statusCategory, id
+    );
+  }
+
+  async updateIssueAssignee(id: string, assignee: string): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+    await this.db.run(
+      'UPDATE issues SET assignee = ? WHERE id = ?', assignee, id
     );
   }
 }
