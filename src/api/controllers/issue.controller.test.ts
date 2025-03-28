@@ -1,12 +1,15 @@
-// src/api/controllers/issue.controller.test.ts
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app is exported
+import app from '../../src/index'; // Assuming your app is exported
 import * as issueService from '../services/issue.service';
 import { Issue } from '../types/issue.d';
+import { describe, it, expect, vi, beforeEach } from 'vitest'; // Import Vitest functions
 
-jest.mock('../services/issue.service');
+vi.mock('../services/issue.service'); // Use vi.mock for Vitest
 
 describe('Issue Controller', () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); // Clear mocks before each test
+  });
   describe('GET /issues', () => {
     it('should find issues and return 200', async () => {
       const mockIssues: Issue[] = [
@@ -20,7 +23,7 @@ describe('Issue Controller', () => {
           updatedAt: new Date().toISOString(),
         },
       ];
-      (issueService.findIssues as jest.Mock).mockResolvedValue(mockIssues);
+      (issueService.findIssues as any).mockResolvedValue(mockIssues);
 
       const response = await request(app).get('/issues');
 
@@ -30,7 +33,7 @@ describe('Issue Controller', () => {
     });
 
     it('should return 500 if issueService.findIssues throws an error', async () => {
-      (issueService.findIssues as jest.Mock).mockRejectedValue(new Error('Service error'));
+      (issueService.findIssues as any).mockRejectedValue(new Error('Service error'));
 
       const response = await request(app).get('/issues');
 
@@ -39,25 +42,25 @@ describe('Issue Controller', () => {
       expect(issueService.findIssues).toHaveBeenCalled();
     });
 
-     it('should handle filtering by status', async () => {
-            const mockIssues: Issue[] = [
-                {
-                    id: '1',
-                    summary: 'Test issue',
-                    description: 'This is a test issue',
-                    status: 'open',
-                    assignee: 'testuser',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                },
-            ];
-            (issueService.findIssues as jest.Mock).mockResolvedValue(mockIssues);
+    it('should handle filtering by status', async () => {
+      const mockIssues: Issue[] = [
+        {
+          id: '1',
+          summary: 'Test issue',
+          description: 'This is a test issue',
+          status: 'open',
+          assignee: 'testuser',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+      (issueService.findIssues as any).mockResolvedValue(mockIssues);
 
-            const response = await request(app).get('/issues?status=open');
+      const response = await request(app).get('/issues?status=open');
 
-            expect(response.statusCode).toBe(200);
-            expect(issueService.findIssues).toHaveBeenCalledWith(expect.objectContaining({ status: 'open' }));
-        });
+      expect(response.statusCode).toBe(200);
+      expect(issueService.findIssues).toHaveBeenCalledWith(expect.objectContaining({ status: 'open' }));
+    });
   });
 
   describe('POST /issues', () => {
@@ -75,7 +78,7 @@ describe('Issue Controller', () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      (issueService.createIssue as jest.Mock).mockResolvedValue(mockIssue);
+      (issueService.createIssue as any).mockResolvedValue(mockIssue);
 
       const response = await request(app).post('/issues').send(newIssueData).set('Content-Type', 'application/json');
 
@@ -90,11 +93,11 @@ describe('Issue Controller', () => {
       expect(response.statusCode).toBe(400);
     });
 
-     it('should return 500 if issueService.createIssue throws an error', async () => {
-            (issueService.createIssue as jest.Mock).mockRejectedValue(new Error('Service error'));
-            const response = await request(app).post('/issues').send({ summary: 'test', description: 'test' }).set('Content-Type', 'application/json');
-            expect(response.statusCode).toBe(500);
-            expect(response.body).toEqual({ message: 'Internal Server Error' });
-        });
+    it('should return 500 if issueService.createIssue throws an error', async () => {
+      (issueService.createIssue as any).mockRejectedValue(new Error('Service error'));
+      const response = await request(app).post('/issues').send({ summary: 'test', description: 'test' }).set('Content-Type', 'application/json');
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toEqual({ message: 'Internal Server Error' });
+    });
   });
 });
