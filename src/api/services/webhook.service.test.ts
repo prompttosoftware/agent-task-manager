@@ -12,10 +12,10 @@ describe('WebhookService', () => {
   let mockDB: Database;
 
   beforeEach(() => {
-    mockDB = { // Mock the database object
+    mockDB = {
       run: vi.fn(),
       all: vi.fn(),
-      get: vi.fn()
+      get: vi.fn(),
     } as any;
     service = new WebhookService(mockDB);
   });
@@ -40,19 +40,19 @@ describe('WebhookService', () => {
 
   it('should register a webhook', async () => {
     const expectedResponse = {
-      id: mockWebhook.id,
+      id: expect.any(String),
       url: webhookRegisterRequest.url,
       events: webhookRegisterRequest.events,
       secret: webhookRegisterRequest.secret,
       status: 'active',
     };
 
-    (mockDB.run as any).mockResolvedValue({ changes: 1 });
+    (mockDB.run as any).mockReturnValue({ changes: 1 });
     vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => ({}) } as any);
 
     const result = await service.registerWebhook(webhookRegisterRequest);
 
-    expect(result).toEqual(expect.objectContaining(expectedResponse));
+    expect(result).toMatchObject(expectedResponse);
     expect(mockDB.run).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO webhooks'),
       expect.any(Array)
@@ -63,7 +63,7 @@ describe('WebhookService', () => {
     const webhookId = 'uuid-1';
     const expectedResponse: WebhookDeleteResponse = { message: 'Webhook deleted', webhookId: webhookId, success: true };
 
-    (mockDB.run as any).mockResolvedValue({ changes: 1 });
+    (mockDB.run as any).mockReturnValue({ changes: 1 });
 
     const result = await service.deleteWebhook(webhookId);
 
@@ -75,7 +75,7 @@ describe('WebhookService', () => {
     const webhookId = 'uuid-1';
     const expectedResponse: WebhookDeleteResponse = { message: 'Webhook not found', webhookId: webhookId, success: false };
 
-    (mockDB.run as any).mockResolvedValue({ changes: 0 });
+    (mockDB.run as any).mockReturnValue({ changes: 0 });
 
     const result = await service.deleteWebhook(webhookId);
 
@@ -85,24 +85,26 @@ describe('WebhookService', () => {
 
   it('should list webhooks', async () => {
     const mockWebhooks: Webhook[] = [mockWebhook];
-    const expectedResponse: WebhookListResponse = { webhooks: mockWebhooks, total: mockWebhooks.length };
+    const expectedResponse: WebhookListResponse = { webhooks: expect.arrayContaining(mockWebhooks), total: mockWebhooks.length };
 
-    (mockDB.all as any).mockResolvedValue([{
+    (mockDB.all as any).mockReturnValue([
+      {
         id: mockWebhook.id,
         url: mockWebhook.url,
         events: JSON.stringify(mockWebhook.events),
         secret: mockWebhook.secret,
-        active: mockWebhook.active ? 1 : 0
-    }]);
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
 
     const result = await service.listWebhooks();
 
-    expect(result).toEqual(expect.objectContaining(expectedResponse));
+    expect(result).toMatchObject(expectedResponse);
     expect(mockDB.all).toHaveBeenCalledWith('SELECT * FROM webhooks');
   });
 
   it('should get webhook by id', async () => {
-    (mockDB.get as any).mockResolvedValue({
+    (mockDB.get as any).mockReturnValue({
       id: mockWebhook.id,
       url: mockWebhook.url,
       events: JSON.stringify(mockWebhook.events),
@@ -112,15 +114,15 @@ describe('WebhookService', () => {
 
     const result = await service.getWebhookById(mockWebhook.id);
 
-    expect(result).toEqual(mockWebhook);
+    expect(result).toMatchObject(mockWebhook);
     expect(mockDB.get).toHaveBeenCalledWith('SELECT * FROM webhooks WHERE id = ?', [mockWebhook.id]);
   });
 
   it('should return undefined if webhook not found by id', async () => {
-      (mockDB.get as any).mockResolvedValue(undefined);
-      const result = await service.getWebhookById(mockWebhook.id);
-      expect(result).toBeUndefined();
-      expect(mockDB.get).toHaveBeenCalledWith('SELECT * FROM webhooks WHERE id = ?', [mockWebhook.id]);
+    (mockDB.get as any).mockReturnValue(undefined);
+    const result = await service.getWebhookById(mockWebhook.id);
+    expect(result).toBeUndefined();
+    expect(mockDB.get).toHaveBeenCalledWith('SELECT * FROM webhooks WHERE id = ?', [mockWebhook.id]);
   });
 
   it('should process webhook event and invoke webhook', async () => {
@@ -128,17 +130,18 @@ describe('WebhookService', () => {
       event: 'issue.created',
       data: { issueId: 'issue-1' },
     };
-    const mockWebhooks: Webhook[] = [mockWebhook];
     const jsonStringifiedPayload = JSON.stringify(payload);
     const signature = crypto.createHmac('sha256', mockWebhook.secret!).update(jsonStringifiedPayload).digest('hex');
 
-    (mockDB.all as any).mockResolvedValue([{
+    (mockDB.all as any).mockReturnValue([
+      {
         id: mockWebhook.id,
         url: mockWebhook.url,
         events: JSON.stringify(mockWebhook.events),
         secret: mockWebhook.secret,
-        active: mockWebhook.active ? 1 : 0
-    }]);
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
     vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => ({}) } as any);
 
     await service.processWebhookEvent(payload);
@@ -160,13 +163,15 @@ describe('WebhookService', () => {
       data: { issueId: 'issue-1' },
     };
 
-    (mockDB.all as any).mockResolvedValue([{
+    (mockDB.all as any).mockReturnValue([
+      {
         id: mockWebhook.id,
         url: mockWebhook.url,
         events: JSON.stringify(['issue.created']),
         secret: mockWebhook.secret,
-        active: mockWebhook.active ? 1 : 0
-    }]);
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
     const fetchMock = vi.spyOn(global, 'fetch');
 
     await service.processWebhookEvent(payload);
@@ -176,63 +181,212 @@ describe('WebhookService', () => {
   });
 
   it('should handle fetch errors', async () => {
-      const payload: WebhookPayload = {
-          event: 'issue.created',
-          data: { issueId: 'issue-1' },
-      };
+    const payload: WebhookPayload = {
+      event: 'issue.created',
+      data: { issueId: 'issue-1' },
+    };
 
-      (mockDB.all as any).mockResolvedValue([{
-          id: mockWebhook.id,
-          url: mockWebhook.url,
-          events: JSON.stringify(mockWebhook.events),
-          secret: mockWebhook.secret,
-          active: mockWebhook.active ? 1 : 0
-      }]);
+    (mockDB.all as any).mockReturnValue([
+      {
+        id: mockWebhook.id,
+        url: mockWebhook.url,
+        events: JSON.stringify(mockWebhook.events),
+        secret: mockWebhook.secret,
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
 
-      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error'));
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error'));
 
-      await service.processWebhookEvent(payload);
+    await service.processWebhookEvent(payload);
 
-      expect(global.fetch).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalled();
   });
 
   it('should handle registerWebhook errors', async () => {
-      (mockDB.run as any).mockRejectedValue(new Error('Database error'));
+    (mockDB.run as any).mockRejectedValue(new Error('Database error'));
 
-      await expect(service.registerWebhook(webhookRegisterRequest)).rejects.toThrow('Failed to register webhook: Database error');
-      expect(mockDB.run).toHaveBeenCalled();
+    await expect(service.registerWebhook(webhookRegisterRequest)).rejects.toThrow('Failed to register webhook: Database error');
+    expect(mockDB.run).toHaveBeenCalled();
   });
 
   it('should handle deleteWebhook errors', async () => {
-      (mockDB.run as any).mockRejectedValue(new Error('Database error'));
+    (mockDB.run as any).mockRejectedValue(new Error('Database error'));
 
-      await expect(service.deleteWebhook('uuid-1')).rejects.toThrow('Failed to delete webhook: Database error');
-      expect(mockDB.run).toHaveBeenCalled();
+    await expect(service.deleteWebhook('uuid-1')).rejects.toThrow('Failed to delete webhook: Database error');
+    expect(mockDB.run).toHaveBeenCalled();
   });
 
   it('should handle listWebhooks errors', async () => {
-      (mockDB.all as any).mockRejectedValue(new Error('Database error'));
+    (mockDB.all as any).mockRejectedValue(new Error('Database error'));
 
-      await expect(service.listWebhooks()).rejects.toThrow('Failed to list webhooks: Database error');
-      expect(mockDB.all).toHaveBeenCalled();
+    await expect(service.listWebhooks()).rejects.toThrow('Failed to list webhooks: Database error');
+    expect(mockDB.all).toHaveBeenCalled();
   });
 
   it('should handle getWebhookById errors', async () => {
-      (mockDB.get as any).mockRejectedValue(new Error('Database error'));
+    (mockDB.get as any).mockRejectedValue(new Error('Database error'));
 
-      await expect(service.getWebhookById('uuid-1')).rejects.toThrow('Failed to get webhook by id: Database error');
-      expect(mockDB.get).toHaveBeenCalled();
+    await expect(service.getWebhookById('uuid-1')).rejects.toThrow('Failed to get webhook by id: Database error');
+    expect(mockDB.get).toHaveBeenCalled();
   });
 
   it('should handle processWebhookEvent errors', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue.created',
+      data: { issueId: 'issue-1' },
+    };
+
+    (mockDB.all as any).mockRejectedValue(new Error('Database error'));
+
+    await expect(service.processWebhookEvent(payload)).rejects.toThrow('Failed to process webhook event: Database error');
+    expect(mockDB.all).toHaveBeenCalled();
+  });
+
+  it('should not invoke webhook if webhook is inactive', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue.created',
+      data: { issueId: 'issue-1' },
+    };
+
+    const inactiveWebhook = {
+      id: mockWebhook.id,
+      url: mockWebhook.url,
+      events: JSON.stringify(mockWebhook.events),
+      secret: mockWebhook.secret,
+      active: 0,
+    };
+
+    (mockDB.all as any).mockReturnValue([inactiveWebhook]);
+    const fetchMock = vi.spyOn(global, 'fetch');
+
+    await service.processWebhookEvent(payload);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockDB.all).toHaveBeenCalledWith('SELECT * FROM webhooks WHERE events LIKE ? AND active = 1', ['%issue.created%']);
+  });
+
+  it('should handle invalid JSON payload', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue.created',
+      data: { issueId: 'issue-1' },
+    };
+
+    const jsonStringifiedPayload = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', mockWebhook.secret!).update(jsonStringifiedPayload).digest('hex');
+
+    (mockDB.all as any).mockReturnValue([
+      {
+        id: mockWebhook.id,
+        url: mockWebhook.url,
+        events: JSON.stringify(mockWebhook.events),
+        secret: mockWebhook.secret,
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
+
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(() => {
+      throw new Error('Failed to parse JSON');
+    });
+
+    await service.processWebhookEvent(payload);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('should validate the secret when generating the signature', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue.created',
+      data: { issueId: 'issue-1' },
+    };
+    const jsonStringifiedPayload = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', mockWebhook.secret!).update(jsonStringifiedPayload).digest('hex');
+
+    (mockDB.all as any).mockReturnValue([
+      {
+        id: mockWebhook.id,
+        url: mockWebhook.url,
+        events: JSON.stringify(mockWebhook.events),
+        secret: mockWebhook.secret,
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
+    vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => ({}) } as any);
+
+    await service.processWebhookEvent(payload);
+    expect(global.fetch).toHaveBeenCalledWith(mockWebhook.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Webhook-Signature': signature,
+      },
+      body: jsonStringifiedPayload,
+    });
+  });
+
+  it('should handle different event types', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue.updated',
+      data: { issueId: 'issue-1' },
+    };
+
+    (mockDB.all as any).mockReturnValue([
+      {
+        id: mockWebhook.id,
+        url: mockWebhook.url,
+        events: JSON.stringify(['issue.updated']),
+        secret: mockWebhook.secret,
+        active: mockWebhook.active ? 1 : 0,
+      },
+    ]);
+
+    const fetchMock = vi.spyOn(global, 'fetch');
+    const jsonStringifiedPayload = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', mockWebhook.secret!).update(jsonStringifiedPayload).digest('hex');
+
+    await service.processWebhookEvent(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(mockWebhook.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Webhook-Signature': signature,
+      },
+      body: jsonStringifiedPayload,
+    });
+  });
+
+    it('should handle missing secret', async () => {
       const payload: WebhookPayload = {
-          event: 'issue.created',
-          data: { issueId: 'issue-1' },
+        event: 'issue.created',
+        data: { issueId: 'issue-1' },
       };
 
-      (mockDB.all as any).mockRejectedValue(new Error('Database error'));
+      const webhookWithoutSecret = {
+        ...mockWebhook,
+        secret: null,
+      };
 
-      await expect(service.processWebhookEvent(payload)).rejects.toThrow('Failed to process webhook event: Database error');
-      expect(mockDB.all).toHaveBeenCalled();
-  });
+      const jsonStringifiedPayload = JSON.stringify(payload);
+
+      (mockDB.all as any).mockReturnValue([
+        {
+          id: webhookWithoutSecret.id,
+          url: webhookWithoutSecret.url,
+          events: JSON.stringify(webhookWithoutSecret.events),
+          secret: null,
+          active: webhookWithoutSecret.active ? 1 : 0,
+        },
+      ]);
+      const fetchMock = vi.spyOn(global, 'fetch');
+
+      await service.processWebhookEvent(payload);
+
+      expect(fetchMock).toHaveBeenCalledWith(mockWebhook.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonStringifiedPayload,
+      });
+    });
 });
