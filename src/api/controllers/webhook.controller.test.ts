@@ -1,97 +1,113 @@
-// src/api/controllers/webhook.controller.test.ts
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your app is exported
-import * as webhookService from '../../src/services/webhook.service';
-import { WebhookRegisterRequest, Webhook } from '../../src/types/webhook.d';
+import app from '../../src/app'; // Assuming your Express app is exported from app.ts or similar
+import { WebhookService } from '../../src/api/services/webhook.service';
+import { WebhookRegisterRequest, WebhookDeleteResponse, WebhookListResponse, WebhookStatus } from '../../src/types/webhook.d';
 
-jest.mock('../../src/services/webhook.service');
+// Mock the WebhookService
+jest.mock('../../src/api/services/webhook.service');
+const mockWebhookService = {
+  registerWebhook: jest.fn(),
+  deleteWebhook: jest.fn(),
+  listWebhooks: jest.fn(),
+};
 
-describe('Webhook Controller', () => {
-  describe('POST /webhooks/register', () => {
-    it('should register a new webhook and return 201', async () => {
-      const newWebhook: WebhookRegisterRequest = {
+// Set up the mock service to be used by the controller
+const originalWebhookService = require('../../src/api/services/webhook.service');
+originalWebhookService.WebhookService = jest.fn(() => mockWebhookService);
+
+describe('WebhookController', () => {
+  describe('POST /api/webhooks', () => {
+    it('should register a webhook and return 201', async () => {
+      const mockRequest: WebhookRegisterRequest = {
         callbackUrl: 'https://example.com/webhook',
-        events: ['issue_created'],
+        events: ['issue.created'],
       };
-      const mockWebhook: Webhook = {
-        id: '123',
-        callbackUrl: newWebhook.callbackUrl,
-        events: newWebhook.events,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      const mockResponse = {
+        id: 'webhook-id-123',
+        callbackUrl: 'https://example.com/webhook',
+        events: ['issue.created'],
+        status: WebhookStatus.ACTIVE,
       };
-      (webhookService.registerWebhook as jest.Mock).mockResolvedValue(mockWebhook);
+      mockWebhookService.registerWebhook.mockResolvedValue(mockResponse);
 
-      const response = await request(app)
-        .post('/webhooks/register')
-        .send(newWebhook)
-        .set('Content-Type', 'application/json');
+      const response = await request(app).post('/api/webhooks').send(mockRequest);
 
-      expect(response.statusCode).toBe(201);
-      expect(response.body).toEqual(mockWebhook);
-      expect(webhookService.registerWebhook).toHaveBeenCalledWith(newWebhook);
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(mockResponse);
+      expect(mockWebhookService.registerWebhook).toHaveBeenCalledWith(mockRequest);
     });
 
-    it('should return 400 if the request body is invalid', async () => {
-      const response = await request(app)
-        .post('/webhooks/register')
-        .send({ invalid: 'data' })
-        .set('Content-Type', 'application/json');
+    it('should return 500 if registration fails', async () => {
+      const mockRequest: WebhookRegisterRequest = {
+        callbackUrl: 'https://example.com/webhook',
+        events: ['issue.created'],
+      };
+      mockWebhookService.registerWebhook.mockRejectedValue(new Error('Registration failed'));
 
-      expect(response.statusCode).toBe(400);
+      const response = await request(app).post('/api/webhooks').send(mockRequest);
+
+      expect(response.status).toBe(500);
+      expect(response.body.message).toBe('Registration failed');
     });
   });
 
-  describe('DELETE /webhooks/:id', () => {
+  describe('DELETE /api/webhooks/:webhookId', () => {
     it('should delete a webhook and return 200', async () => {
-      const webhookId = '123';
-      (webhookService.deleteWebhook as jest.Mock).mockResolvedValue({ id: webhookId, status: 'deleted' });
+      const webhookId = 'webhook-id-123';
+      const mockResponse: WebhookDeleteResponse = {
+        id: webhookId,
+        status: WebhookStatus.DELETED,
+      };
+      mockWebhookService.deleteWebhook.mockResolvedValue(mockResponse);
 
-      const response = await request(app).delete(`/webhooks/${webhookId}`);
+      const response = await request(app).delete(`/api/webhooks/${webhookId}`);
 
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toEqual({ id: webhookId, status: 'deleted' });
-      expect(webhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockResponse);
+      expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
     });
 
-    it('should return 404 if the webhook is not found', async () => {
-      const webhookId = 'nonexistent';
-      (webhookService.deleteWebhook as jest.Mock).mockResolvedValue(null);
+    it('should return 500 if deletion fails', async () => {
+      const webhookId = 'webhook-id-123';
+      mockWebhookService.deleteWebhook.mockRejectedValue(new Error('Deletion failed'));
 
-      const response = await request(app).delete(`/webhooks/${webhookId}`);
+      const response = await request(app).delete(`/api/webhooks/${webhookId}`);
 
-      expect(response.statusCode).toBe(404);
+      expect(response.status).toBe(500);
+      expect(response.body.message).toBe('Deletion failed');
     });
   });
 
-  describe('GET /webhooks', () => {
-    it('should list all webhooks and return 200', async () => {
-      const mockWebhooks: Webhook[] = [
-        {
-          id: '1',
-          callbackUrl: 'https://example.com/webhook1',
-          events: ['issue_created'],
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          callbackUrl: 'https://example.com/webhook2',
-          events: ['issue_updated'],
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ];
-      (webhookService.listWebhooks as jest.Mock).mockResolvedValue({ webhooks: mockWebhooks });
+  describe('GET /api/webhooks', () => {
+    it('should list webhooks and return 200', async () => {
+      const mockResponse: WebhookListResponse = {
+        webhooks: [
+          {
+            id: 'webhook-id-123',
+            callbackUrl: 'https://example.com/webhook',
+            events: ['issue.created'],
+            status: WebhookStatus.ACTIVE,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      mockWebhookService.listWebhooks.mockResolvedValue(mockResponse);
 
-      const response = await request(app).get('/webhooks');
+      const response = await request(app).get('/api/webhooks');
 
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toEqual({ webhooks: mockWebhooks });
-      expect(webhookService.listWebhooks).toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockResponse);
+      expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+    });
+
+    it('should return 500 if listing fails', async () => {
+      mockWebhookService.listWebhooks.mockRejectedValue(new Error('Listing failed'));
+
+      const response = await request(app).get('/api/webhooks');
+
+      expect(response.status).toBe(500);
+      expect(response.body.message).toBe('Listing failed');
     });
   });
 });
