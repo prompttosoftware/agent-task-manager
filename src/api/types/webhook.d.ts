@@ -1,20 +1,22 @@
 export interface Webhook {
   id: string;
-  url: string;
-  events: string[];
+  callbackUrl: string;
   secret?: string;
-  active: boolean;
+  events: string[];
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WebhookRegisterRequest {
-  url: string;
+  callbackUrl: string;
   events: string[];
   secret?: string;
 }
 
 export interface WebhookRegisterResponse {
   id: string;
-  url: string;
+  callbackUrl: string;
   events: string[];
   secret?: string;
   status: string;
@@ -33,5 +35,7 @@ export interface WebhookDeleteResponse {
 
 export interface WebhookPayload {
   event: string;
-  [key: string]: any; // Allows for any other data to be sent
+  data: any;
+  webhookId: string;
+  timestamp: string;
 }
