@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { WebhookService } from '../services/webhook.service';
-import { WebhookRegisterRequest } from '../types/webhook.d';
+import { WebhookRegisterRequest, RegisterWebhookResponse, DeleteWebhookResponse, ListWebhooksResponse } from '../types/webhook.d';
 
 export class WebhookController {
   private webhookService: WebhookService;
@@ -16,8 +16,8 @@ export class WebhookController {
         callbackUrl,
         secret,
         events,
-      };
-      const response = await this.webhookService.registerWebhook(request);
+      };        
+      const response: RegisterWebhookResponse = await this.webhookService.registerWebhook(request);
       res.status(201).json(response);
     } catch (error: any) {
       console.error('Error registering webhook:', error);
@@ -28,7 +28,7 @@ export class WebhookController {
   async deleteWebhook(req: Request, res: Response) {
     try {
       const webhookId = req.params.webhookId;
-      const response = await this.webhookService.deleteWebhook(webhookId);
+      const response: DeleteWebhookResponse = await this.webhookService.deleteWebhook(webhookId);
       res.status(200).json(response);
     } catch (error: any) {
       console.error('Error deleting webhook:', error);
@@ -38,7 +38,7 @@ export class WebhookController {
 
   async listWebhooks(req: Request, res: Response) {
     try {
-      const response = await this.webhookService.listWebhooks();
+      const response: ListWebhooksResponse = await this.webhookService.listWebhooks();
       res.status(200).json(response);
     } catch (error: any) {
       console.error('Error listing webhooks:', error);
