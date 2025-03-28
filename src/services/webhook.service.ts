@@ -1,26 +1,68 @@
-// Import necessary modules
+// Import necessary modules and types
 import { WebhookPayload } from '../types/webhook.d';
+import Database from '../db/database'; // Assuming you have a database module
 
-// Define the webhook processing function
-export const processWebhook = async (payload: WebhookPayload) => {
-  try {
-    // Implement your business logic here to handle the webhook payload.
-    // This could involve database updates, sending notifications, etc.
-    console.log('Processing webhook:', payload);
+// Define the WebhookService class
+class WebhookService {
+  private db: Database; // Database connection
 
-    // Example:  Validate the payload (optional)
-    // if (!payload || !payload.eventType) {
-    //   throw new Error('Invalid payload');
-    // }
-
-    // Example:  Perform database operations (replace with your actual logic)
-    // await someDatabaseUpdateFunction(payload);
-
-    // Return something if needed.
-    return;
-  } catch (error: any) {
-    // Handle any errors that occur during webhook processing.
-    console.error('Error processing webhook:', error);
-    throw error;
+  constructor(db: Database) {
+    this.db = db;
   }
-};
+
+  async createWebhook(data: any): Promise<any> {
+    try {
+      // Validate data if needed
+      const { url, eventType } = data;
+      if (!url || !eventType) {
+        throw new Error('Missing required fields for webhook creation.');
+      }
+
+      // Prepare the SQL statement
+      const sql = `INSERT INTO webhooks (url, event_type) VALUES (?, ?)`;
+      const params = [url, eventType];
+
+      // Execute the query
+      const result = await this.db.run(sql, params);
+
+      // Handle the result, return the inserted webhook's ID
+      return { id: result.lastID, ...data };
+    } catch (error: any) {
+      console.error('Error creating webhook:', error);
+      throw error; // Re-throw the error for the caller to handle
+    }
+  }
+
+  async getAllWebhooks(): Promise<any[]> {
+    try {
+      const sql = `SELECT * FROM webhooks`;
+      const rows = await this.db.all(sql);
+      return rows;
+    } catch (error: any) {
+      console.error('Error getting all webhooks:', error);
+      throw error;
+    }
+  }
+
+  async deleteWebhook(webhookId: number): Promise<void> {
+    try {
+      if (!webhookId) {
+        throw new Error('Webhook ID is required for deletion.');
+      }
+
+      const sql = `DELETE FROM webhooks WHERE id = ?`;
+      const params = [webhookId];
+
+      const result = await this.db.run(sql, params);
+
+      if (result.changes === 0) {
+        throw new Error(`Webhook with ID ${webhookId} not found.`);
+      }
+    } catch (error: any) {
+      console.error('Error deleting webhook:', error);
+      throw error;
+    }
+  }
+}
+
+export default WebhookService;
