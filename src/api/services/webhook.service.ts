@@ -1,142 +1,107 @@
-// src/api/services/webhook.service.ts
+import { db } from '../db/database';
+import { Webhook, WebhookRegisterRequest, WebhookPayload } from '../types/webhook.d';
 import { v4 as uuidv4 } from 'uuid';
-import { Webhook, WebhookRegisterRequest, WebhookListResponse, WebhookDeleteResponse, WebhookPayload } from '../types/webhook.d';
-import Database from '../../src/db/database';
-import * as crypto from 'crypto';
+import { config } from '../config';
 
-export class WebhookService {
-  private db: Database;
+export async function createWebhook(webhookData: WebhookRegisterRequest): Promise<Webhook> {
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  const result = db.prepare(
+    'INSERT INTO webhooks (id, callbackUrl, secret, events, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    id,
+    webhookData.callbackUrl,
+    webhookData.secret || null,
+    JSON.stringify(webhookData.events),
+    'active',
+    now,
+    now
+  );
 
-  constructor(db: Database) {
-    this.db = db;
+  if (result.changes === 0) {
+    throw new Error('Failed to create webhook');
   }
 
-  async registerWebhook(request: WebhookRegisterRequest): Promise<WebhookRegisterResponse> {
-    const id = uuidv4();
-    const webhook: Webhook = {
-      id: id,
-      url: request.url,
-      events: request.events,
-      secret: request.secret,
-      active: true,
-    };
+  return {
+    id: id,
+    callbackUrl: webhookData.callbackUrl,
+    secret: webhookData.secret,
+    events: webhookData.events,
+    status: 'active',
+    createdAt: now,
+    updatedAt: now
+  };
+}
 
-    try {
-      await this.db.run(
-        `INSERT INTO webhooks (id, url, events, secret, active) VALUES (?, ?, ?, ?, ?) `,
-        [webhook.id, webhook.url, JSON.stringify(webhook.events), webhook.secret, webhook.active ? 1 : 0]
-      );
-      return {
-        id: webhook.id,
-        url: webhook.url,
-        events: webhook.events,
-        secret: webhook.secret,
-        status: 'active',
-      };
-    } catch (error: any) {
-      console.error('Error registering webhook:', error);
-      throw new Error(`Failed to register webhook: ${error.message}`);
-    }
+export async function getWebhook(id: string): Promise<Webhook | undefined> {
+  const row = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as Webhook | undefined;
+
+  if (row) {
+    row.events = JSON.parse(row.events);
   }
 
-  async deleteWebhook(webhookId: string): Promise<WebhookDeleteResponse> {
-    try {
-      const result = await this.db.run('DELETE FROM webhooks WHERE id = ?', [webhookId]);
-      if (result.changes === 0) {
-        return { message: 'Webhook not found', webhookId: webhookId, success: false };
-      }
-      return { message: 'Webhook deleted', webhookId: webhookId, success: true };
-    } catch (error: any) {
-      console.error('Error deleting webhook:', error);
-      throw new Error(`Failed to delete webhook: ${error.message}`);
-    }
+  return row;
+}
+
+export async function listWebhooks(): Promise<Webhook[]> {
+  const rows = db.prepare('SELECT * FROM webhooks').all() as Webhook[];
+  return rows.map(row => {
+    row.events = JSON.parse(row.events);
+    return row;
+  });
+}
+
+export async function deleteWebhook(id: string): Promise<boolean> {
+  const result = db.prepare('DELETE FROM webhooks WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
+export async function processWebhookQueue(webhookId: string, payload: any) {
+  // This function will process the webhook queue.  It will make the call to the webhook.
+  console.log('Processing webhook for ' + webhookId + ' with payload ' + JSON.stringify(payload));
+  // Implement queue processing logic here
+  const webhook = await getWebhook(webhookId);
+  if (!webhook) {
+      console.log("Webhook not found for id: " + webhookId);
+      return;
   }
 
-  async listWebhooks(): Promise<WebhookListResponse> {
-    try {
-      const rows = await this.db.all('SELECT * FROM webhooks');
-      const webhooks = rows.map(row => ({
-        id: row.id,
-        url: row.url,
-        events: JSON.parse(row.events) as string[],
-        secret: row.secret,
-        active: row.active === 1, // Convert back to boolean
-      }));
-      return { webhooks: webhooks, total: webhooks.length };
-    } catch (error: any) {
-      console.error('Error listing webhooks:', error);
-      throw new Error(`Failed to list webhooks: ${error.message}`);
-    }
-  }
-
-  async getWebhookById(webhookId: string): Promise<Webhook | undefined> {
-    try {
-      const row = await this.db.get('SELECT * FROM webhooks WHERE id = ?', [webhookId]);
-      if (!row) {
-        return undefined;
-      }
-      const webhook = {
-        id: row.id,
-        url: row.url,
-        events: JSON.parse(row.events) as string[],
-        secret: row.secret,
-        active: row.active === 1, // Convert back to boolean
-      };
-      return webhook;
-    } catch (error: any) {
-      console.error('Error getting webhook by id:', error);
-      throw new Error(`Failed to get webhook by id: ${error.message}`);
-    }
-  }
-
-  async processWebhookEvent(payload: WebhookPayload): Promise<void> {
-    try {
-      const rows = await this.db.all('SELECT * FROM webhooks WHERE events LIKE ? AND active = 1', [`%${payload.event}%`]);
-      const webhooks = rows.map(row => ({
-        id: row.id,
-        url: row.url,
-        events: JSON.parse(row.events) as string[],
-        secret: row.secret,
-        active: row.active === 1, // Convert back to boolean
-      }));
-
-      for (const webhook of webhooks) {
-        if (webhook.events.includes(payload.event)) {
-          this.invokeWebhook(webhook, payload);
-        }
-      }
-    } catch (error: any) {
-      console.error('Error processing webhook event:', error);
-      throw new Error(`Failed to process webhook event: ${error.message}`);
-    }
-  }
-
-  private async invokeWebhook(webhook: Webhook, payload: WebhookPayload): Promise<void> {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (webhook.secret) {
-        headers['X-Webhook-Signature'] = this.generateSignature(JSON.stringify(payload), webhook.secret);
-      }
-
-      const response = await fetch(webhook.url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload),
+  try {
+      const response = await fetch(webhook.callbackUrl, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+              // Add any other headers as needed, e.g., for authentication
+          },
+          body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        console.error(`Webhook invocation failed for ${webhook.id} with status ${response.status}`);
+          console.error(`Webhook call failed for ${webhookId} with status ${response.status}`);
+          // Handle failed webhook calls (e.g., retry, dead-letter queue)
+      } else {
+          console.log(`Webhook call successful for ${webhookId}`);
       }
-    } catch (error: any) {
-      console.error(`Error invoking webhook ${webhook.id}:`, error);
-    }
+  } catch (error) {
+      console.error(`Error calling webhook for ${webhookId}:`, error);
+      // Handle network errors or other exceptions
   }
+}
 
-  private generateSignature(data: string, secret: string): string {
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(data);
-    return hmac.digest('hex');
-  }
+// The following functions are related to queueing
+// They will be implemented later or removed based on the design.
+
+export interface WebhookQueueItem {
+  webhookId: string;
+  payload: any;
+  timestamp: string;
+}
+
+export async function addWebhookPayloadToQueue(webhookId: string, payload: any): Promise<void> {
+  // Implement queueing logic here. This could involve using a message queue service like RabbitMQ,
+  // Redis, or a database table to store the payloads for later processing.
+  // For this example, we'll just log the payload.  Actual implementation is in processWebhookQueue.
+  // console.log(`Adding webhook payload to queue for webhookId ${webhookId}:`, payload);
+  // In a real application, you would enqueue the payload.
+  await processWebhookQueue(webhookId, payload);
 }
