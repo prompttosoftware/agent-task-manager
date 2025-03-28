@@ -38,7 +38,7 @@ app.get('/issues', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issues:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // GET /issues/:id
@@ -54,7 +54,7 @@ app.get('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }    
 });
 
 // POST /issues
@@ -91,7 +91,7 @@ app.post('/issues', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error creating issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // PUT /issues/:id
@@ -109,13 +109,13 @@ app.put('/issues/:id', async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Summary is required' });
         }
 
+        await db.updateIssue(issueId, req.body.summary);
         issue.summary = req.body.summary;
-        // TODO: implement update in db.ts
         res.json(issue);
     } catch (error) {
         console.error('Error updating issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }    
 });
 
 // DELETE /issues/:id
@@ -123,7 +123,7 @@ app.delete('/issues/:id', async (req: Request, res: Response) => {
     const issueId = req.params.id;
     try {
         await db.init();
-        // TODO: implement delete in db.ts
+        await db.deleteIssue(issueId);
         res.status(204).send();
     } catch (error) {
         console.error('Error deleting issue:', error);
@@ -215,7 +215,7 @@ app.put('/issues/:id/links', async (req: Request, res: Response) => {
         for (const link of req.body.links) {
             if (!link.type || !link.issueKey) {
                 return res.status(400).json({ message: 'Link type and issueKey are required for each link' });
-            } 
+            }
             const isValid = await isValidIssueKey(link.issueKey);
             if (!isValid) {
                 return res.status(400).json({ message: `Invalid issueKey: ${link.issueKey}. Issue does not exist.` });
