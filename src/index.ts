@@ -86,6 +86,55 @@ app.get('/issue/:issueId/attachment/:attachmentId', async (req, res) => {
   }
 });
 
+// Board Management endpoints
+// In-memory storage for boards and issues (replace with database later)
+let boards: { [key: string]: { name: string, issues: string[] } } = {};
+let nextBoardId = 1;
+
+app.get('/boards', (req, res) => {
+  res.json(Object.values(boards).map( (board, index) => ({
+    id: index + 1, //Simple id
+    name: board.name
+  })));
+});
+
+app.post('/boards', (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Board name is required' });
+  }
+  const boardId = nextBoardId++;
+  boards[boardId] = { name, issues: [] };
+  res.status(201).json({ id: boardId, name });
+});
+
+app.get('/boards/:boardId/issues', (req, res) => {
+  const boardId = parseInt(req.params.boardId, 10);
+  const board = boards[boardId];
+  if (!board) {
+    return res.status(404).json({ error: 'Board not found' });
+  }
+  res.json(board.issues.map((issueId) => ({
+      id: issueId,
+      summary: `Issue ${issueId} summary` //Placeholder summary
+  })));
+});
+
+app.post('/boards/:boardId/issues', (req, res) => {
+  const boardId = parseInt(req.params.boardId, 10);
+  const { issueId } = req.body;
+  const board = boards[boardId];
+  if (!board) {
+    return res.status(404).json({ error: 'Board not found' });
+  }
+  if (!issueId) {
+    return res.status(400).json({ error: 'issueId is required' });
+  }
+  board.issues.push(issueId);
+  res.status(201).json({ message: `Issue ${issueId} added to board ${boardId}` });
+});
+
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
