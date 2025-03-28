@@ -1,18 +1,31 @@
-// Import necessary modules
 import { Request, Response } from 'express';
-import { processWebhook } from '../services/webhook.service';
+import * as webhookService from '../services/webhook.service';
 
-// Define the webhook handler
-export const handleWebhook = async (req: Request, res: Response) => {
+// POST /webhooks - Create a new webhook subscription
+export const registerWebhook = async (reqBody: any) => {
   try {
-    // Process the webhook data using the service
-    await processWebhook(req.body);
-
-    // Respond with a success status
-    res.status(200).send('Webhook received and processed');
+    const webhook = await webhookService.createWebhook(reqBody);
+    return webhook;
   } catch (error: any) {
-    // Log the error and respond with an error status
-    console.error('Error processing webhook:', error);
-    res.status(500).send('Error processing webhook');
+    throw new Error(error.message || 'Failed to register webhook in controller');
+  }
+};
+
+// DELETE /webhooks/:webhookId - Delete a webhook
+export const deleteWebhook = async (webhookId: string) => {
+  try {
+    await webhookService.removeWebhook(webhookId);
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to delete webhook in controller');
+  }
+};
+
+// GET /webhooks - List all webhooks
+export const listWebhooks = async () => {
+  try {
+    const webhooks = await webhookService.getAllWebhooks();
+    return webhooks;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to list webhooks in controller');
   }
 };
