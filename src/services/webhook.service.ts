@@ -1,6 +1,21 @@
 import { db } from '../db/database';
-import { Webhook, WebhookRegisterRequest } from '../types/webhook.d';
+import { Webhook, WebhookRegisterRequest, WebhookPayload } from '../types/webhook.d';
 import { v4 as uuidv4 } from 'uuid';
+
+// In-memory queue for webhooks
+const webhookQueue: WebhookPayload[] = [];
+
+// Function to add a webhook payload to the queue
+export function enqueueWebhook(payload: WebhookPayload) {
+  webhookQueue.push(payload);
+  // In a real application, you'd likely trigger a worker here
+  // to process the queue asynchronously.
+}
+
+// Function to get the next webhook payload from the queue (for testing)
+export function dequeueWebhook(): WebhookPayload | undefined {
+  return webhookQueue.shift();
+}
 
 export async function createWebhook(webhookData: WebhookRegisterRequest): Promise<Webhook> {
   const id = uuidv4();
