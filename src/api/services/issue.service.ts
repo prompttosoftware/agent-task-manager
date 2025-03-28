@@ -9,32 +9,48 @@ import { getWebhook } from './webhook.service';
 const webhookService = new WebhookService(db);
 
 export async function createIssue(issueData: any): Promise<any> {
+  const start = Date.now();
+  let issue: any;
   try {
+    db.exec('BEGIN TRANSACTION');
     const stmt = db.prepare('INSERT INTO issues (summary, description, status) VALUES (?, ?, ?)');
     const info = stmt.run(issueData.summary, issueData.description, issueData.status);
-    const issue = { id: info.lastInsertRowid, ...issueData };
+    issue = { id: info.lastInsertRowid, ...issueData };
     console.log("Issue created", info.lastInsertRowid);
     await triggerIssueEvent('issue.created', issue);
+    db.exec('COMMIT');
+    const end = Date.now();
+    console.log(`createIssue (service) took ${end - start}ms`);
     return issue;
   } catch (error) {
+    const end = Date.now();
+    console.log(`createIssue (service) took ${end - start}ms`);
     console.error("Error creating issue:", error);
+    db.exec('ROLLBACK');
     throw error;
   }
 }
 
 export async function getIssue(issueId: number): Promise<any> {
+    const start = Date.now();
   try {
     const stmt = db.prepare('SELECT * FROM issues WHERE id = ?');
     const row = stmt.get(issueId);
+    const end = Date.now();
+    console.log(`getIssue (service) took ${end - start}ms`);
     return row;
   } catch (error) {
+      const end = Date.now();
+      console.log(`getIssue (service) took ${end - start}ms`);
     console.error("Error getting issue:", error);
     throw error;
   }
 }
 
 export async function updateIssue(issueId: number, updateData: any): Promise<any> {
+    const start = Date.now();
   try {
+    db.exec('BEGIN TRANSACTION');
     // Build the SET part of the SQL query dynamically
     const setClauses = Object.keys(updateData).map(key => `${key} = ?`).join(', ');
     const values = Object.values(updateData);
@@ -46,21 +62,35 @@ export async function updateIssue(issueId: number, updateData: any): Promise<any
     console.log("Issue updated", info.changes);
     const issue = { id: issueId, ...updateData };
     await triggerIssueEvent('issue.updated', issue);
+    db.exec('COMMIT');
+      const end = Date.now();
+      console.log(`updateIssue (service) took ${end - start}ms`);
     return { changes: info.changes };
   } catch (error) {
+      const end = Date.now();
+      console.log(`updateIssue (service) took ${end - start}ms`);
     console.error("Error updating issue:", error);
+    db.exec('ROLLBACK');
     throw error;
   }
 }
 
 export async function deleteIssue(issueId: number): Promise<void> {
+    const start = Date.now();
   try {
+    db.exec('BEGIN TRANSACTION');
     const stmt = db.prepare('DELETE FROM issues WHERE id = ?');
     stmt.run(issueId);
     console.log("Issue deleted");
     await triggerIssueEvent('issue.deleted', { id: issueId });
+    db.exec('COMMIT');
+      const end = Date.now();
+      console.log(`deleteIssue (service) took ${end - start}ms`);
   } catch (error) {
+      const end = Date.now();
+      console.log(`deleteIssue (service) took ${end - start}ms`);
     console.error("Error deleting issue:", error);
+    db.exec('ROLLBACK');
     throw error;
   }
 }
