@@ -46,3 +46,17 @@ export class WebhookController {
     }
   }
 }
+
+// Instantiate WebhookController with the service
+import { createWebhook, deleteWebhook, listWebhooks } from '../services/webhook.service';
+const webhookService = {
+  registerWebhook: createWebhook,
+  deleteWebhook: deleteWebhook,
+  listWebhooks: listWebhooks
+}
+
+const webhookController = new WebhookController(webhookService);
+
+export const registerWebhook = webhookController.registerWebhook.bind(webhookController);
+export const deleteWebhook = webhookController.deleteWebhook.bind(webhookController);
+export const listWebhooks = webhookController.listWebhooks.bind(webhookController);
