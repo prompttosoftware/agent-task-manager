@@ -21,8 +21,11 @@ export interface WebhookDeleteResponse {
 export interface Webhook {
   id: string;
   callbackUrl: string;
+  secret?: string;
   events: string[];
   status: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WebhookListResponse {

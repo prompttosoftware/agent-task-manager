@@ -1,116 +1,56 @@
-// Import necessary modules and types
-import { WebhookRegisterRequest, Webhook, WebhookListResponse, WebhookDeleteResponse } from '../types/webhook.d';
-import Database from '../db/database'; // Assuming you have a database module
+import { db } from '../db/database';
+import { Webhook, WebhookRegisterRequest } from '../types/webhook.d';
+import { v4 as uuidv4 } from 'uuid';
 
-// Define custom error class for WebhookService
-class WebhookServiceError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-    this.name = 'WebhookServiceError';
-    Object.setPrototypeOf(this, WebhookServiceError.prototype);
+export async function createWebhook(webhookData: WebhookRegisterRequest): Promise<Webhook> {
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  const result = db.prepare(
+    'INSERT INTO webhooks (id, callbackUrl, secret, events, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    id,
+    webhookData.callbackUrl,
+    webhookData.secret || null,
+    JSON.stringify(webhookData.events),
+    'active',
+    now,
+    now
+  );
+
+  if (result.changes === 0) {
+    throw new Error('Failed to create webhook');
   }
+
+  return {
+    id: id,
+    callbackUrl: webhookData.callbackUrl,
+    secret: webhookData.secret,
+    events: webhookData.events,
+    status: 'active',
+    createdAt: now,
+    updatedAt: now
+  };
 }
 
-// Define the WebhookService class
-class WebhookService {
-  private db: Database; // Database connection
+export async function getWebhook(id: string): Promise<Webhook | undefined> {
+  const row = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as Webhook | undefined;
 
-  constructor(db: Database) {
-    this.db = db;
+  if (row) {
+    row.events = JSON.parse(row.events);
   }
 
-  async createWebhook(data: WebhookRegisterRequest): Promise<Webhook> {
-    try {
-      // Validate data if needed
-      const { callbackUrl, events, secret } = data;
-      if (!callbackUrl || !events || !Array.isArray(events) || events.length === 0) {
-        throw new WebhookServiceError('INVALID_INPUT', 'Missing required fields for webhook creation.');
-      }
-
-      // Further validation for events can be added here
-
-      // Prepare the SQL statement
-      const sql = `INSERT INTO webhooks (callbackUrl, events, secret) VALUES (?, ?, ?)`;
-      const params = [callbackUrl, JSON.stringify(events), secret];
-
-      //  Execute the query
-      try {
-        const result = await this.db.run(sql, params);
-        if (!result.lastID) {
-          throw new WebhookServiceError('DATABASE_ERROR', 'Failed to create webhook: No ID returned.');
-        }
-        // Handle the result, return the inserted webhook's ID
-        const webhook = { id: result.lastID.toString(), callbackUrl, events, status: 'active' };
-        return webhook;
-      } catch (dbError: any) {
-        console.error('Database error creating webhook:', dbError);
-        throw new WebhookServiceError('DATABASE_ERROR', dbError.message || 'Internal database error.');
-      }
-    } catch (error: any) {
-      console.error('Error creating webhook:', error);
-      if (error instanceof WebhookServiceError) {
-        throw error; // Re-throw if it's a service-specific error
-      }
-      throw new WebhookServiceError('UNEXPECTED_ERROR', error.message || 'An unexpected error occurred.'); // Wrap other errors
-    }
-  }
-
-  async getAllWebhooks(): Promise<WebhookListResponse> {
-    try {
-      const sql = `SELECT id, callbackUrl, events, secret, status FROM webhooks`;
-      try {
-        const rows = await this.db.all(sql);
-        const webhooks = rows.map(row => ({
-          id: row.id.toString(),
-          callbackUrl: row.callbackUrl,
-          events: JSON.parse(row.events),
-          secret: row.secret,
-          status: row.status
-        }));
-        return { webhooks: webhooks };
-      } catch (dbError: any) {
-        console.error('Database error getting all webhooks:', dbError);
-        throw new WebhookServiceError('DATABASE_ERROR', dbError.message || 'Internal database error.');
-      }
-    } catch (error: any) {
-      console.error('Error getting all webhooks:', error);
-      if (error instanceof WebhookServiceError) {
-          throw error;
-      }
-      throw new WebhookServiceError('UNEXPECTED_ERROR', error.message || 'An unexpected error occurred.');
-    }
-  }
-
-  async deleteWebhook(webhookId: string): Promise<WebhookDeleteResponse> {
-    try {
-      if (!webhookId) {
-        throw new WebhookServiceError('INVALID_INPUT', 'Webhook ID is required for deletion.');
-      }
-
-      const sql = `DELETE FROM webhooks WHERE id = ?`;
-      const params = [webhookId];
-
-      try {
-        const result = await this.db.run(sql, params);
-        if (result.changes === 0) {
-          throw new WebhookServiceError('NOT_FOUND', `Webhook with ID ${webhookId} not found.`);
-        }
-
-        return { id: webhookId, status: 'deleted' };
-      } catch (dbError: any) {
-        console.error('Database error deleting webhook:', dbError);
-        throw new WebhookServiceError('DATABASE_ERROR', dbError.message || 'Internal database error.');
-      }
-    } catch (error: any) {
-      console.error('Error deleting webhook:', error);
-      if (error instanceof WebhookServiceError) {
-          throw error;
-      }
-      throw new WebhookServiceError('UNEXPECTED_ERROR', error.message || 'An unexpected error occurred.');
-    }
-  }
+  return row;
 }
 
-export default WebhookService;
+export async function listWebhooks(): Promise<Webhook[]> {
+  const rows = db.prepare('SELECT * FROM webhooks').all() as Webhook[];
+  return rows.map(row => {
+    row.events = JSON.parse(row.events);
+    return row;
+  });
+}
+
+export async function deleteWebhook(id: string): Promise<boolean> {
+  const result = db.prepare('DELETE FROM webhooks WHERE id = ?').run(id);
+  return result.changes > 0;
+}
