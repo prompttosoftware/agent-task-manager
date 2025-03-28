@@ -1,124 +1,215 @@
 // src/api/controllers/webhook.controller.test.ts
-import { test, describe, expect, beforeEach, vi } from 'vitest';
-import request from 'supertest';
-import app from '../../app'; // Import the app instance
-import { WebhookService } from '../services/webhook.service';
-import { validateWebhookRegister } from '../middleware/webhookValidation';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Request, Response } from 'express';
+import { WebhookController } from './webhook.controller';
+import { WebhookService } from '../services/webhook.service';
+import { WebhookRegisterRequest, Webhook } from '../types/webhook';
 import { mock } from 'vitest-mock-extended';
-import { validationResult } from 'express-validator';
 
 vi.mock('../services/webhook.service');
-vi.mock('../middleware/webhookValidation');
 
-const mockWebhookService = mock<WebhookService>();
+describe('WebhookController', () => {
+  let webhookController: WebhookController;
+  let mockWebhookService: WebhookService;
+  let mockRequest: any; // Use 'any' or define a more specific type for your request
+  let mockResponse: any; // Use 'any' or define a more specific type for your response
 
-describe('Webhook Controller', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(WebhookService).mockReturnValue(mockWebhookService);
-    (validateWebhookRegister as jest.Mock).mockImplementation((req: Request, res: Response, next: () => void) => {
-      next();
-    });
+    mockWebhookService = mock<WebhookService>();
+    webhookController = new WebhookController(mockWebhookService);
+    mockRequest = {};
+    mockResponse = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis(),
+    };
   });
 
-  describe('POST /api/webhooks', () => {
+  describe('registerWebhook', () => {
     it('should register a webhook successfully', async () => {
-      const registerWebhookMock = vi.spyOn(mockWebhookService, 'registerWebhook').mockResolvedValue({ id: '123', url: 'https://example.com', events: [], secret: '', status: 'active' });
-      const response = await request(app).post('/api/webhooks').send({ url: 'https://example.com', events: [], secret: 'secret' });
+      const request: WebhookRegisterRequest = {
+        url: 'https://example.com/webhook',
+        events: ['task.created', 'task.updated'],
+        secret: 'mysecret',
+      };
+      mockRequest = { body: request };
+      (mockWebhookService.registerWebhook as any).mockResolvedValue({ id: 'some-id', ...request });
 
-      expect(response.status).toBe(201);
-      expect(registerWebhookMock).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://example.com', events: [], secret: 'secret' }));
-      expect(response.body).toEqual({ id: '123', url: 'https://example.com', events: [], secret: '', status: 'active' });
+      await webhookController.registerWebhook(mockRequest, mockResponse);
+
+      expect(mockWebhookService.registerWebhook).toHaveBeenCalledWith(request);
+      expect(mockResponse.status).toHaveBeenCalledWith(201);
+      expect(mockResponse.json).toHaveBeenCalledWith({ id: 'some-id', ...request });
     });
 
-    it('should handle invalid request (validation error)', async () => {
-      (validationResult as any).mockImplementation(() => ({
-        isEmpty: () => false,
-        array: () => [{ msg: 'URL is required' }],
-      }));
+    it('should handle errors during registration', async () => {
+      const request: WebhookRegisterRequest = {
+        url: 'https://example.com/webhook',
+        events: ['task.created', 'task.updated'],
+        secret: 'mysecret',
+      };
+      mockRequest = { body: request };
+      (mockWebhookService.registerWebhook as any).mockRejectedValue(new Error('Service error'));
 
-      const response = await request(app).post('/api/webhooks').send({});
+      await webhookController.registerWebhook(mockRequest, mockResponse);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({ errors: [{ msg: 'URL is required' }] });
+      expect(mockWebhookService.registerWebhook).toHaveBeenCalledWith(request);
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Service error' });
     });
 
-    it('should handle service errors', async () => {
-      const registerWebhookMock = vi.spyOn(mockWebhookService, 'registerWebhook').mockRejectedValue(new Error('Database error'));
-      const response = await request(app).post('/api/webhooks').send({ url: 'https://example.com', events: [], secret: 'secret' });
+    it('should return 400 if validation fails', async () => {
+      mockRequest = { body: { url: 'not a url' } };
+      const mockValidateResult = {
+        isEmpty: vi.fn().mockReturnValue(false),
+        array: vi.fn().mockReturnValue([{
+          msg: 'Invalid URL',
+          param: 'url',
+        }]),
+      };
+      vi.mocked(require('express-validator')).validationResult.mockReturnValue(mockValidateResult);
 
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to register webhook: Database error' });
+      await webhookController.registerWebhook(mockRequest, mockResponse);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ errors: [{ msg: 'Invalid URL', param: 'url' }] });
     });
   });
 
-  describe('DELETE /api/webhooks/:id', () => {
+  describe('deleteWebhook', () => {
     it('should delete a webhook successfully', async () => {
-      const deleteWebhookMock = vi.spyOn(mockWebhookService, 'deleteWebhook').mockResolvedValue({ message: 'Webhook deleted', webhookId: '123', success: true });
-      const response = await request(app).delete('/api/webhooks/123');
+      const webhookId = 'valid-uuid';
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.deleteWebhook as any).mockResolvedValue({ success: true, webhookId: webhookId });
 
-      expect(response.status).toBe(200);
-      expect(deleteWebhookMock).toHaveBeenCalledWith('123');
-      expect(response.body).toEqual({ message: 'Webhook deleted', webhookId: '123', success: true });
+      await webhookController.deleteWebhook(mockRequest, mockResponse);
+
+      expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(200);
+      expect(mockResponse.json).toHaveBeenCalledWith({ success: true, webhookId: webhookId });
     });
 
-    it('should handle invalid webhookId format', async () => {
-      const response = await request(app).delete('/api/webhooks/invalid-id');
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: 'Invalid webhookId format' });
+    it('should return 404 if webhook not found', async () => {
+      const webhookId = 'valid-uuid';
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.deleteWebhook as any).mockResolvedValue({ success: false, webhookId: webhookId });
+
+      await webhookController.deleteWebhook(mockRequest, mockResponse);
+
+      expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(404);
+      expect(mockResponse.json).toHaveBeenCalledWith({ success: false, webhookId: webhookId });
     });
 
-    it('should handle service errors when deleting', async () => {
-      const deleteWebhookMock = vi.spyOn(mockWebhookService, 'deleteWebhook').mockRejectedValue(new Error('Database error'));
-      const response = await request(app).delete('/api/webhooks/123');
+    it('should handle errors during deletion', async () => {
+      const webhookId = 'valid-uuid';
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.deleteWebhook as any).mockRejectedValue(new Error('Service error'));
 
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to delete webhook: Database error' });
+      await webhookController.deleteWebhook(mockRequest, mockResponse);
+
+      expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Service error' });
+    });
+
+    it('should return 400 for invalid webhookId format', async () => {
+        const webhookId = 'invalid-uuid';
+        mockRequest = { params: { id: webhookId } };
+
+        await webhookController.deleteWebhook(mockRequest, mockResponse);
+
+        expect(mockResponse.status).toHaveBeenCalledWith(400);
+        expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Invalid webhookId format' });
+        expect(mockWebhookService.deleteWebhook).not.toHaveBeenCalled();
     });
   });
 
-  describe('GET /api/webhooks', () => {
+  describe('listWebhooks', () => {
     it('should list webhooks successfully', async () => {
-      const listWebhooksMock = vi.spyOn(mockWebhookService, 'listWebhooks').mockResolvedValue({ webhooks: [{ id: '123', url: 'https://example.com', events: [], secret: '', active: true }], total: 1 });
-      const response = await request(app).get('/api/webhooks');
+      const mockWebhooks: Webhook[] = [
+        {
+          id: 'id1',
+          url: 'url1',
+          events: ['event1'],
+          secret: 'secret1',
+          active: true,
+        },
+      ];
+      mockRequest = {};
+      (mockWebhookService.listWebhooks as any).mockResolvedValue({ webhooks: mockWebhooks, total: 1 });
 
-      expect(response.status).toBe(200);
-      expect(listWebhooksMock).toHaveBeenCalled();
-      expect(response.body).toEqual({ webhooks: [{ id: '123', url: 'https://example.com', events: [], secret: '', active: true }], total: 1 });
+      await webhookController.listWebhooks(mockRequest, mockResponse);
+
+      expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(200);
+      expect(mockResponse.json).toHaveBeenCalledWith({ webhooks: mockWebhooks, total: 1 });
     });
 
-    it('should handle service errors when listing', async () => {
-      const listWebhooksMock = vi.spyOn(mockWebhookService, 'listWebhooks').mockRejectedValue(new Error('Database error'));
-      const response = await request(app).get('/api/webhooks');
+    it('should handle errors during listing', async () => {
+      mockRequest = {};
+      (mockWebhookService.listWebhooks as any).mockRejectedValue(new Error('Service error'));
 
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to list webhooks: Database error' });
+      await webhookController.listWebhooks(mockRequest, mockResponse);
+
+      expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Service error' });
     });
   });
 
-  describe('GET /api/webhooks/:id', () => {
+  describe('getWebhookById', () => {
     it('should get a webhook by id successfully', async () => {
-      const getWebhookByIdMock = vi.spyOn(mockWebhookService, 'getWebhookById').mockResolvedValue({ id: '123', url: 'https://example.com', events: [], secret: '', active: true });
-      const response = await request(app).get('/api/webhooks/123');
+      const webhookId = 'valid-uuid';
+      const mockWebhook: Webhook = {
+        id: webhookId,
+        url: 'url1',
+        events: ['event1'],
+        secret: 'secret1',
+        active: true,
+      };
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.getWebhookById as any).mockResolvedValue(mockWebhook);
 
-      expect(response.status).toBe(200);
-      expect(getWebhookByIdMock).toHaveBeenCalledWith('123');
-      expect(response.body).toEqual({ id: '123', url: 'https://example.com', events: [], secret: '', active: true });
+      await webhookController.getWebhookById(mockRequest, mockResponse);
+
+      expect(mockWebhookService.getWebhookById).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(200);
+      expect(mockResponse.json).toHaveBeenCalledWith(mockWebhook);
     });
 
-    it('should handle invalid webhookId format', async () => {
-      const response = await request(app).get('/api/webhooks/invalid-id');
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({ message: 'Invalid webhookId format' });
+    it('should return 404 if webhook not found', async () => {
+      const webhookId = 'valid-uuid';
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.getWebhookById as any).mockResolvedValue(undefined);
+
+      await webhookController.getWebhookById(mockRequest, mockResponse);
+
+      expect(mockWebhookService.getWebhookById).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(404);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Webhook not found' });
     });
 
-    it('should handle service errors when getting by id', async () => {
-      const getWebhookByIdMock = vi.spyOn(mockWebhookService, 'getWebhookById').mockRejectedValue(new Error('Database error'));
-      const response = await request(app).get('/api/webhooks/123');
+    it('should handle errors during retrieval', async () => {
+      const webhookId = 'valid-uuid';
+      mockRequest = { params: { id: webhookId } };
+      (mockWebhookService.getWebhookById as any).mockRejectedValue(new Error('Service error'));
 
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to get webhook by id: Database error' });
+      await webhookController.getWebhookById(mockRequest, mockResponse);
+
+      expect(mockWebhookService.getWebhookById).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Service error' });
+    });
+
+    it('should return 400 for invalid webhookId format', async () => {
+        const webhookId = 'invalid-uuid';
+        mockRequest = { params: { id: webhookId } };
+
+        await webhookController.getWebhookById(mockRequest, mockResponse);
+
+        expect(mockResponse.status).toHaveBeenCalledWith(400);
+        expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Invalid webhookId format' });
+        expect(mockWebhookService.getWebhookById).not.toHaveBeenCalled();
     });
   });
 });
