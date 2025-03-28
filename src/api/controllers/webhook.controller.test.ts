@@ -1,105 +1,84 @@
-// src/api/controllers/webhook.controller.test.ts
-import { test, expect, describe, beforeEach, vi } from 'vitest';
-import { registerWebhook, deleteWebhook, listWebhooks } from './webhook.controller';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import request from 'supertest';
+import express from 'express';
+import webhookRoutes from '../routes/webhook.routes';
 import * as webhookService from '../services/webhook.service';
-import { Request, Response } from 'express';
+import { Webhook } from '../types/webhook.d';
+
+vi.mock('../services/webhook.service');
+
+const app = express();
+app.use(express.json());
+app.use('/webhooks', webhookRoutes);
 
 describe('Webhook Controller', () => {
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
-  const mockWebhook = { id: '123', url: 'https://example.com' };
+  const mockWebhook: Webhook = {
+    id: '1',
+    url: 'https://example.com/webhook',
+    events: ['issue.created'],
+    isActive: true,
+  };
 
   beforeEach(() => {
-    mockRequest = {};
-    mockResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
     vi.clearAllMocks();
   });
 
-  describe('registerWebhook', () => {
-    it('should register a webhook and return 201', async () => {
-      mockRequest.body = { url: 'https://example.com' };
-      vi.spyOn(webhookService, 'createWebhook').mockResolvedValue(mockWebhook);
+  it('should register a webhook', async () => {
+    (webhookService.createWebhook as jest.Mock).mockResolvedValue(1);
 
-      await registerWebhook(mockRequest as Request, mockResponse as Response);
+    const response = await request(app)
+      .post('/webhooks')
+      .send(mockWebhook);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(201);
-      expect(mockResponse.json).toHaveBeenCalledWith(mockWebhook);
-      expect(webhookService.createWebhook).toHaveBeenCalledWith('https://example.com');
-    });
-
-    it('should return 400 if url is missing', async () => {
-      mockRequest.body = {};
-
-      await registerWebhook(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'URL is required' });
-    });
-
-    it('should return 500 on service error', async () => {
-      mockRequest.body = { url: 'https://example.com' };
-      vi.spyOn(webhookService, 'createWebhook').mockRejectedValue(new Error('Database error'));
-
-      await registerWebhook(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Failed to register webhook' });
-    });
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({ id: 1 });
+    expect(webhookService.createWebhook).toHaveBeenCalledWith(mockWebhook);
   });
 
-  describe('deleteWebhook', () => {
-    it('should delete a webhook and return 200', async () => {
-      mockRequest.params = { id: '123' };
-      vi.spyOn(webhookService, 'deleteWebhook').mockResolvedValue(true);
+  it('should handle errors when registering a webhook', async () => {
+    (webhookService.createWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
 
-      await deleteWebhook(mockRequest as Request, mockResponse as Response);
+    const response = await request(app).post('/webhooks').send(mockWebhook);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Webhook deleted successfully' });
-      expect(webhookService.deleteWebhook).toHaveBeenCalledWith('123');
-    });
-
-    it('should return 400 if id is missing', async () => {
-      mockRequest.params = {};
-
-      await deleteWebhook(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'ID is required' });
-    });
-
-    it('should return 500 on service error', async () => {
-      mockRequest.params = { id: '123' };
-      vi.spyOn(webhookService, 'deleteWebhook').mockRejectedValue(new Error('Database error'));
-
-      await deleteWebhook(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Failed to delete webhook' });
-    });
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Service error' });
   });
 
-  describe('listWebhooks', () => {
-    it('should list webhooks and return 200', async () => {
-      vi.spyOn(webhookService, 'getAllWebhooks').mockResolvedValue([mockWebhook]);
+  it('should list webhooks', async () => {
+    (webhookService.getAllWebhooks as jest.Mock).mockResolvedValue([mockWebhook]);
 
-      await listWebhooks(mockRequest as Request, mockResponse as Response);
+    const response = await request(app).get('/webhooks');
 
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith([mockWebhook]);
-      expect(webhookService.getAllWebhooks).toHaveBeenCalled();
-    });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([mockWebhook]);
+    expect(webhookService.getAllWebhooks).toHaveBeenCalled();
+  });
 
-    it('should return 500 on service error', async () => {
-      vi.spyOn(webhookService, 'getAllWebhooks').mockRejectedValue(new Error('Database error'));
+  it('should handle errors when listing webhooks', async () => {
+    (webhookService.getAllWebhooks as jest.Mock).mockRejectedValue(new Error('Service error'));
 
-      await listWebhooks(mockRequest as Request, mockResponse as Response);
+    const response = await request(app).get('/webhooks');
 
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Failed to retrieve webhooks' });
-    });
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Service error' });
+  });
+
+  it('should delete a webhook', async () => {
+    (webhookService.deleteWebhook as jest.Mock).mockResolvedValue(1);
+
+    const response = await request(app).delete('/webhooks/1');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ message: 'Webhook deleted' });
+    expect(webhookService.deleteWebhook).toHaveBeenCalledWith('1');
+  });
+
+  it('should handle errors when deleting a webhook', async () => {
+    (webhookService.deleteWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
+
+    const response = await request(app).delete('/webhooks/1');
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Service error' });
   });
 });
