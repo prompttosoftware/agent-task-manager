@@ -1,34 +1,16 @@
-const Database = require('better-sqlite3');
+// src/db/db.js
+import Database from 'better-sqlite3';
 
-const db = new Database('./data/task_manager.db');
+const db = new Database('data/task_manager.db', { verbose: console.log });
 
-function executeQuery(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    const result = stmt.all(params);
-    return result;
-  } catch (error) {
-    console.error('Error executing query:', error);
-    throw error;
-  }
-}
+// Create issues table if it doesn't exist
+db.exec(`
+  CREATE TABLE IF NOT EXISTS issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    summary TEXT,
+    description TEXT,
+    status TEXT
+  );
+`);
 
-function getConnection() {
-  return db;
-}
-
-// Test function
-function testConnection() {
-  try {
-    executeQuery('SELECT 1');
-    console.log('Database connection successful.');
-  } catch (error) {
-    console.error('Database connection failed:', error);
-  }
-}
-
-module.exports = {
-  executeQuery,
-  getConnection,
-  testConnection,
-};
+export default db;

@@ -1,10 +1,13 @@
 // src/api/routes/issue.routes.ts
-import { Router } from 'express';
-import { findIssues, createIssue } from '../controllers/issue.controller';
 
-const router = Router();
+import express from 'express';
+import * as issueController from '../api/controllers/issue.controller';
 
-router.get('/issues/search', findIssues);
-router.post('/issues', createIssue);
+const router = express.Router();
+
+router.post('/issues', issueController.createIssue);
+router.get('/issues/:id', issueController.getIssue);
+router.put('/issues/:id', issueController.updateIssue);
+router.delete('/issues/:id', issueController.deleteIssue);
 
 export default router;
