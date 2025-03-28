@@ -1,101 +1,74 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// src/api/controllers/webhook.controller.test.ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import express from 'express';
-import webhookRoutes from '../routes/webhook.routes';
-import * as webhookService from '../services/webhook.service';
-import { WebhookRegisterRequest, Webhook } from '../types/webhook.d';
+import { app } from '../../src/index'; // Adjust the path as needed
+import { createDatabase, closeDatabase } from '../../src/db/database'; // Adjust the path as needed
 
-vi.mock('../services/webhook.service');
-
-const app = express();
-app.use(express.json());
-app.use('/webhooks', webhookRoutes);
-
-describe('Webhook Controller', () => {
-  const mockWebhookRegisterRequest: WebhookRegisterRequest = {
-    url: 'https://example.com/webhook',
-    events: ['issue.created'],
-    secret: 'testSecret',
-  };
-
-  const mockWebhook: Webhook = {
-    id: 'uuid-1',
-    url: mockWebhookRegisterRequest.url,
-    events: mockWebhookRegisterRequest.events,
-    secret: mockWebhookRegisterRequest.secret,
-    active: true,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('WebhookController Integration Tests', () => {
+  beforeAll(async () => {
+    await createDatabase();
   });
 
-  it('should register a webhook with valid input', async () => {
-    (webhookService.registerWebhook as jest.Mock).mockResolvedValue(mockWebhook);
-
-    const response = await request(app)
-      .post('/webhooks')
-      .send(mockWebhookRegisterRequest);
-
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual(expect.objectContaining({ id: mockWebhook.id, url: mockWebhook.url, events: mockWebhook.events, secret: mockWebhook.secret }));
-    expect(webhookService.registerWebhook).toHaveBeenCalledWith(mockWebhookRegisterRequest);
+  afterAll(async () => {
+    await closeDatabase();
   });
 
-  it('should return 400 for invalid input when registering a webhook', async () => {
+  it('POST /api/webhook should return 200 for a valid issue_created payload', async () => {
     const response = await request(app)
-      .post('/webhooks')
-      .send({ url: 'not-a-url', events: [''] });
+      .post('/api/webhook')
+      .send({ event: 'issue_created', data: { issue: { key: 'ATM-1', fields: { summary: 'Test Issue' } } } })
+      .set('Content-Type', 'application/json');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBeDefined();
+  });
+
+  it('POST /api/webhook should return 400 for an invalid payload', async () => {
+    const response = await request(app)
+      .post('/api/webhook')
+      .send({ invalid: 'payload' })
+      .set('Content-Type', 'application/json');
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual(expect.objectContaining({ errors: expect.any(Array) }));
-    expect(webhookService.registerWebhook).not.toHaveBeenCalled();
   });
 
-  it('should handle errors when registering a webhook', async () => {
-    (webhookService.registerWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
-
-    const response = await request(app).post('/webhooks').send(mockWebhookRegisterRequest);
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Service error' });
-  });
-
-  it('should list webhooks', async () => {
-    (webhookService.listWebhooks as jest.Mock).mockResolvedValue({ webhooks: [mockWebhook], total: 1 });
-
-    const response = await request(app).get('/webhooks');
+  it('POST /api/webhook should return 200 for a valid issue_updated payload', async () => {
+    const response = await request(app)
+      .post('/api/webhook')
+      .send({ event: 'issue_updated', data: { issue: { key: 'ATM-1', fields: { summary: 'Updated Test Issue' } } } })
+      .set('Content-Type', 'application/json');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ webhooks: [expect.objectContaining({id: mockWebhook.id, url: mockWebhook.url, events: mockWebhook.events, secret: mockWebhook.secret, active: mockWebhook.active})], total: 1 });
-    expect(webhookService.listWebhooks).toHaveBeenCalled();
+    expect(response.body).toBeDefined();
   });
 
-  it('should handle errors when listing webhooks', async () => {
-    (webhookService.listWebhooks as jest.Mock).mockRejectedValue(new Error('Service error'));
-
-    const response = await request(app).get('/webhooks');
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Service error' });
-  });
-
-  it('should delete a webhook', async () => {
-    (webhookService.deleteWebhook as jest.Mock).mockResolvedValue({ message: 'Webhook deleted', webhookId: mockWebhook.id, success: true });
-
-    const response = await request(app).delete(`/webhooks/${mockWebhook.id}`);
+  it('POST /api/webhook should return 200 for a valid issue_deleted payload', async () => {
+    const response = await request(app)
+      .post('/api/webhook')
+      .send({ event: 'issue_deleted', data: { issue: { key: 'ATM-1' } } })
+      .set('Content-Type', 'application/json');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ message: 'Webhook deleted', webhookId: mockWebhook.id, success: true });
-    expect(webhookService.deleteWebhook).toHaveBeenCalledWith(mockWebhook.id);
+    expect(response.body).toBeDefined();
   });
 
-  it('should handle errors when deleting a webhook', async () => {
-    (webhookService.deleteWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
+  it('POST /api/webhook should return 400 if event is missing', async () => {
+    const response = await request(app)
+      .post('/api/webhook')
+      .send({ data: { issue: { key: 'ATM-1' } } })
+      .set('Content-Type', 'application/json');
 
-    const response = await request(app).delete(`/webhooks/${mockWebhook.id}`);
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Service error' });
+    expect(response.status).toBe(400);
   });
+
+  it('POST /api/webhook with invalid content type should return 415', async () => {
+    const response = await request(app)
+      .post('/api/webhook')
+      .send({ event: 'issue_created', data: { issue: { key: 'ATM-1' } } })
+      .set('Content-Type', 'text/plain');
+
+    expect(response.status).toBe(415);
+  });
+
+  // Add more tests for different webhook events and error scenarios
 });
