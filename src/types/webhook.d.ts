@@ -31,3 +31,9 @@ export interface Webhook {
 export interface WebhookListResponse {
   webhooks: Webhook[];
 }
+
+export interface WebhookService {
+  registerWebhook(request: WebhookRegisterRequest): Promise<WebhookRegisterResponse>;
+  deleteWebhook(webhookId: string): Promise<WebhookDeleteResponse>;
+  listWebhooks(): Promise<WebhookListResponse>;
+}
