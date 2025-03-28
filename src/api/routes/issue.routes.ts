@@ -1,8 +1,9 @@
-import express from 'express';
-import * as issueController from '../api/controllers/issue.controller';
+// src/api/routes/issue.routes.ts
+import { Router } from 'express';
+import { findIssues } from '../controllers/issue.controller';
 
-const router = express.Router();
+const router = Router();
 
-router.get('/', issueController.getAllIssues);
+router.get('/issues/search', findIssues);
 
 export default router;
