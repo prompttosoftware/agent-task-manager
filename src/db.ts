@@ -2,6 +2,7 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { Attachment } from './models/attachment';
 import { Issue, IssueLink } from './models/Issue';
+import { StatusCategory } from './src/models/Board';
 
 export class Database {
   private db: any;
@@ -145,7 +146,7 @@ export class Database {
     );
   }
 
-  async updateIssueStatus(id: string, statusCategory: string): Promise<void> {
+  async updateIssueStatus(id: string, statusCategory: StatusCategory): Promise<void> {
     if (!this.db) {
       await this.init();
     }

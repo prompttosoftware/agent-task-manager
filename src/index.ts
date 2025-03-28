@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { Issue, IssueLink, IssueType } from './src/models/Issue';
+import { Issue, IssueLink, IssueType, Status, Transition } from './src/models/Issue';
 import { StatusCategory } from './src/models/Board';
 import { resolve } from 'path';
 import { Database } from './db';
@@ -40,7 +40,7 @@ app.get('/issues', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issues:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /issues/:id
@@ -56,7 +56,7 @@ app.get('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }    
+    }
 });
 
 // POST /issues
@@ -76,6 +76,7 @@ app.post('/issues', async (req: Request, res: Response) => {
         summary: req.body.summary,
         statusCategory: StatusCategory.TO_DO,
         issueType: issueType,
+        status: { name: 'To Do', id: '1' } // Default status
     };
 
     // Add issue-type specific fields
@@ -93,7 +94,7 @@ app.post('/issues', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error creating issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // PUT /issues/:id
@@ -117,7 +118,7 @@ app.put('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // DELETE /issues/:id
@@ -130,18 +131,20 @@ app.delete('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error deleting issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /issue/createmeta
 app.get('/issue/createmeta', (req: Request, res: Response) => {
     // Return available issue types and their fields
-    const createMeta = Object.entries(issueTypeDetails).map(([issueType, details]) => ({
-        id: issueType,
-        name: issueType,
-        description: details?.description,
-        fields: details?.fields,
-    }));
+    const createMeta = Object.entries(issueTypeDetails).map(([issueType, details]) => {
+        return {
+            id: issueType,
+            name: issueType,
+            description: details?.description,
+            fields: details?.fields,
+        };
+    });
 
     res.json({ issueTypes: createMeta });
 });
@@ -179,7 +182,7 @@ app.post('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error creating link:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /issues/:id/links
@@ -196,7 +199,7 @@ app.get('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error getting links:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // PUT /issues/:id/links - Update links (including remove)
@@ -230,7 +233,7 @@ app.put('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating links:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /issue/{issueId} - Implement Get Issue Endpoint
@@ -252,10 +255,11 @@ app.get('/issue/:issueId', async (req: Request, res: Response) => {
                 summary: issue.summary,
                 issuetype: {
                     name: issue.issueType,
-                    id: issue.issueType,                    
+                    id: issue.issueType,
                 },
                 status: {
                     name: issue.statusCategory,
+                    id: '1' // need to lookup actual status id.
                 }
                 // Add more fields as needed to match Jira format
             }
@@ -265,7 +269,7 @@ app.get('/issue/:issueId', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /issue?query={searchTerms} - Implement Find Issue Endpoint
@@ -292,6 +296,7 @@ app.get('/issue', async (req: Request, res: Response) => {
                 },
                 status: {
                     name: issue.statusCategory,
+                    id: '1' // need to lookup actual status id.
                 }
             }
         }));
@@ -300,7 +305,7 @@ app.get('/issue', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error searching issues:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // GET /transitions - Implement List Transitions Endpoint
@@ -350,20 +355,23 @@ app.post('/issue/:issueId/transitions', async (req: Request, res: Response) => {
         }
 
         // Update the issue status in the database
-        let newStatus: StatusCategory;
+        let newStatusCategory: StatusCategory;
+        let newStatusName: string;
         switch (transition) {
             case 'In Progress':
-                newStatus = StatusCategory.IN_PROGRESS;
+                newStatusCategory = StatusCategory.IN_PROGRESS;
+                newStatusName = 'In Progress';
                 break;
             case 'Done':
-                newStatus = StatusCategory.DONE;
+                newStatusCategory = StatusCategory.DONE;
+                newStatusName = 'Done';
                 break;
             default:
                 return res.status(400).json({ message: 'Invalid transition' });
         }
 
         //TODO: Implement update status in db.ts
-        await db.updateIssueStatus(issueId, newStatus);
+        await db.updateIssueStatus(issueId, newStatusCategory);
 
         // Respond with success
         res.json({
@@ -372,7 +380,8 @@ app.post('/issue/:issueId/transitions', async (req: Request, res: Response) => {
             self: `http://localhost:3000/issue/${issueId}`, // Or the correct URL
             fields: {
                 status: {
-                    name: newStatus,
+                    name: newStatusName,
+                    id: '1' // need to lookup actual status id.
                 }
             }
         });
@@ -380,7 +389,7 @@ app.post('/issue/:issueId/transitions', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error transitioning issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 // PUT /issue/:issueId/assignee - Implement Update Assignee Endpoint
@@ -422,7 +431,7 @@ app.put('/issue/:issueId/assignee', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating assignee:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }   
+    }
 });
 
 app.listen(port, () => {
