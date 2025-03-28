@@ -60,6 +60,32 @@ app.post('/issue/:issueId/attachment', upload.single('file'), async (req, res) =
   }
 });
 
+// Get attachment metadata endpoint
+app.get('/issue/:issueId/attachment/:attachmentId', async (req, res) => {
+  try {
+    const issueId = req.params.issueId;
+    const attachmentId = req.params.attachmentId;
+
+    if (!issueId) {
+      return res.status(400).json({ error: 'issueId is required' });
+    }
+    if (!attachmentId) {
+      return res.status(400).json({ error: 'attachmentId is required' });
+    }
+
+    const attachment = await db.getAttachment(attachmentId);
+
+    if (!attachment) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    res.status(200).json(attachment);
+  } catch (error: any) {
+    console.error('Error getting attachment metadata:', error);
+    res.status(500).json({ error: error.message || 'Failed to get attachment metadata' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
