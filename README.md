@@ -4,6 +4,12 @@
 
 The Agent Task Manager is a project designed to implement a simplified task management system with API endpoints, a database, and webhook functionality. It aims to provide a core set of features similar to Jira but on a smaller scale.
 
+This project includes the following features:
+
+*   **API Endpoints:** RESTful API for managing issues, boards, epics, and webhooks.
+*   **Database:** SQLite database for storing data.
+*   **Webhooks:** Functionality to trigger webhooks on specific events.
+
 ## Epics and Progress
 
 The following table summarizes the implemented epics and their status:
@@ -23,7 +29,7 @@ The following table summarizes the implemented epics and their status:
 | Epic 11: Implementation - API Endpoints Boards | Implemented | Implemented the API endpoints and related files for boards.                                                                                                                                                                  | Epic 12: Implementation - API Endpoints Webhooks |
 | Epic 12: Implementation - API Endpoints Webhooks | Implemented | Implemented the API endpoints and related files for webhooks.                                                                                                                                                                  | Epic 13: Implementation - API Endpoints Epics |
 | Epic 13: Implementation - API Endpoints Epics | Implemented | Implemented the API endpoints and related files for epics.                                                                                                                                                                  | Epic 14: Implementation - Webhook Processing |
-| Epic 14: Implementation - Webhook Processing | Implemented | Implemented the webhook processing logic.                                                                                                                                                                  | Epic 15: Testing and Integration |
+| Epic 14: Implementation - Webhook Processing | Implemented | Implemented the webhook processing logic.                                                                                                                                                                  | Epic 15: Testing and Integration | 
 | Epic 15: Testing and Integration           | Implemented | Unit tests, integration tests and manual testing completed.  | Epic 16: Deployment and Configuration |
 | Epic 16: Deployment and Configuration    | Implemented | Deployment strategy, configuration management, and startup scripts/processes defined.   | Epic 17: Final Testing and Refinement |
 | Epic 17: Final Testing and Refinement      | Implemented | Comprehensive testing, bug fixing, documentation update, and code refinement completed. | Epic 18: Project Completion |
@@ -136,7 +142,20 @@ npm test
 
 ### API Documentation
 
-API documentation is available in the `src/api` directory.  Consider using tools like Swagger/OpenAPI for auto-generating documentation in a future iteration.
+*   **API Endpoints:** The API endpoints are:
+    *   `POST /webhooks`: Registers a new webhook.
+        *   Request Body:  `WebhookRegisterRequest` (defined in `src/api/types/webhook.d.ts`)
+        *   Response:  `WebhookRegisterResponse` (defined in `src/api/types/webhook.d.ts`)
+    *   `DELETE /webhooks/:id`: Deletes a webhook by ID.
+        *   Parameters:
+            *   `id`: The ID of the webhook to delete (UUID format).
+        *   Response: `WebhookDeleteResponse` (defined in `src/api/types/webhook.d.ts`)
+    *   `GET /webhooks`: Lists all webhooks.
+        *   Response: `WebhookListResponse` (defined in `src/api/types/webhook.d.ts`)
+    *   `GET /webhooks/:id`: Retrieves a webhook by ID.
+        *   Parameters:
+            *   `id`: The ID of the webhook to retrieve (UUID format).
+        *   Response: `Webhook` or 404 if not found.
 
 ## Configuration
 
