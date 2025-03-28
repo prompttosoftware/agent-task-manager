@@ -16,6 +16,8 @@ const issueTypeDetails: { [key in IssueType]?: { description: string; fields?: {
     [IssueType.Bug]: { description: 'A problem which impairs or prevents the functions of a product.', fields: { priority: ['High', 'Medium', 'Low'] } },
     [IssueType.Task]: { description: 'A unit of work.' },
     [IssueType.Story]: { description: 'A user story.', fields: { assignee: 'string', epicLink: 'string' } },
+    [IssueType.Subtask]: { description: 'A subtask.' },
+    [IssueType.Epic]: { description: 'An epic.' }
 };
 
 async function isValidIssueKey(issueKey: string): Promise<boolean> {
@@ -115,7 +117,7 @@ app.put('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }    
+    }   
 });
 
 // DELETE /issues/:id
@@ -128,7 +130,7 @@ app.delete('/issues/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error deleting issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // GET /issue/createmeta
@@ -177,7 +179,7 @@ app.post('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error creating link:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // GET /issues/:id/links
@@ -194,7 +196,7 @@ app.get('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error getting links:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // PUT /issues/:id/links - Update links (including remove)
@@ -228,7 +230,7 @@ app.put('/issues/:id/links', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating links:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // GET /issue/{issueId} - Implement Get Issue Endpoint
@@ -250,12 +252,10 @@ app.get('/issue/:issueId', async (req: Request, res: Response) => {
                 summary: issue.summary,
                 issuetype: {
                     name: issue.issueType,
-                    id: issue.issueType,
-                    //TODO: Add more fields
+                    id: issue.issueType,                    
                 },
                 status: {
                     name: issue.statusCategory,
-                    //TODO: Add more fields
                 }
                 // Add more fields as needed to match Jira format
             }
@@ -265,7 +265,7 @@ app.get('/issue/:issueId', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching issue:', error);
         res.status(500).json({ message: 'Internal server error' });
-    }
+    }   
 });
 
 // GET /issue?query={searchTerms} - Implement Find Issue Endpoint
@@ -300,7 +300,129 @@ app.get('/issue', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error searching issues:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }   
+});
+
+// GET /transitions - Implement List Transitions Endpoint
+app.get('/transitions', async (req: Request, res: Response) => {
+    // For now, hardcode the transitions based on status categories
+    const transitions = {
+        'To Do': [
+            {
+                to: 'In Progress'
+            }
+        ],
+        'In Progress': [
+            {
+                to: 'Done'
+            }
+        ]
+    };
+
+    res.json(transitions);
+});
+
+// POST /issue/:issueId/transitions - Implement Transition Issue Endpoint
+app.post('/issue/:issueId/transitions', async (req: Request, res: Response) => {
+    const issueId = req.params.issueId;
+    const { transition } = req.body;
+
+    if (!transition) {
+        return res.status(400).json({ message: 'Transition is required' });
     }
+
+    try {
+        await db.init();
+        const issue = await db.getIssue(issueId);
+
+        if (!issue) {
+            return res.status(404).json({ message: 'Issue not found' });
+        }
+
+        // Validate the transition
+        const validTransitions = {
+            'To Do': ['In Progress'],
+            'In Progress': ['Done']
+        };
+
+        if (!validTransitions[issue.statusCategory]?.includes(transition)) {
+            return res.status(400).json({ message: 'Invalid transition' });
+        }
+
+        // Update the issue status in the database
+        let newStatus: StatusCategory;
+        switch (transition) {
+            case 'In Progress':
+                newStatus = StatusCategory.IN_PROGRESS;
+                break;
+            case 'Done':
+                newStatus = StatusCategory.DONE;
+                break;
+            default:
+                return res.status(400).json({ message: 'Invalid transition' });
+        }
+
+        //TODO: Implement update status in db.ts
+        await db.updateIssueStatus(issueId, newStatus);
+
+        // Respond with success
+        res.json({
+            id: issueId,
+            key: issueId, // Or use the actual issue key
+            self: `http://localhost:3000/issue/${issueId}`, // Or the correct URL
+            fields: {
+                status: {
+                    name: newStatus,
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error transitioning issue:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }   
+});
+
+// PUT /issue/:issueId/assignee - Implement Update Assignee Endpoint
+app.put('/issue/:issueId/assignee', async (req: Request, res: Response) => {
+    const issueId = req.params.issueId;
+    const { assignee } = req.body;
+
+    if (!assignee) {
+        return res.status(400).json({ message: 'Assignee is required' });
+    }
+
+    try {
+        await db.init();
+        const issue = await db.getIssue(issueId);
+
+        if (!issue) {
+            return res.status(404).json({ message: 'Issue not found' });
+        }
+
+        // Validate the assignee key (basic check)
+        if (typeof assignee !== 'string') {
+            return res.status(400).json({ message: 'Invalid assignee format' });
+        }
+
+        // Update the issue assignee in the database
+        //TODO: Implement update assignee in db.ts
+        await db.updateIssueAssignee(issueId, assignee);
+
+        // Respond with success
+        res.json({
+            id: issueId,
+            key: issueId, // Or use the actual issue key
+            self: `http://localhost:3000/issue/${issueId}`, // Or the correct URL
+            fields: {
+                assignee: assignee,
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating assignee:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }   
 });
 
 app.listen(port, () => {
