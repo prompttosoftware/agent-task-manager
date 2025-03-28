@@ -1,5 +1,5 @@
 // Import necessary modules and types
-import { WebhookPayload } from '../types/webhook.d';
+import { WebhookPayload, Webhook } from '../types/webhook.d';
 import Database from '../db/database'; // Assuming you have a database module
 
 // Define the WebhookService class
@@ -10,7 +10,7 @@ class WebhookService {
     this.db = db;
   }
 
-  async createWebhook(data: any): Promise<any> {
+  async createWebhook(data: WebhookPayload): Promise<Webhook> {
     try {
       // Validate data if needed
       const { url, eventType } = data;
@@ -26,14 +26,14 @@ class WebhookService {
       const result = await this.db.run(sql, params);
 
       // Handle the result, return the inserted webhook's ID
-      return { id: result.lastID, ...data };
+      return { id: result.lastID, url, eventType };
     } catch (error: any) {
       console.error('Error creating webhook:', error);
       throw error; // Re-throw the error for the caller to handle
     }
   }
 
-  async getAllWebhooks(): Promise<any[]> {
+  async getAllWebhooks(): Promise<Webhook[]> {
     try {
       const sql = `SELECT * FROM webhooks`;
       const rows = await this.db.all(sql);
