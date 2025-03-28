@@ -4,19 +4,33 @@ import express from 'express';
 import { issueRoutes } from './api/routes/issue.routes';
 import { webhookRoutes } from './api/routes/webhook.routes';
 import { config } from './config';
+import { WebhookWorker } from './services/webhookWorker';
+import Database from './db/database';
 
 const app = express();
 const port = config.port;
 
-app.use(express.json());
+// Initialize the database
+const db = new Database('data/task_manager.db');
+db.init().then(() => {
+  console.log('Database initialized');
 
-app.use('/issues', issueRoutes);
-app.use('/webhooks', webhookRoutes);
+  // Initialize WebhookService and WebhookWorker
+  const webhookWorker = new WebhookWorker(db);
+  webhookWorker.start();
 
-app.get('/', (req, res) => {
-  res.send('Agent Task Manager');
-});
+  app.use(express.json());
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  app.use('/issues', issueRoutes);
+  app.use('/webhooks', webhookRoutes);
+
+  app.get('/', (req, res) => {
+    res.send('Agent Task Manager');
+  });
+
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
 });
