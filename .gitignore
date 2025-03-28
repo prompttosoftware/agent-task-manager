@@ -1,0 +1,31 @@
+# Node modules
+node_modules/
+
+# Compiled output
+dist/
+
+# Logs
+logs/*.log
+*.log
+
+# SQLite database
+data/*.db
+
+# Test coverage
+coverage/
+
+# IDE files
+.idea/
+*.iml
+
+# Editor backups
+*.swp
+*.swo
+*.bak
+
+# OS generated files
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
