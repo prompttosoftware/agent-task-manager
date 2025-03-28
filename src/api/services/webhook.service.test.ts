@@ -257,8 +257,7 @@ describe('WebhookService', () => {
 
       await (webhookService as any).invokeWebhook(webhook, mockPayload);
 
-      expect(global.fetch).toHaveBeenCalledWith('url1', {
-        method: 'POST',
+      expect(global.fetch).toHaveBeenCalledWith('url1', {        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Webhook-Signature': 'signature',
