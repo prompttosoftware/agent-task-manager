@@ -45,5 +45,19 @@ export class WebhookController {
       res.status(500).json({ message: error.message });
     }
   }
-  // Add a method to handle retrieving a single webhook if needed
+
+  async getWebhookById(req: Request, res: Response) {
+    try {
+      const webhookId = req.params.id;
+      const webhook = await this.webhookService.getWebhookById(webhookId);
+      if (webhook) {
+        res.status(200).json(webhook);
+      } else {
+        res.status(404).json({ message: 'Webhook not found' });
+      }
+    } catch (error: any) {
+      console.error('Error getting webhook by id:', error);
+      res.status(500).json({ message: error.message });
+    }
+  }
 }

@@ -2,6 +2,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Webhook, WebhookRegisterRequest, WebhookListResponse, WebhookDeleteResponse, WebhookPayload } from '../types/webhook.d';
 import Database from '../../src/db/database';
+import * as crypto from 'crypto';
 
 export class WebhookService {
   private db: Database;
@@ -68,6 +69,26 @@ export class WebhookService {
     }
   }
 
+  async getWebhookById(webhookId: string): Promise<Webhook | undefined> {
+    try {
+      const row = await this.db.get('SELECT * FROM webhooks WHERE id = ?', [webhookId]);
+      if (!row) {
+        return undefined;
+      }
+      const webhook = {
+        id: row.id,
+        url: row.url,
+        events: JSON.parse(row.events) as string[],
+        secret: row.secret,
+        active: row.active === 1, // Convert back to boolean
+      };
+      return webhook;
+    } catch (error: any) {
+      console.error('Error getting webhook by id:', error);
+      throw new Error(`Failed to get webhook by id: ${error.message}`);
+    }
+  }
+
   async processWebhookEvent(payload: WebhookPayload): Promise<void> {
     try {
       const rows = await this.db.all('SELECT * FROM webhooks WHERE events LIKE ? AND active = 1', [`%${payload.event}%`]);
@@ -114,8 +135,8 @@ export class WebhookService {
   }
 
   private generateSignature(data: string, secret: string): string {
-    // In a real application, use a proper HMAC implementation
-    // This is a placeholder.  Do not use this in production.
-    return 'signature';
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(data);
+    return hmac.digest('hex');
   }
 }

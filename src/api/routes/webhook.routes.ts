@@ -8,6 +8,7 @@ export function createWebhookRoutes(controller: WebhookController): Router {
   router.post('/webhooks', controller.registerWebhook);
   router.delete('/webhooks/:id', controller.deleteWebhook);
   router.get('/webhooks', controller.listWebhooks);
+  router.get('/webhooks/:id', controller.getWebhookById);
 
   return router;
 }
