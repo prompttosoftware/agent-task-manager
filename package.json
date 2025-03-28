@@ -1,0 +1,7 @@
+{
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.9.1",
+    "npm-check-updates": "^17.1.16"
+  }
+}
