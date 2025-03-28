@@ -1,24 +1,49 @@
 import { WebhookRegistration, WebhookPayload, Webhook } from '../types/webhook';
+import Database from 'better-sqlite3';
 
-// In-memory storage for webhooks (replace with a database in a real application)
-let webhooks: Webhook[] = [];
+const db = new Database('atm.db');
+
+const createWebhooksTable = db.prepare(
+  `CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    events TEXT NOT NULL,
+    secret TEXT
+  )`
+);
+
+createWebhooksTable.run();
+
+const insertWebhook = db.prepare(
+  'INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)'
+);
+
+const deleteWebhookStmt = db.prepare('DELETE FROM webhooks WHERE id = ?');
+
+const listWebhooksStmt = db.prepare('SELECT * FROM webhooks');
+
+const getWebhookById = db.prepare('SELECT * FROM webhooks WHERE id = ?');
 
 export const registerWebhook = (registration: WebhookRegistration): Webhook => {
-  const newWebhook: Webhook = {
-    id: generateId(), // You'll need to implement this function
-    ...registration,
-  };
-  webhooks.push(newWebhook);
-  return newWebhook;
+  const id = generateId();
+  const { url, events, secret } = registration;
+  insertWebhook.run(id, url, JSON.stringify(events), secret);
+  return { id, url, events, secret };
 };
 
 export const deleteWebhook = (webhookId: string): boolean => {
-  webhooks = webhooks.filter((webhook) => webhook.id !== webhookId);
-  return true; // Or return false if not found
+  const result = deleteWebhookStmt.run(webhookId);
+  return result.changes > 0;
 };
 
 export const listWebhooks = (): Webhook[] => {
-  return webhooks;
+  const rows = listWebhooksStmt.all() as any[];
+  return rows.map(row => ({
+    id: row.id,
+    url: row.url,
+    events: JSON.parse(row.events),
+    secret: row.secret,
+  }));
 };
 
 export const generateId = (): string => {
@@ -26,6 +51,7 @@ export const generateId = (): string => {
 };
 
 export const processWebhookEvent = (payload: WebhookPayload): void => {
+  const webhooks = listWebhooks();
   const matchingWebhooks = webhooks.filter(webhook => webhook.events.includes(payload.event));
 
   matchingWebhooks.forEach(webhook => {
