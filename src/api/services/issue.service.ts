@@ -3,6 +3,7 @@
 import db from '../db/database';
 import { WebhookService } from './webhook.service';
 import { WebhookPayload } from '../types/webhook.d';
+import { getWebhook } from './webhook.service';
 
 // Instantiate WebhookService - ideally, this would be dependency injected
 const webhookService = new WebhookService(db);
@@ -65,14 +66,27 @@ export async function deleteIssue(issueId: number): Promise<void> {
 }
 
 async function triggerIssueEvent(event: string, data: any) {
-  const payload: WebhookPayload = {
-    event: event,
-    data: data,
-  };
-  try {
-    await webhookService.processWebhookEvent(payload);
-  } catch (error) {
-    console.error(`Error triggering ${event} event:`, error);
-    // Consider more sophisticated error handling, e.g., retry mechanism or dead-letter queue
-  }
+    const webhooks = await listWebhooksForEvent(event);
+
+    for (const webhook of webhooks) {
+        const payload: WebhookPayload = {
+            event: event,
+            data: data,
+            timestamp: new Date().toISOString(),
+            webhookId: webhook.id,
+        };
+        try {
+            await webhookService.addWebhookPayloadToQueue(webhook.id, payload);
+        } catch (error) {
+            console.error(`Error triggering ${event} event for webhook ${webhook.id}:`, error);
+            // Consider more sophisticated error handling, e.g., retry mechanism or dead-letter queue
+        }
+    }
+}
+
+
+async function listWebhooksForEvent(event: string) {
+    // Fetch all active webhooks and filter by the event
+    const allWebhooks = await webhookService.listWebhooks();
+    return allWebhooks.filter(webhook => webhook.events.includes(event));
 }
