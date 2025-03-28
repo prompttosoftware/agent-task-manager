@@ -1,113 +1,74 @@
+// src/api/controllers/webhook.controller.test.ts
+import { test, describe, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
-import app from '../../src/app'; // Assuming your Express app is exported from app.ts or similar
-import { WebhookService } from '../../src/api/services/webhook.service';
-import { WebhookRegisterRequest, WebhookDeleteResponse, WebhookListResponse, WebhookStatus } from '../../src/types/webhook.d';
+import app from '../../app'; // Import the app instance
+import * as webhookService from '../services/webhook.service';
 
-// Mock the WebhookService
-jest.mock('../../src/api/services/webhook.service');
-const mockWebhookService = {
-  registerWebhook: jest.fn(),
-  deleteWebhook: jest.fn(),
-  listWebhooks: jest.fn(),
-};
+describe('Webhook Controller', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-// Set up the mock service to be used by the controller
-const originalWebhookService = require('../../src/api/services/webhook.service');
-originalWebhookService.WebhookService = jest.fn(() => mockWebhookService);
-
-describe('WebhookController', () => {
   describe('POST /api/webhooks', () => {
-    it('should register a webhook and return 201', async () => {
-      const mockRequest: WebhookRegisterRequest = {
-        callbackUrl: 'https://example.com/webhook',
-        events: ['issue.created'],
-      };
-      const mockResponse = {
-        id: 'webhook-id-123',
-        callbackUrl: 'https://example.com/webhook',
-        events: ['issue.created'],
-        status: WebhookStatus.ACTIVE,
-      };
-      mockWebhookService.registerWebhook.mockResolvedValue(mockResponse);
-
-      const response = await request(app).post('/api/webhooks').send(mockRequest);
+    it('should register a webhook successfully', async () => {
+      const mockCreateWebhook = vi.spyOn(webhookService, 'createWebhook').mockResolvedValue({ id: '123', url: 'https://example.com' });
+      const response = await request(app).post('/api/webhooks').send({ url: 'https://example.com' });
 
       expect(response.status).toBe(201);
-      expect(response.body).toEqual(mockResponse);
-      expect(mockWebhookService.registerWebhook).toHaveBeenCalledWith(mockRequest);
+      expect(mockCreateWebhook).toHaveBeenCalledWith('https://example.com');
+      expect(response.body).toEqual({ id: '123', url: 'https://example.com' });
     });
 
-    it('should return 500 if registration fails', async () => {
-      const mockRequest: WebhookRegisterRequest = {
-        callbackUrl: 'https://example.com/webhook',
-        events: ['issue.created'],
-      };
-      mockWebhookService.registerWebhook.mockRejectedValue(new Error('Registration failed'));
+    it('should handle invalid request (missing URL)', async () => {
+      const response = await request(app).post('/api/webhooks').send({});
 
-      const response = await request(app).post('/api/webhooks').send(mockRequest);
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'URL is required' }); // Assuming you have validation
+    });
+
+    it('should handle service errors', async () => {
+      vi.spyOn(webhookService, 'createWebhook').mockRejectedValue(new Error('Database error'));
+      const response = await request(app).post('/api/webhooks').send({ url: 'https://example.com' });
 
       expect(response.status).toBe(500);
-      expect(response.body.message).toBe('Registration failed');
+      expect(response.body).toEqual({ message: 'Failed to register webhook' });
     });
   });
 
-  describe('DELETE /api/webhooks/:webhookId', () => {
-    it('should delete a webhook and return 200', async () => {
-      const webhookId = 'webhook-id-123';
-      const mockResponse: WebhookDeleteResponse = {
-        id: webhookId,
-        status: WebhookStatus.DELETED,
-      };
-      mockWebhookService.deleteWebhook.mockResolvedValue(mockResponse);
+  describe('DELETE /api/webhooks/:id', () => {
+    it('should delete a webhook successfully', async () => {
+      const mockDeleteWebhook = vi.spyOn(webhookService, 'deleteWebhook').mockResolvedValue(true);
+      const response = await request(app).delete('/api/webhooks/123');
 
-      const response = await request(app).delete(`/api/webhooks/${webhookId}`);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockResponse);
-      expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(response.status).toBe(204);
+      expect(mockDeleteWebhook).toHaveBeenCalledWith('123');
     });
 
-    it('should return 500 if deletion fails', async () => {
-      const webhookId = 'webhook-id-123';
-      mockWebhookService.deleteWebhook.mockRejectedValue(new Error('Deletion failed'));
-
-      const response = await request(app).delete(`/api/webhooks/${webhookId}`);
+    it('should handle service errors when deleting', async () => {
+      vi.spyOn(webhookService, 'deleteWebhook').mockRejectedValue(new Error('Database error'));
+      const response = await request(app).delete('/api/webhooks/123');
 
       expect(response.status).toBe(500);
-      expect(response.body.message).toBe('Deletion failed');
+      expect(response.body).toEqual({ message: 'Failed to delete webhook' });
     });
   });
 
   describe('GET /api/webhooks', () => {
-    it('should list webhooks and return 200', async () => {
-      const mockResponse: WebhookListResponse = {
-        webhooks: [
-          {
-            id: 'webhook-id-123',
-            callbackUrl: 'https://example.com/webhook',
-            events: ['issue.created'],
-            status: WebhookStatus.ACTIVE,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      };
-      mockWebhookService.listWebhooks.mockResolvedValue(mockResponse);
-
+    it('should list webhooks successfully', async () => {
+      const mockGetAllWebhooks = vi.spyOn(webhookService, 'getAllWebhooks').mockResolvedValue([{ id: '123', url: 'https://example.com' }]);
       const response = await request(app).get('/api/webhooks');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockResponse);
-      expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+      expect(mockGetAllWebhooks).toHaveBeenCalled();
+      expect(response.body).toEqual([{ id: '123', url: 'https://example.com' }]);
     });
 
-    it('should return 500 if listing fails', async () => {
-      mockWebhookService.listWebhooks.mockRejectedValue(new Error('Listing failed'));
-
+    it('should handle service errors when listing', async () => {
+      vi.spyOn(webhookService, 'getAllWebhooks').mockRejectedValue(new Error('Database error'));
       const response = await request(app).get('/api/webhooks');
 
       expect(response.status).toBe(500);
-      expect(response.body.message).toBe('Listing failed');
+      expect(response.body).toEqual({ message: 'Failed to retrieve webhooks' });
     });
   });
 });
