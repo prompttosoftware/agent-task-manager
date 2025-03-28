@@ -1,0 +1,28 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Typescript
+*.ts.map
+*.js
+
+# SQLite
+*.db
+.DS_Store
+
+# IDE / Editor
+.vscode/
+*.iml
+.idea/
+
+# Build artifacts
+dist/
+coverage/
+
+# Logs
+*.log
+
+# Environment files (sensitive) - not applicable here.  Good to include if needed.
+.env
+.env.local
