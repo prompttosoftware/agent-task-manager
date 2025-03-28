@@ -23,7 +23,7 @@ export class Database {
     );
     await this.db.exec(
       `CREATE TABLE IF NOT EXISTS issues (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         summary TEXT NOT NULL,
         statusCategory TEXT NOT NULL,
         issueType TEXT
@@ -76,8 +76,8 @@ export class Database {
       await this.init();
     }
     await this.db.run(
-      'INSERT INTO issues (summary, statusCategory, issueType) VALUES (?, ?, ?)',
-      issue.summary, issue.statusCategory, issue.issueType
+      'INSERT INTO issues (id, summary, statusCategory, issueType) VALUES (?, ?, ?, ?)',
+      issue.id, issue.summary, issue.statusCategory, issue.issueType
     );
   }
 
@@ -89,5 +89,43 @@ export class Database {
       'SELECT id, summary, statusCategory, issueType FROM issues WHERE issueType = ?', 'Epic'
     );
     return rows;
+  }
+
+  async getIssue(id: string): Promise<Issue | undefined> {
+    if (!this.db) {
+      await this.init();
+    }
+    const row = await this.db.get<Issue>(
+      'SELECT id, summary, statusCategory, issueType FROM issues WHERE id = ?', id
+    );
+    return row;
+  }
+
+  async updateIssue(id: string, summary: string): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+    await this.db.run(
+      'UPDATE issues SET summary = ? WHERE id = ?', summary, id
+    );
+  }
+
+  async searchIssues(query: string): Promise<Issue[]> {
+    if (!this.db) {
+      await this.init();
+    }
+    const rows = await this.db.all<Issue[]>(
+        'SELECT id, summary, statusCategory, issueType FROM issues WHERE summary LIKE ?', `%${query}%`
+    );
+    return rows;
+  }
+
+  async deleteIssue(id: string): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+    await this.db.run(
+      'DELETE FROM issues WHERE id = ?', id
+    );
   }
 }
