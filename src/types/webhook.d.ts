@@ -12,6 +12,7 @@ export interface Webhook {
   url: string;
   events: string[];
   secret?: string; // Stored secret
+  active: boolean;
   // Add other webhook properties as needed
 }
 

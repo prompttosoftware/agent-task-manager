@@ -1,6 +1,7 @@
+// src/api/controllers/webhook.controller.ts
 import { Request, Response } from 'express';
 import { WebhookService } from '../services/webhook.service';
-import { WebhookRegisterRequest, WebhookDeleteResponse, WebhookListResponse } from '../types/webhook.d';
+import { WebhookRegisterRequest } from '../types/webhook.d';
 
 export class WebhookController {
   private webhookService: WebhookService;
@@ -9,35 +10,40 @@ export class WebhookController {
     this.webhookService = webhookService;
   }
 
-  async registerWebhook(req: Request, res: Response): Promise<void> {
+  async registerWebhook(req: Request, res: Response) {
     try {
-      const requestBody: WebhookRegisterRequest = req.body;
-      const webhook = await this.webhookService.registerWebhook(requestBody);
-      res.status(201).json(webhook);
+      const request: WebhookRegisterRequest = req.body;
+      const result = await this.webhookService.registerWebhook(request);
+      res.status(201).json(result);
     } catch (error: any) {
       console.error('Error registering webhook:', error);
       res.status(500).json({ message: error.message });
     }
   }
 
-  async deleteWebhook(req: Request, res: Response): Promise<void> {
+  async deleteWebhook(req: Request, res: Response) {
     try {
-      const webhookId = req.params.webhookId;
-      const result: WebhookDeleteResponse = await this.webhookService.deleteWebhook(webhookId);
-      res.status(200).json(result);
+      const webhookId = req.params.id;
+      const result = await this.webhookService.deleteWebhook(webhookId);
+      if (result.success) {
+        res.status(200).json(result);
+      } else {
+        res.status(404).json(result);
+      }
     } catch (error: any) {
       console.error('Error deleting webhook:', error);
       res.status(500).json({ message: error.message });
     }
   }
 
-  async listWebhooks(req: Request, res: Response): Promise<void> {
+  async listWebhooks(req: Request, res: Response) {
     try {
-      const webhooks: WebhookListResponse = await this.webhookService.listWebhooks();
-      res.status(200).json(webhooks);
+      const result = await this.webhookService.listWebhooks();
+      res.status(200).json(result);
     } catch (error: any) {
       console.error('Error listing webhooks:', error);
       res.status(500).json({ message: error.message });
     }
   }
+  // Add a method to handle retrieving a single webhook if needed
 }
