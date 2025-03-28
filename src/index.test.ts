@@ -10,17 +10,13 @@ describe('API Endpoints', () => {
 
   it('should add an attachment', async () => {
     const res = await request(app)
-      .post('/attachments')
-      .send({
-        issueId: 'ISSUE-123',
-        fileName: 'test.txt',
-        filePath: '/path/to/test.txt',
-      });
+      .post('/issue/ISSUE-123/attachment')
+      .attach('file', Buffer.from('file content'), 'test.txt');
 
     expect(res.statusCode).toEqual(201);
     expect(res.body).toHaveProperty('id');
     expect(res.body.issueId).toEqual('ISSUE-123');
     expect(res.body.fileName).toEqual('test.txt');
-    expect(res.body.filePath).toEqual('/path/to/test.txt');
+    expect(res.body.filePath).toContain('/usr/src/app/attachments/');
   });
 });

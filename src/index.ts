@@ -1,5 +1,7 @@
 // src/index.ts
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
 import { Database } from './db';
 import { Attachment } from './models/attachment';
 
@@ -8,26 +10,44 @@ const port = 3000;
 
 const db = new Database();
 
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, '/usr/src/app/attachments'); // Destination folder
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// Middleware to parse JSON request bodies
+app.use(express.json());
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.send('OK');
 });
 
 // Add attachment endpoint
-app.post('/attachments', async (req, res) => {
-  // In a real application, you'd handle file uploads here.
-  // For this example, we'll just create a placeholder attachment.
+app.post('/issue/:issueId/attachment', upload.single('file'), async (req, res) => {
   try {
-    const { issueId, fileName, filePath } = req.body;
-    if (!issueId || !fileName || !filePath) {
-      return res.status(400).json({ error: 'issueId, fileName, and filePath are required' });
+    const issueId = req.params.issueId;
+    if (!issueId) {
+      return res.status(400).json({ error: 'issueId is required' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const attachment: Attachment = {
       id: Math.random().toString(36).substring(2, 15),
-      issueId,
-      fileName,
-      filePath,
+      issueId: issueId,
+      fileName: req.file.originalname,
+      filePath: `/usr/src/app/attachments/${req.file.filename}`,
       createdAt: new Date().toISOString(),
     };
 
@@ -39,7 +59,6 @@ app.post('/attachments', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to add attachment' });
   }
 });
-
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
