@@ -67,3 +67,21 @@ export interface ListWebhooksRequest {
 export interface ListWebhooksResponse {
   webhooks: Webhook[];
 }
+
+// Additional types for improved type safety and clarity
+
+export enum WebhookStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  DELETED = 'deleted',
+}
+
+export interface WebhookEvent {
+  name: string;
+  description?: string;
+}
+
+//  Extend Webhook interface with additional fields or specific types as needed.  Example:
+//  export interface Webhook extends Webhook {
+//    createdBy: string;
+//  }
