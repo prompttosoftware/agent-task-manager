@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { Database } from './db';
 import { Attachment } from './models/attachment';
+import { Issue } from './models/Issue';
 
 const app = express();
 const port = 3000;
@@ -86,54 +87,101 @@ app.get('/issue/:issueId/attachment/:attachmentId', async (req, res) => {
   }
 });
 
-// Board Management endpoints
-// In-memory storage for boards and issues (replace with database later)
-let boards: { [key: string]: { name: string, issues: string[] } } = {};
-let nextBoardId = 1;
+// Get Issues for Board endpoint
+app.get('/board/:boardName/issues', async (req, res) => {
+  try {
+    const boardName = req.params.boardName;
 
-app.get('/boards', (req, res) => {
-  res.json(Object.values(boards).map( (board, index) => ({
-    id: index + 1, //Simple id
-    name: board.name
-  })));
+    if (!boardName) {
+      return res.status(400).json({ error: 'boardName is required' });
+    }
+
+    // Fetch issues from SQLite database associated with the board name
+    // Assuming you have a way to link issues to boards via a 'statusCategory' field
+    //  For example, 'To Do', 'In Progress', 'Done' will be the board names
+    const issues = await db.getIssuesByStatusCategory(boardName);
+
+    // Return Jira-like JSON response
+    const jiraIssues = issues.map(issue => {
+      let statusName: string = boardName;
+      if (boardName === 'To Do') {
+        statusName = 'open (11)';
+      } else if (boardName === 'In Progress') {
+        statusName = 'indeterminate (21)';
+      } else if (boardName === 'Done') {
+        statusName = 'done (31)';
+      }
+
+      return {
+        id: issue.id,
+        key: `ATM-${issue.id}`,
+        fields: {
+          summary: issue.summary,
+          status: {
+            name: statusName // Changed to reflect the mapping
+          },
+          // Add other fields as needed, e.g., priority, issue type, etc.
+        }
+      }
+    });
+
+    res.status(200).json(jiraIssues);
+
+  } catch (error: any) {
+    console.error('Error getting issues for board:', error);
+    res.status(500).json({ error: error.message || 'Failed to get issues for board' });
+  }
 });
 
-app.post('/boards', (req, res) => {
-  const { name } = req.body;
-  if (!name) {
-    return res.status(400).json({ error: 'Board name is required' });
+// Create Issue endpoint
+app.post('/issue', async (req, res) => {
+  try {
+    const { summary, statusCategory } = req.body;
+
+    if (!summary) {
+      return res.status(400).json({ error: 'Summary is required' });
+    }
+    if (!statusCategory) {
+      return res.status(400).json({ error: 'statusCategory is required' });
+    }
+
+    const newIssue: Issue = {
+      id: Math.floor(Math.random() * 10000).toString(), // Generate a random id
+      summary: summary,
+      statusCategory: statusCategory,
+    };
+
+    await db.addIssue(newIssue);
+
+    res.status(201).json(newIssue);
+  } catch (error: any) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: error.message || 'Failed to create issue' });
   }
-  const boardId = nextBoardId++;
-  boards[boardId] = { name, issues: [] };
-  res.status(201).json({ id: boardId, name });
 });
 
-app.get('/boards/:boardId/issues', (req, res) => {
-  const boardId = parseInt(req.params.boardId, 10);
-  const board = boards[boardId];
-  if (!board) {
-    return res.status(404).json({ error: 'Board not found' });
-  }
-  res.json(board.issues.map((issueId) => ({
-      id: issueId,
-      summary: `Issue ${issueId} summary` //Placeholder summary
-  })));
-});
+// Get Epics endpoint
+app.get('/epics', async (req, res) => {
+  try {
+    // Assuming you have a method in your db class to retrieve epics
+    const epics = await db.getEpics();
 
-app.post('/boards/:boardId/issues', (req, res) => {
-  const boardId = parseInt(req.params.boardId, 10);
-  const { issueId } = req.body;
-  const board = boards[boardId];
-  if (!board) {
-    return res.status(404).json({ error: 'Board not found' });
-  }
-  if (!issueId) {
-    return res.status(400).json({ error: 'issueId is required' });
-  }
-  board.issues.push(issueId);
-  res.status(201).json({ message: `Issue ${issueId} added to board ${boardId}` });
-});
+    // Format the epics as needed (Jira-like format)
+    const jiraEpics = epics.map(epic => ({
+      id: epic.id,
+      key: `ATM-${epic.id}`,
+      fields: {
+        summary: epic.summary,
+        // Add other relevant fields
+      }
+    }));
 
+    res.status(200).json(jiraEpics);
+  } catch (error: any) {
+    console.error('Error getting epics:', error);
+    res.status(500).json({ error: error.message || 'Failed to get epics' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
