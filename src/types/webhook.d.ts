@@ -37,3 +37,21 @@ export interface WebhookService {
   deleteWebhook(webhookId: string): Promise<WebhookDeleteResponse>;
   listWebhooks(): Promise<WebhookListResponse>;
 }
+
+// Define request and response types for the API endpoints
+
+// POST /api/webhooks (Register)
+export interface RegisterWebhookRequest extends WebhookRegisterRequest {}
+
+export interface RegisterWebhookResponse extends WebhookRegisterResponse {}
+
+// DELETE /api/webhooks/:webhookId (Delete)
+export interface DeleteWebhookResponse {
+  id: string;
+  status: string;
+}
+
+// GET /api/webhooks (List)
+export interface ListWebhooksResponse {
+  webhooks: Webhook[];
+}
