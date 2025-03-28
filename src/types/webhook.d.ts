@@ -42,11 +42,11 @@ export interface WebhookService {
 
 // POST /api/webhooks (Register)
 export interface RegisterWebhookRequest extends WebhookRegisterRequest {
-  // Add any specific request parameters if needed
+  // Add any specific request parameters if needed.  No specific parameters needed other than what is defined by WebhookRegisterRequest
 }
 
 export interface RegisterWebhookResponse extends WebhookRegisterResponse {
-  // Add any specific response parameters if needed
+  // Add any specific response parameters if needed. No specific parameters needed other than what is defined by WebhookRegisterResponse
 }
 
 // DELETE /api/webhooks/:webhookId (Delete)
@@ -56,7 +56,7 @@ export interface DeleteWebhookRequest {
 
 export interface DeleteWebhookResponse {
   id: string;
-  status: string;
+  status: string; // e.g. 'deleted'
 }
 
 // GET /api/webhooks (List)
