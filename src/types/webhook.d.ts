@@ -41,17 +41,29 @@ export interface WebhookService {
 // Define request and response types for the API endpoints
 
 // POST /api/webhooks (Register)
-export interface RegisterWebhookRequest extends WebhookRegisterRequest {}
+export interface RegisterWebhookRequest extends WebhookRegisterRequest {
+  // Add any specific request parameters if needed
+}
 
-export interface RegisterWebhookResponse extends WebhookRegisterResponse {}
+export interface RegisterWebhookResponse extends WebhookRegisterResponse {
+  // Add any specific response parameters if needed
+}
 
 // DELETE /api/webhooks/:webhookId (Delete)
+export interface DeleteWebhookRequest {
+  // No request body for DELETE
+}
+
 export interface DeleteWebhookResponse {
   id: string;
   status: string;
 }
 
 // GET /api/webhooks (List)
+export interface ListWebhooksRequest {
+  // No request body for GET
+}
+
 export interface ListWebhooksResponse {
   webhooks: Webhook[];
 }
