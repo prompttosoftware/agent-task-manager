@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import * as issueService from '../api/services/issue.service';
+import { IssueUpdate } from '../types/issue.d';
 
 export async function createIssue(req: Request, res: Response) {
     const start = Date.now();
@@ -14,14 +15,14 @@ export async function createIssue(req: Request, res: Response) {
         const end = Date.now();
         console.log(`createIssue took ${end - start}ms`);
         res.status(500).json({ message: error.message });
-    }
+    } 
 }
 
 export async function getIssue(req: Request, res: Response) {
     const start = Date.now();
     try {
         const issueId = parseInt(req.params.id, 10);
-        if (isNaN(issueId)) {    
+        if (isNaN(issueId)) {
             const end = Date.now();
             console.log(`getIssue (invalid id) took ${end - start}ms`);
             return res.status(400).json({ message: 'Invalid issue ID' });
@@ -43,13 +44,16 @@ export async function getIssue(req: Request, res: Response) {
 export async function updateIssue(req: Request, res: Response) {
     const start = Date.now();
     try {
-        const issueId = parseInt(req.params.id, 10);
+        const issueId = parseInt(req.params.issueKey, 10); // Changed to issueKey
         if (isNaN(issueId)) {
             const end = Date.now();
             console.log(`updateIssue (invalid id) took ${end - start}ms`);
             return res.status(400).json({ message: 'Invalid issue ID' });
         }
-        const updated = await issueService.updateIssue(issueId, req.body);
+
+        const updateData: IssueUpdate = req.body; // Type assertion
+
+        const updated = await issueService.updateIssue(issueId, updateData);
         const end = Date.now();
         console.log(`updateIssue took ${end - start}ms`);
         if (updated.changes === 0) {
