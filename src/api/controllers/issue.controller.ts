@@ -15,7 +15,7 @@ export async function createIssue(req: Request, res: Response) {
         const end = Date.now();
         console.log(`createIssue took ${end - start}ms`);
         res.status(500).json({ message: error.message });
-    } 
+    }
 }
 
 export async function getIssue(req: Request, res: Response) {
@@ -86,3 +86,18 @@ export async function deleteIssue(req: Request, res: Response) {
         res.status(500).json({ message: error.message });
     }
 }
+
+export async function transitionIssue(req: Request, res: Response) {
+    // Implement the transition logic here
+    const issueKey = req.params.issueKey;
+    const transitionData = req.body;
+
+    try {
+      // Assuming you have a service function to handle the transition
+      await issueService.transitionIssue(issueKey, transitionData);
+      res.status(200).json({ message: 'Issue transitioned successfully' });
+    } catch (error: any) {
+      console.error("Transition failed:", error);
+      res.status(500).json({ message: error.message || 'Failed to transition issue' });
+    }
+  }
