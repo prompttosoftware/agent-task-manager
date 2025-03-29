@@ -1,113 +1,77 @@
-// src/api/controllers/issue.controller.ts
+import { Context, Hono } from 'hono';
+import { z } from 'zod';
+import { issueService } from '../services/issue.service';
+import { Issue } from '../types/issue';
+import { Attachment } from '../types/issue';
 
-import { Request, Response } from 'express';
-import * as issueService from '../api/services/issue.service';
-import { IssueUpdate } from '../types/issue.d';
+const issueKeySchema = z.string().min(1);
 
-export async function createIssue(req: Request, res: Response) {
-    const start = Date.now();
+const issueController = {
+  async getIssue(c: Context) {
+    const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
     try {
-        const issue = await issueService.createIssue(req.body);
-        const end = Date.now();
-        console.log(`createIssue took ${end - start}ms`);
-        res.status(201).json(issue);
-    } catch (error: any) {
-        const end = Date.now();
-        console.log(`createIssue took ${end - start}ms`);
-        res.status(500).json({ message: error.message });
+      const issue = await issueService.getIssue(issueKey);
+      if (!issue) {
+        return c.json({ message: 'Issue not found' }, 404);
+      }
+      return c.json(issue);
+    } catch (error) {
+      console.error('Error getting issue:', error);
+      return c.json({ message: 'Internal server error' }, 500);
     }
-}
+  },
 
-export async function getIssue(req: Request, res: Response) {
-    const start = Date.now();
+  async deleteIssue(c: Context) {
+    const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
     try {
-        const issueId = parseInt(req.params.id, 10);
-        if (isNaN(issueId)) {
-            const end = Date.now();
-            console.log(`getIssue (invalid id) took ${end - start}ms`);
-            return res.status(400).json({ message: 'Invalid issue ID' });
-        }
-        const issue = await issueService.getIssue(issueId);
-        const end = Date.now();
-        console.log(`getIssue took ${end - start}ms`);
-        if (!issue) {
-            return res.status(404).json({ message: 'Issue not found' });
-        }
-        res.json(issue);
-    } catch (error: any) {
-        const end = Date.now();
-        console.log(`getIssue took ${end - start}ms`);
-        res.status(500).json({ message: error.message });
+      await issueService.deleteIssue(issueKey);
+      return c.json({ message: 'Issue deleted successfully' }, 200);
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      // Consider specific error handling here, e.g., 404 if not found, 403 if forbidden
+      return c.json({ message: 'Failed to delete issue' }, 500);
     }
-}
-
-export async function updateIssue(req: Request, res: Response) {
-    const start = Date.now();
+  },
+  async addAttachment(c: Context) {
+    const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
     try {
-        const issueId = parseInt(req.params.issueKey, 10); // Changed to issueKey
-        if (isNaN(issueId)) {
-            const end = Date.now();
-            console.log(`updateIssue (invalid id) took ${end - start}ms`);
-            return res.status(400).json({ message: 'Invalid issue ID' });
-        }
+      const formData = await c.req.parseBody();
+      if (!formData || !formData.file) {
+        return c.json({ message: 'No file provided' }, 400);
+      }
 
-        const updateData: IssueUpdate = req.body; // Type assertion
+      const file = formData.file as any;
+      const filename = file.filename;
+      const buffer = await file.arrayBuffer();
 
-        const updated = await issueService.updateIssue(issueId, updateData);
-        const end = Date.now();
-        console.log(`updateIssue took ${end - start}ms`);
-        if (updated.changes === 0) {
-            return res.status(404).json({ message: 'Issue not found or no changes' });
-        }
-        res.json({ message: 'Issue updated' });
-    } catch (error: any) {
-        const end = Date.now();
-        console.log(`updateIssue took ${end - start}ms`);
-        res.status(500).json({ message: error.message });
-    }
-}
+      //File size limit - 10MB
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
+      if (buffer.byteLength > MAX_FILE_SIZE) {
+          return c.json({ message: 'File size exceeds the limit' }, 400);
+      }
 
-export async function deleteIssue(req: Request, res: Response) {
-    const start = Date.now();
-    try {
-        const issueId = parseInt(req.params.id, 10);
-        if (isNaN(issueId)) {
-            const end = Date.now();
-            console.log(`deleteIssue (invalid id) took ${end - start}ms`);
-            return res.status(400).json({ message: 'Invalid issue ID' });
-        }
-        await issueService.deleteIssue(issueId);
-        const end = Date.now();
-        console.log(`deleteIssue took ${end - start}ms`);
-        res.status(204).send(); // No content
-    } catch (error: any) {
-        const end = Date.now();
-        console.log(`deleteIssue took ${end - start}ms`);
-        res.status(500).json({ message: error.message });
-    }
-}
+      //Allowed file types
+      const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'application/pdf', 'text/plain'];
+      if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+          return c.json({ message: 'Invalid file type' }, 400);
+      }
 
-export async function transitionIssue(req: Request, res: Response) {
-    const start = Date.now();
-    const issueKey = req.params.issueKey;
+      //Here goes the implementation of saving the file
+      const attachment: Attachment = {
+        filename: filename,
+        contentType: file.type,
+        size: buffer.byteLength,
+        data: Buffer.from(buffer).toString('base64') // or store as a file path if needed
+      }
 
-    // Validate issueKey format (basic check for now)
-    if (!/^[0-9]+$/.test(issueKey)) {
-        const end = Date.now();
-        console.log(`transitionIssue (invalid issueKey) took ${end - start}ms`);
-        return res.status(400).json({ message: 'Invalid issue key format.  Must be a number.' });
-    }
+      await issueService.addAttachment(issueKey, attachment);
 
-    const transitionData = req.body;
-
-    try {
-      await issueService.transitionIssue(issueKey, transitionData);
-      const end = Date.now();
-      console.log(`transitionIssue took ${end - start}ms`);
-      res.status(200).json({ message: 'Issue transitioned successfully' });
-    } catch (error: any) {
-      const end = Date.now();
-      console.error("Transition failed:", error);
-      res.status(500).json({ message: error.message || 'Failed to transition issue' });
+      return c.json({ message: 'Attachment uploaded successfully', attachment: attachment }, 200);
+    } catch (error) {
+      console.error('Error adding attachment:', error);
+      return c.json({ message: 'Failed to upload attachment' }, 500);
     }
   }
+};
+
+export { issueController };
