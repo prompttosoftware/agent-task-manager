@@ -1,14 +1,11 @@
-// src/api/routes/issue.routes.ts
+import { Hono } from 'hono';
+import { issueController } from '../controllers/issue.controller';
 
-import express from 'express';
-import * as issueController from '../api/controllers/issue.controller';
+const issueRoutes = new Hono();
 
-const router = express.Router();
+issueRoutes.get('/issues/:issueKey', issueController.getIssue);
+issueRoutes.delete('/issues/:issueKey', issueController.deleteIssue);
+issueRoutes.post('/issues/:issueKey/attachments', issueController.addAttachment);
+issueRoutes.post('/issuelinks', issueController.createIssueLink);
 
-router.post('/issues', issueController.createIssue);
-router.get('/issues/:id', issueController.getIssue);
-router.put('/issues/:issueKey', issueController.updateIssue);
-router.delete('/issues/:id', issueController.deleteIssue);
-router.post('/issues/:issueKey/transitions', issueController.transitionIssue); // Add this line
-
-export default router;
+export { issueRoutes };

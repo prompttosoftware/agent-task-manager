@@ -3,8 +3,14 @@ import { z } from 'zod';
 import { issueService } from '../services/issue.service';
 import { Issue } from '../types/issue';
 import { Attachment } from '../types/issue';
+import { IssueLink } from '../types/issue';
 
 const issueKeySchema = z.string().min(1);
+const issueLinkSchema = z.object({
+  issueKey: z.string().min(1),
+  type: z.string().min(1),
+  linkedIssueKey: z.string().min(1)
+});
 
 const issueController = {
   async getIssue(c: Context) {
@@ -70,6 +76,36 @@ const issueController = {
     } catch (error) {
       console.error('Error adding attachment:', error);
       return c.json({ message: 'Failed to upload attachment' }, 500);
+    }
+  },
+  async createIssueLink(c: Context) {
+    try {
+      const body = await c.req.json();
+      const { issueKey, type, linkedIssueKey } = issueLinkSchema.parse(body);
+
+      // Validate issue keys exist (using issueService or a similar method)
+      if (!await issueService.issueExists(issueKey)) {
+        return c.json({ message: `Issue with key ${issueKey} not found` }, 404);
+      }
+      if (!await issueService.issueExists(linkedIssueKey)) {
+        return c.json({ message: `Issue with key ${linkedIssueKey} not found` }, 404);
+      }
+
+      // Implement the logic to create the issue link using issueService
+      const issueLink: IssueLink = {
+        issueKey,
+        type,
+        linkedIssueKey
+      }
+      await issueService.createIssueLink(issueLink);
+
+      return c.json({ message: 'Issue link created successfully', link: { issueKey, type, linkedIssueKey } }, 201);
+    } catch (error) {
+      console.error('Error creating issue link:', error);
+      if (error instanceof z.ZodError) {
+        return c.json({ message: 'Invalid request body', errors: error.errors }, 400);
+      }
+      return c.json({ message: 'Failed to create issue link' }, 500);
     }
   }
 };
