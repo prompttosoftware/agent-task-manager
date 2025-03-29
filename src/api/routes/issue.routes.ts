@@ -9,5 +9,6 @@ router.post('/issues', issueController.createIssue);
 router.get('/issues/:id', issueController.getIssue);
 router.put('/issues/:issueKey', issueController.updateIssue);
 router.delete('/issues/:id', issueController.deleteIssue);
+router.post('/issues/:issueKey/transitions', issueController.transitionIssue); // Add this line
 
 export default router;
