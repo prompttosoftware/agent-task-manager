@@ -8,6 +8,10 @@ import { getWebhook } from './webhook.service';
 // Instantiate WebhookService - ideally, this would be dependency injected
 const webhookService = new WebhookService(db);
 
+export interface TransitionRequest {
+  transitionId: string; // Or use a more descriptive type if you have transition names
+}
+
 export async function createIssue(issueData: any): Promise<any> {
   const start = Date.now();
   let issue: any;
@@ -92,6 +96,49 @@ export async function deleteIssue(issueId: number): Promise<void> {
     console.error("Error deleting issue:", error);
     db.exec('ROLLBACK');
     throw error;
+  }
+}
+
+export async function transitionIssue(issueKey: string, transitionData: TransitionRequest): Promise<any> {
+  // In a real-world scenario, you would fetch the issue from your database or Jira.
+  const issueId = parseInt(issueKey, 10);
+  if (isNaN(issueId)) {
+    throw new Error('Invalid issue key format.');
+  }
+  const issue = await getIssue(issueId);
+
+  if (!issue) {
+    throw new Error('Issue not found.');
+  }
+
+  try {
+    // Implement your transition logic here
+    // Validate transitionData (e.g., transitionId)
+    if (!transitionData.transitionId) {
+      throw new Error('Transition ID is required.');
+    }
+
+    // In a real implementation, you would use the transitionId and issue details
+    // to update the issue's status in your database or Jira.
+    // For this example, we'll just simulate the transition by updating the status.
+    let newStatus: string;
+    switch (transitionData.transitionId) {
+        case '1': // Assuming '1' represents 'To Do' -> 'In Progress'
+            newStatus = 'In Progress';
+            break;
+        case '2': // Assuming '2' represents 'In Progress' -> 'Done'
+            newStatus = 'Done';
+            break;
+        default:
+            throw new Error('Invalid transition ID.');
+    }
+
+    await updateIssue(issueId, { status: newStatus });
+
+    return { message: `Issue ${issueKey} transitioned to ${newStatus}` };
+  } catch (error: any) {
+    console.error("Error transitioning issue:", error);
+    throw new Error(`Failed to transition issue: ${error.message}`);
   }
 }
 

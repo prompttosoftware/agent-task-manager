@@ -88,15 +88,25 @@ export async function deleteIssue(req: Request, res: Response) {
 }
 
 export async function transitionIssue(req: Request, res: Response) {
-    // Implement the transition logic here
+    const start = Date.now();
     const issueKey = req.params.issueKey;
+
+    // Validate issueKey format (basic check for now)
+    if (!/^[0-9]+$/.test(issueKey)) {
+        const end = Date.now();
+        console.log(`transitionIssue (invalid issueKey) took ${end - start}ms`);
+        return res.status(400).json({ message: 'Invalid issue key format.  Must be a number.' });
+    }
+
     const transitionData = req.body;
 
     try {
-      // Assuming you have a service function to handle the transition
       await issueService.transitionIssue(issueKey, transitionData);
+      const end = Date.now();
+      console.log(`transitionIssue took ${end - start}ms`);
       res.status(200).json({ message: 'Issue transitioned successfully' });
     } catch (error: any) {
+      const end = Date.now();
       console.error("Transition failed:", error);
       res.status(500).json({ message: error.message || 'Failed to transition issue' });
     }
