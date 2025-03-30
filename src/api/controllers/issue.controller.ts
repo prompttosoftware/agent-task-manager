@@ -14,8 +14,8 @@ const issueLinkSchema = z.object({
 
 const issueController = {
   async getIssue(c: Context) {
-    const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
     try {
+      const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
       const issue = await issueService.getIssue(issueKey);
       if (!issue) {
         return c.json({ message: 'Issue not found' }, 404);
@@ -23,6 +23,9 @@ const issueController = {
       return c.json(issue);
     } catch (error) {
       console.error('Error getting issue:', error);
+      if (error instanceof z.ZodError) {
+        return c.json({ message: 'Invalid issueKey', errors: error.errors }, 400);
+      }
       return c.json({ message: 'Internal server error' }, 500);
     }
   },
@@ -106,6 +109,36 @@ const issueController = {
         return c.json({ message: 'Invalid request body', errors: error.errors }, 400);
       }
       return c.json({ message: 'Failed to create issue link' }, 500);
+    }
+  },
+
+  async getIssueCreateMetadata(c: Context) {
+    try {
+      const projectKeys = c.req.query('projectKeys');
+      const issueTypeNames = c.req.query('issueTypeNames');
+
+      const metadata = await issueService.getIssueCreateMetadata(projectKeys ? projectKeys.split(',') : undefined, issueTypeNames ? issueTypeNames.split(',') : undefined);
+
+      return c.json(metadata);
+    } catch (error) {
+      console.error('Error getting issue create metadata:', error);
+      return c.json({ message: 'Failed to retrieve issue create metadata' }, 500);
+    }
+  },
+
+  async getIssueTransitions(c: Context) {
+    try {
+      const issueKey = issueKeySchema.parse(c.req.param('issueKey'));
+
+      const transitions = await issueService.getIssueTransitions(issueKey);
+
+      return c.json(transitions);
+    } catch (error) {
+      console.error('Error getting issue transitions:', error);
+      if (error instanceof z.ZodError) {
+        return c.json({ message: 'Invalid issueKey', errors: error.errors }, 400);
+      }
+      return c.json({ message: 'Internal server error' }, 500);
     }
   }
 };
