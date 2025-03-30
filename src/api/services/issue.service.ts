@@ -51,3 +51,119 @@ export async function createIssueLink(issueLink: IssueLink): Promise<void> {
     throw new Error(`Failed to create issue link.  ${(error as Error).message}`); // Re-throw to be handled by the controller
   }
 }
+
+
+/**
+ * Retrieves issue creation metadata.
+ * @param projectKeys Optional array of project keys to filter metadata.
+ * @param issueTypeNames Optional array of issue type names to filter metadata.
+ * @returns A promise that resolves to the issue creation metadata.
+ */
+export async function getIssueCreateMetadata(projectKeys?: string[], issueTypeNames?: string[]) {
+  // In a real implementation, this would fetch metadata from a database or Jira API
+  // and filter it based on the provided parameters.
+  // This is a placeholder implementation.
+
+  const metadata = {
+    fields: {
+      summary: {
+        required: true,
+        schema: {
+          type: 'string'
+        },
+        name: 'Summary',
+        key: 'summary',
+        hasDefaultValue: false,
+        operations: ['set']
+      },
+      description: {
+        required: false,
+        schema: {
+          type: 'string'
+        },
+        name: 'Description',
+        key: 'description',
+        hasDefaultValue: false,
+        operations: ['set']
+      },
+      priority: {
+        required: true,
+        schema: {
+          type: 'string',
+          allowedValues: ['High', 'Medium', 'Low']
+        },
+        name: 'Priority',
+        key: 'priority',
+        hasDefaultValue: true,
+        defaultValue: 'Medium',
+        operations: ['set']
+      },
+      assignee: {
+        required: false,
+        schema: {
+          type: 'string'
+        },
+        name: 'Assignee',
+        key: 'assignee',
+        hasDefaultValue: false,
+        operations: ['set']
+      },
+      reporter: {
+        required: true,
+        schema: {
+          type: 'string'
+        },
+        name: 'Reporter',
+        key: 'reporter',
+        hasDefaultValue: true,
+        defaultValue: 'CurrentUser',
+        operations: ['set']
+      },
+      issuetype: {
+        required: true,
+        schema: {
+          type: 'string',
+          allowedValues: ['Bug', 'Task', 'Story']
+        },
+        name: 'Issue Type',
+        key: 'issuetype',
+        hasDefaultValue: true,
+        defaultValue: 'Task',
+        operations: ['set']
+      }
+    },
+    projects: [
+      {
+        key: 'ATM',
+        name: 'Agent Task Manager',
+        id: '1'
+      }
+    ],
+    issueTypes: [
+      {
+        id: '1',
+        name: 'Bug'
+      },
+      {
+        id: '2',
+        name: 'Task'
+      },
+      {
+        id: '3',
+        name: 'Story'
+      }
+    ]
+  }
+
+  //Filtering by projectKeys
+  if (projectKeys && projectKeys.length > 0) {
+    metadata.projects = metadata.projects.filter(project => projectKeys.includes(project.key));
+  }
+
+  //Filtering by issueTypeNames
+    if (issueTypeNames && issueTypeNames.length > 0) {
+    metadata.issueTypes = metadata.issueTypes.filter(issueType => issueTypeNames.includes(issueType.name));
+  }
+
+  return metadata;
+}
