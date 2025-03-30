@@ -1,7 +1,14 @@
 // src/api/controllers/webhook.controller.ts
 
-import { Request, Response } from 'express';
+import { Context, Hono } from 'hono';
 import { WebhookService } from '../services/webhook.service';
+import { z } from 'zod';
+
+
+const webhookSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.string()),
+});
 
 export class WebhookController {
   private webhookService: WebhookService;
@@ -10,75 +17,79 @@ export class WebhookController {
     this.webhookService = webhookService;
   }
 
-  async registerWebhook(req: Request, res: Response) {
-      const start = Date.now();
+  async registerWebhook(c: Context) {
+    const start = Date.now();
     try {
-      const { url, events } = req.body;
+      const body = await c.req.json();
+      const { url, events } = webhookSchema.parse(body);
       const webhook = await this.webhookService.createWebhook(url, events);
       const end = Date.now();
-      console.log(`registerWebhook took ${end - start}ms`);
-      res.status(201).json(webhook);
+      console.log(`registerWebhook succeeded in ${end - start}ms`, { url, events });
+      return c.json(webhook, 201);
     } catch (error: any) {
-        const end = Date.now();
-        console.log(`registerWebhook took ${end - start}ms`);
-      res.status(500).json({ message: error.message });
+      const end = Date.now();
+      console.error(`registerWebhook failed in ${end - start}ms`, { error: error.message, url: c.req.body?.url, events: c.req.body?.events });
+      if (error instanceof z.ZodError) {
+        return c.json({ message: 'Invalid request body', errors: error.errors }, 400);
+      }
+      return c.json({ message: error.message }, 500);
     }
   }
 
-  async deleteWebhook(req: Request, res: Response) {
-      const start = Date.now();
+  async deleteWebhook(c: Context) {
+    const start = Date.now();
     try {
-      const webhookId = parseInt(req.params.id, 10);
-      if (isNaN(webhookId)) {
-          const end = Date.now();
-          console.log(`deleteWebhook (invalid id) took ${end - start}ms`);
-        return res.status(400).json({ message: 'Invalid webhook ID' });
+      const webhookId = c.req.param('id');
+      if (isNaN(Number(webhookId))) {
+        const end = Date.now();
+        console.warn(`deleteWebhook received invalid webhook ID ${c.req.param('id')} in ${end - start}ms`);
+        return c.json({ message: 'Invalid webhook ID' }, 400);
       }
       await this.webhookService.deleteWebhook(webhookId);
-        const end = Date.now();
-        console.log(`deleteWebhook took ${end - start}ms`);
-      res.status(204).send(); // No content
+      const end = Date.now();
+      console.log(`deleteWebhook succeeded in ${end - start}ms`, { webhookId });
+      return c.text(null, 204); // No content
     } catch (error: any) {
-        const end = Date.now();
-        console.log(`deleteWebhook took ${end - start}ms`);
-      res.status(500).json({ message: error.message });
+      const end = Date.now();
+      console.error(`deleteWebhook failed in ${end - start}ms`, { error: error.message, webhookId: c.req.param('id') });
+      return c.json({ message: error.message }, 500);
     }
   }
 
-  async listWebhooks(req: Request, res: Response) {
-      const start = Date.now();
+  async listWebhooks(c: Context) {
+    const start = Date.now();
     try {
       const webhooks = await this.webhookService.listWebhooks();
-        const end = Date.now();
-        console.log(`listWebhooks took ${end - start}ms`);
-      res.json(webhooks);
+      const end = Date.now();
+      console.log(`listWebhooks succeeded in ${end - start}ms`, { webhookCount: webhooks.length });
+      return c.json(webhooks);
     } catch (error: any) {
-        const end = Date.now();
-        console.log(`listWebhooks took ${end - start}ms`);
-      res.status(500).json({ message: error.message });
+      const end = Date.now();
+      console.error(`listWebhooks failed in ${end - start}ms`, { error: error.message });
+      return c.json({ message: error.message }, 500);
     }
   }
 
-  async getWebhookById(req: Request, res: Response) {
-      const start = Date.now();
+  async getWebhookById(c: Context) {
+    const start = Date.now();
     try {
-      const webhookId = parseInt(req.params.id, 10);
-      if (isNaN(webhookId)) {
-          const end = Date.now();
-          console.log(`getWebhookById (invalid id) took ${end - start}ms`);
-        return res.status(400).json({ message: 'Invalid webhook ID' });
-      }
-      const webhook = await this.webhookService.getWebhookById(webhookId);
+      const webhookId = c.req.param('id');
+      if (isNaN(Number(webhookId))) {
         const end = Date.now();
-        console.log(`getWebhookById took ${end - start}ms`);
+        console.warn(`getWebhookById received invalid webhook ID ${c.req.param('id')} in ${end - start}ms`);
+        return c.json({ message: 'Invalid webhook ID' }, 400);
+      }
+      const webhook = await this.webhookService.getWebhook(webhookId);
+      const end = Date.now();
+      console.log(`getWebhookById succeeded in ${end - start}ms`, { webhookId });
       if (!webhook) {
-        return res.status(404).json({ message: 'Webhook not found' });
+        return c.json({ message: 'Webhook not found' }, 404);
       }
-      res.json(webhook);
+      return c.json(webhook);
     } catch (error: any) {
-        const end = Date.now();
-        console.log(`getWebhookById took ${end - start}ms`);
-      res.status(500).json({ message: error.message });
+      const end = Date.now();
+      console.error(`getWebhookById failed in ${end - start}ms`, { error: error.message, webhookId: c.req.param('id') });
+      return c.json({ message: error.message }, 500);
     }
   }
 }

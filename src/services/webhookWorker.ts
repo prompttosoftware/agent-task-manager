@@ -1,6 +1,16 @@
 // src/services/webhookWorker.ts
 import { WebhookService } from './webhook.service';
 import { WebhookPayload } from '../api/types/webhook.d';
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  defaultMeta: { service: 'webhook-worker' },
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
 
 export class WebhookWorker {
   private webhookService: WebhookService;
@@ -36,8 +46,8 @@ export class WebhookWorker {
     if (payload) {
       try {
         await this.webhookService.processWebhookEvent(payload);
-      } catch (error) {
-        console.error('Error processing webhook in worker:', error);
+      } catch (error: any) {
+        logger.error('Error processing webhook in worker:', { error: error.message, payload });
         // Consider adding retry logic or dead-letter queue
       }
     }
