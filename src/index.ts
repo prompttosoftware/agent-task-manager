@@ -8,15 +8,17 @@ import { WebhookWorker } from './services/webhookWorker';
 import Database from './db/database';
 
 const app = express();
-const port = config.port;
+const port = config.server.port;
 
 // Initialize the database
-const db = new Database('data/task_manager.db');
+const db = new Database(config.database.databasePath);
+console.log('Attempting to initialize database at:', config.database.databasePath);
 db.init().then(() => {
-  console.log('Database initialized');
+  console.log('Database initialized successfully.');
 
   // Initialize WebhookService and WebhookWorker
   const webhookWorker = new WebhookWorker(db);
+  console.log('Starting WebhookWorker...');
   webhookWorker.start();
 
   app.use(express.json());
