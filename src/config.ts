@@ -44,10 +44,18 @@ const defaultServerConfig: ServerConfig = {
     host: process.env.HOST || 'localhost',
 }
 
+// Add environment variables for configuration
+interface Configuration {
+  [key: string]: any;
+  agent: AgentConfig;
+  database: DatabaseConfig;
+  auth: AuthConfig;
+  server: ServerConfig;
+}
 
 // Combine all configurations into a single config object
 
-export const config = {
+export const config: Configuration = {
   server: defaultServerConfig,
   database: defaultDatabaseConfig,
   agent: defaultAgentConfig,
