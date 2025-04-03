@@ -1,42 +1,76 @@
-import { Router } from 'express';
-import { issueController } from '../controllers/issue.controller';
+// src/api/controllers/issue.controller.ts
 
-const router = Router();
+// Placeholder for issue controller
+console.log('Issue controller initialized');
 
-// GET /issues/search
-router.get('/issues/search', issueController.searchIssues);
+import { Request, Response } from 'express';
+import { Issue } from '../../types/issue'; // Import the Issue type
 
-// GET /issues/:issueKey
-router.get('/issues/:issueKey', issueController.getIssue);
+// In-memory storage for issues (replace with a database in a real application)
+let issues: Issue[] = [];
 
-// GET /boards/:boardId/issues
-router.get('/boards/:boardId/issues', issueController.getIssuesByBoard);
+// Create a new issue
+export const createIssue = (req: Request, res: Response) => {
+  const { description } = req.body;
 
-// POST /issues
-router.post('/issues', issueController.createIssue);
+  if (!description) {
+    return res.status(400).json({ error: 'Description is required' });
+  }
 
-// PUT /issues/:issueKey
-router.put('/issues/:issueKey', issueController.updateIssue);
+  const newIssue: Issue = {
+    id: String(Date.now()), // Simple ID generation (replace with UUID in production)
+    description,
+  };
 
-// DELETE /issues/:issueKey
-router.delete('/issues/:issueKey', issueController.deleteIssue);
+  issues.push(newIssue);
+  res.status(201).json(newIssue); // 201 Created
+};
 
-// POST /issues/:issueKey/transitions
-router.post('/issues/:issueKey/transitions', issueController.transitionIssue);
+// Get all issues
+export const getAllIssues = (req: Request, res: Response) => {
+  res.status(200).json(issues);
+};
 
-// POST /issues/:issueKey/attachments
-router.post('/issues/:issueKey/attachments', issueController.addAttachment);
+// Get a specific issue by ID
+export const getIssueById = (req: Request, res: Response) => {
+  const { id } = req.params;
+  const issue = issues.find((issue) => issue.id === id);
 
-// POST /issuelinks
-router.post('/issuelinks', issueController.createIssueLink);
+  if (!issue) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
 
-// PUT /issues/:issueKey/assignee
-router.put('/issues/:issueKey/assignee', issueController.assignIssue);
+  res.status(200).json(issue);
+};
 
-// GET /issue/createmeta
-router.get('/issue/createmeta', issueController.getCreateIssueMeta);
+// Update an existing issue
+export const updateIssue = (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { description } = req.body;
 
-// GET /issues/:issueKey/transitions
-router.get('/issues/:issueKey/transitions', issueController.getIssueTransitions);
+  if (!description) {
+    return res.status(400).json({ error: 'Description is required' });
+  }
 
-export default router;
+  const issueIndex = issues.findIndex((issue) => issue.id === id);
+
+  if (issueIndex === -1) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
+
+  issues[issueIndex] = { ...issues[issueIndex], description }; // Update only the description.  Keep the id.
+  res.status(200).json(issues[issueIndex]);
+};
+
+// Delete an issue
+export const deleteIssue = (req: Request, res: Response) => {
+  const { id } = req.params;
+  const issueIndex = issues.findIndex((issue) => issue.id === id);
+
+  if (issueIndex === -1) {
+    return res.status(404).json({ error: 'Issue not found' });
+  }
+
+  issues.splice(issueIndex, 1);
+  res.status(204).send(); // 204 No Content (successful deletion)
+};
