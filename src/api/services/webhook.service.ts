@@ -2,6 +2,16 @@ import { db } from '../db/database';
 import { Webhook, WebhookRegisterRequest, WebhookPayload } from '../types/webhook.d';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
+import winston from 'winston';
+
+const logger = winston.createLogger({
+    level: config.agent.logLevel || 'info',
+    format: winston.format.json(),
+    defaultMeta: { service: 'webhook-service' },
+    transports: [
+        new winston.transports.Console(),
+    ],
+});
 
 export async function createWebhook(webhookData: WebhookRegisterRequest): Promise<Webhook> {
   const id = uuidv4();
@@ -57,12 +67,10 @@ export async function deleteWebhook(id: string): Promise<boolean> {
 }
 
 export async function processWebhookQueue(webhookId: string, payload: any) {
-  // This function will process the webhook queue.  It will make the call to the webhook.
-  console.log('Processing webhook for ' + webhookId + ' with payload ' + JSON.stringify(payload));
-  // Implement queue processing logic here
+  logger.info('Processing webhook for ' + webhookId + ' with payload', { payload });
   const webhook = await getWebhook(webhookId);
   if (!webhook) {
-      console.log("Webhook not found for id: " + webhookId);
+      logger.warn("Webhook not found for id: " + webhookId);
       return;
   }
 
@@ -77,13 +85,13 @@ export async function processWebhookQueue(webhookId: string, payload: any) {
       });
 
       if (!response.ok) {
-          console.error(`Webhook call failed for ${webhookId} with status ${response.status}`);
+          logger.error(`Webhook call failed for ${webhookId} with status ${response.status}`);
           // Handle failed webhook calls (e.g., retry, dead-letter queue)
       } else {
-          console.log(`Webhook call successful for ${webhookId}`);
+          logger.info(`Webhook call successful for ${webhookId}`);
       }
   } catch (error) {
-      console.error(`Error calling webhook for ${webhookId}:`, error);
+      logger.error(`Error calling webhook for ${webhookId}:`, error);
       // Handle network errors or other exceptions
   }
 }
