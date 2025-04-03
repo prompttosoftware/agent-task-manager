@@ -25,6 +25,70 @@ The application uses the following environment variables:
 *   `AGENT_LOG_LEVEL`: Specifies the log level for the agent.  Defaults to `info`.
 *   `AGENT_TASK_POLLING_INTERVAL`: Specifies the task polling interval in milliseconds. Defaults to 60000 (1 minute).
 
+### PM2 Setup
+
+To manage the Agent Task Manager with PM2, follow these steps:
+
+1.  **Install PM2:**
+    ```bash
+    npm install -g pm2
+    ```
+
+2.  **Configure PM2:**
+    Create a `pm2.config.js` file in the root directory of your project.  An example configuration file is:
+    ```javascript
+    module.exports = {
+      apps: [{
+        name: 'agent-task-manager',
+        script: 'dist/index.js',
+        instances: 'max',
+        autorestart: true,
+        watch: false,
+        max_memory_restart: '1G',
+        env: {
+          NODE_ENV: 'production',
+          PORT: 3000,
+          DATABASE_PATH: './data/task_manager.db',
+          AGENT_LOG_LEVEL: 'info',
+          AGENT_TASK_POLLING_INTERVAL: 60000,
+        },
+      }]
+    };
+    ```
+
+3.  **Start the application with PM2:**
+    ```bash
+    pm2 start pm2.config.js
+    ```
+
+4.  **Check the status:**
+    ```bash
+    pm2 status
+    ```
+
+5.  **Stop the application:**
+    ```bash
+    pm2 stop agent-task-manager
+    ```
+
+6.  **Restart the application:**
+    ```bash
+    pm2 restart agent-task-manager
+    ```
+
+7.  **Save the PM2 process list:**
+    ```bash
+    pm2 save
+    ```
+    This command saves the current list of PM2 processes so they are automatically restarted on server reboot.
+
+8.  **PM2 Startup Script (Optional):**
+    To ensure PM2 starts automatically on system boot, you can generate and configure a startup script:
+    ```bash
+    pm2 startup
+    pm2 save
+    ```
+
 ### Example
 
 ```bash
@@ -79,4 +143,3 @@ agent-task-manager/
 ├── package.json
 ├── pm2.config.js
 └── README.md
-```
