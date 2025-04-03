@@ -1,21 +1,28 @@
 // src/api/controllers/issue.controller.ts
 
 import { Request, Response } from 'express';
+import { validationResult } from 'express-validator';
 import * as issueService from '../services/issue.service';
 import { Issue } from '../../types/issue';
 import { IssueLink } from '../../types/issue';
+import { validateCreateIssue, validateUpdateIssue } from './issue.validation';
 
-export const createIssue = async (req: Request, res: Response) => {
+export const createIssue = async (req: Request, res: Response) => {  
+  await validateCreateIssue(req, res);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   try {
     const { description } = req.body;
-
-    if (!description) {
-      return res.status(400).json({ error: 'Description is required' });
-    }
 
     const newIssue: Issue = {
       id: String(Date.now()), // Replace with UUID in production
       description,
+      status: 'open',
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     const createdIssue = await issueService.createIssue(newIssue);
@@ -53,17 +60,21 @@ export const getIssueById = async (req: Request, res: Response) => {
 };
 
 export const updateIssue = async (req: Request, res: Response) => {
+  await validateUpdateIssue(req, res);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   try {
     const { id } = req.params;
-    const { description } = req.body;
-
-    if (!description) {
-      return res.status(400).json({ error: 'Description is required' });
-    }
+    const { description, status } = req.body;
 
     const updatedIssue: Issue = {
       id, // Keep the original ID
-      description,
+      description: description, 
+      status: status,  //Added Status Update
+      createdAt: new Date(),  //Keeping the original creation date
+      updatedAt: new Date(),
     };
 
     const result = await issueService.updateIssue(updatedIssue);
