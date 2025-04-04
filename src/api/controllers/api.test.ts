@@ -7,10 +7,11 @@ import { Issue } from '../types/issue.d';
 import { BoardController } from '../controllers/board.controller';
 import { EpicController } from '../controllers/epic.controller';
 import * as webhookController from '../controllers/webhook.controller';
-import { Board } from '../models/board';
+import { Board } from '../types/board.d';
 import { EpicCreateRequest, EpicResponse, EpicListResponse, EpicUpdateRequest } from '../types/epic.d';
 import { v4 as uuidv4 } from 'uuid';
 import { Webhook } from '../api/models/webhook';
+import { BoardService } from '../services/board.service';
 
 jest.mock('../services/issue.service');
 jest.mock('../services/board.service');
@@ -28,8 +29,13 @@ app.delete('/issues/:id', deleteIssue);
 app.get('/issues', listIssues);
 
 // Board Controller Setup
-const boardController = new BoardController();
+const mockBoardService = {
+    createBoard: jest.fn(),
+    getAllBoards: jest.fn()
+};
+const boardController = new BoardController(mockBoardService as BoardService);
 app.post('/boards', boardController.createBoard.bind(boardController));
+app.get('/api/boards', boardController.getBoards.bind(boardController));
 
 // Epic Controller Setup
 const epicController = new EpicController();
@@ -44,9 +50,6 @@ app.get('/api/epics/:epicKey/issues', epicController.getIssuesByEpicKey.bind(epi
 app.post('/api/webhooks', webhookController.registerWebhook);
 app.delete('/api/webhooks/:webhookId', webhookController.deleteWebhook);
 app.get('/api/webhooks', webhookController.listWebhooks);
-
-
-
 
 describe('API Response Format Verification', () => {
 
@@ -271,8 +274,7 @@ describe('API Response Format Verification', () => {
     };
 
     it('should create a board and return 201 with the correct JSON format', async () => {
-      const createBoardMock = jest.fn().mockResolvedValue(mockBoard);
-      (boardService.BoardService.prototype.createBoard as any) = createBoardMock;
+      (mockBoardService.createBoard as jest.Mock).mockResolvedValue(mockBoard);
 
       const response = await request(app).post('/boards').send({ name: 'Test Board', description: 'Test Description' });
 
@@ -282,6 +284,7 @@ describe('API Response Format Verification', () => {
         name: expect.any(String),
         description: expect.any(String),
       });
+      expect(mockBoardService.createBoard).toHaveBeenCalledWith({ name: 'Test Board', description: 'Test Description' });
     });
 
     it('should return 400 if validation fails', async () => {
@@ -292,14 +295,38 @@ describe('API Response Format Verification', () => {
     });
 
     it('should return 500 if board creation fails', async () => {
-      const createBoardMock = jest.fn().mockRejectedValue(new Error('Failed to create'));
-      (boardService.BoardService.prototype.createBoard as any) = createBoardMock;
+      (mockBoardService.createBoard as jest.Mock).mockRejectedValue(new Error('Failed to create'));
 
       const response = await request(app).post('/boards').send({ name: 'Test Board', description: 'Test Description' });
 
       expect(response.status).toBe(500);
       expect(response.body.message).toBe('Internal server error');
     });
+
+     it('should get all boards and return 200 with the correct JSON format', async () => {
+        const mockBoards: Board[] = [mockBoard, { ...mockBoard, id: 2, name: 'Test Board 2' }];
+        (mockBoardService.getAllBoards as jest.Mock).mockResolvedValue(mockBoards);
+
+        const response = await request(app).get('/api/boards');
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(2);
+        expect(response.body[0]).toMatchObject({
+          id: expect.any(Number),
+          name: expect.any(String),
+          description: expect.any(String),
+        });
+      });
+
+      it('should return 500 if getting all boards fails', async () => {
+        (mockBoardService.getAllBoards as jest.Mock).mockRejectedValue(new Error('Failed to get boards'));
+
+        const response = await request(app).get('/api/boards');
+
+        expect(response.status).toBe(500);
+        expect(response.body.message).toBe('Failed to fetch boards');
+      });
   });
 
   // Epic Controller Tests
