@@ -1,14 +1,16 @@
 // src/api/routes/webhook.routes.ts
-import { Hono } from 'hono';
-import { WebhookController } from '../controllers/webhook.controller';
+import express from 'express';
+import * as webhookController from '../controllers/webhook.controller';
 
-export function createWebhookRoutes(controller: WebhookController): Hono {
-  const router = new Hono();
+const router = express.Router();
 
-  router.post('/webhooks', (c) => controller.registerWebhook(c));
-  router.delete('/webhooks/:id', (c) => controller.deleteWebhook(c));
-  router.get('/webhooks', (c) => controller.listWebhooks(c));
-  router.get('/webhooks/:id', (c) => controller.getWebhookById(c));
+// POST /webhooks - Create a new webhook subscription
+router.post('/webhooks', webhookController.createWebhook);
 
-  return router;
-}
+// DELETE /webhooks/:webhookId - Delete a webhook
+router.delete('/webhooks/:webhookId', webhookController.deleteWebhook);
+
+// GET /webhooks - List all registered webhooks
+router.get('/webhooks', webhookController.listWebhooks);
+
+export default router;
