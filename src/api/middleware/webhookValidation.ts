@@ -1,14 +1,24 @@
 // src/api/middleware/webhookValidation.ts
-import { Request, Response, NextFunction } from 'express';
-import { body } from 'express-validator';
 
-export const validateWebhookRegister = async (req: Request, res: Response, next: NextFunction) => {
-  // Define validation rules for the request body
-  await Promise.all([
-    body('url').isURL().withMessage('URL must be a valid URL').run(req),
-    body('events').isArray().withMessage('Events must be an array').run(req),
-    body('events.*').isString().withMessage('Each event must be a string').run(req),
-    body('secret').optional().isString().withMessage('Secret must be a string').run(req),
-  ]);
-  next();
-};
+import { Request, Response, NextFunction } from 'express';
+import { validationResult, check } from 'express-validator';
+
+export const validateWebhookRegistration = [
+  check('event')
+    .notEmpty()
+    .withMessage('Event is required')
+    .isIn(['issue.created', 'issue.updated', 'issue.deleted'])
+    .withMessage('Invalid event type'),
+  check('url')
+    .notEmpty()
+    .withMessage('URL is required')
+    .isURL()
+    .withMessage('Invalid URL'),
+  (req: Request, res: Response, next: NextFunction) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    next();
+  },
+];
