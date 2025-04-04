@@ -24,7 +24,7 @@ export class EpicController {
       const epicDto = plainToClass(EpicCreateDto, createEpicDto);
       const errors: ValidationError[] = await validate(epicDto);
 
-      if (errors.length > 0) {
+      if (errors.length > 0) {  
         const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
         throw { status: HttpStatus.BAD_REQUEST, message: `Validation failed: ${errorMessages.join(', ')}` };
       }
@@ -97,8 +97,7 @@ export class EpicController {
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
       throw { status, message: error.message || 'Internal server error' };
-    }
-  }
+    }  }
 
   @Delete(':epicKey')
   @ApiOperation({ summary: 'Delete an epic' })
