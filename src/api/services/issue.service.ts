@@ -1,6 +1,12 @@
 import { db } from '../../src/db/database';
 import { Attachment } from '../types/issue.d';
 import * as fs from 'fs/promises';
+import { validate, ValidationError } from 'class-validator';
+import { plainToClass } from 'class-transformer';
+import { IssueDto } from '../types/issue.d';
+import { Logger } from '../../src/utils/logger';
+
+const logger = new Logger('IssueService');
 
 export const issueService = {
   async getIssue(issueKey: string) {
@@ -8,7 +14,7 @@ export const issueService = {
       const issue = await db.prepare('SELECT * FROM issues WHERE issue_key = ?').get(issueKey);
       return issue;
     } catch (error: any) {
-      console.error('Error fetching issue:', error);
+      logger.error('Error fetching issue:', error);
       throw new Error(error.message || 'Failed to get issue');
     }
   },
@@ -20,7 +26,7 @@ export const issueService = {
       const info = insert.run(issueKey, originalname, fileContent, mimetype);
       return info.lastInsertRowid as number;
     } catch (error: any) {
-      console.error('Error adding attachment:', error);
+      logger.error('Error adding attachment:', error);
       throw new Error(error.message || 'Failed to add attachment');
     }
   },
@@ -73,5 +79,26 @@ export const issueService = {
       issues: issues,
       total: total,
     };
+  },
+
+  async updateIssue(issueKey: string, issueData: any): Promise<any> {
+    try {
+      // Validate input
+      const issueDto = plainToClass(IssueDto, issueData);
+      const errors: ValidationError[] = await validate(issueDto);
+      if (errors.length > 0) {
+        const errorMessages = errors.map(err => Object.values(err.constraints)).flat();
+        logger.error(`Validation failed: ${errorMessages.join(', ')}`);
+        throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
+      }
+
+      // Placeholder implementation
+      logger.info(`Updating issue ${issueKey} with data:`, issueData);
+      return { issueKey, ...issueData, updated_at: new Date() };
+    } catch (error: any) {
+      logger.error('Error updating issue:', error);
+      throw new Error(error.message || 'Failed to update issue');
+    }
   }
+
 };
