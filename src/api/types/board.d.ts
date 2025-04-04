@@ -2,6 +2,5 @@ export interface Board {
   id?: number;
   name: string;
   description: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  // Add other board properties as needed, matching the database schema
 }

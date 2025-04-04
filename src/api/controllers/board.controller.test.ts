@@ -17,6 +17,40 @@ describe('BoardController', () => {
     boardController = new BoardController();
   });
 
+  describe('getBoards', (
+  ) => {
+    it('should return 200 and an array of boards', async () => {
+      const mockBoards: Board[] = [
+        { id: 1, name: 'Test Board 1', description: 'Test Description 1' },
+        { id: 2, name: 'Test Board 2', description: 'Test Description 2' },
+      ];
+      mockBoardService.getBoards.mockResolvedValue(mockBoards);
+
+      const mockReq = {} as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
+
+      await boardController.getBoards(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith(mockBoards);
+      expect(mockBoardService.getBoards).toHaveBeenCalled();
+    });
+
+    it('should return 500 if an error occurs', async () => {
+      const errorMessage = 'Database error';
+      mockBoardService.getBoards.mockRejectedValue(new Error(errorMessage));
+
+      const mockReq = {} as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
+
+      await boardController.getBoards(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Failed to get boards' });
+      expect(mockBoardService.getBoards).toHaveBeenCalled();
+    });
+  });
+
   describe('getBoardById', () => {
     it('should return 200 and the board if found', async () => {
       const mockBoard: Board = { id: 1, name: 'Test Board', description: 'Test Description' };
