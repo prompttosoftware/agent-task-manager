@@ -2,19 +2,27 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook } from './webhook.controller';
+import { createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook, triggerWebhook } from './webhook.controller';
 import { WebhookService } from '../services/webhook.service';
 import { Webhook } from '../models/webhook';
 import { validationResult, body, param } from 'express-validator';
+import { addWebhookJob } from '../../src/services/webhookQueue';
+import { EventType } from '../types/webhook.d';
 
 // Mock express-validator
 vi.mock('express-validator', () => ({
     validationResult: vi.fn(),
-    body: vi.fn(() => ({ isURL: vi.fn(() => ({ withMessage: vi.fn(() => ({ run: vi.fn() })) })) })),
-    param: vi.fn(() => ({ isUUID: vi.fn(() => ({ withMessage: vi.fn(() => ({ run: vi.fn() })) })) })),
+    body: vi.fn(() => ({
+        isURL: vi.fn(() => ({ withMessage: vi.fn(() => ({ run: vi.fn() })) })),
+        isArray: vi.fn(() => ({ withMessage: vi.fn(() => ({ run: vi.fn() })) })),
+    })),
+    param: vi.fn(() => ({
+        isUUID: vi.fn(() => ({ withMessage: vi.fn(() => ({ run: vi.fn() })) })),
+    })),
 }));
 
 vi.mock('../services/webhook.service');
+vi.mock('../../src/services/webhookQueue');
 
 const app = express();
 app.use(express.json());
@@ -53,7 +61,7 @@ describe('WebhookController', () => {
 
     describe('POST /webhooks', () => {
         it('should create a webhook successfully', async () => {
-            const mockWebhook: Webhook = { id: '123', url: 'https://example.com', events: ['event1'], active: true };
+            const mockWebhook: Webhook = { id: '123', url: 'https://example.com', events: ['event1'], active: undefined };
             const mockWebhookService = createMockWebhookService({ createWebhook: vi.fn().mockResolvedValue(mockWebhook) });
             vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true, array: () => [] } as any);
 
@@ -167,15 +175,12 @@ describe('WebhookController', () => {
 
     describe('PUT /webhooks/:id', () => {
         it('should update a webhook successfully', async () => {
-            const mockWebhook: Webhook = { id: '123', url: 'https://new-example.com', events: ['event2'], active: false };
             const mockWebhookService = createMockWebhookService({ updateWebhook: vi.fn().mockResolvedValue(true) });
             vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true, array: () => [] } as any);
 
             const response = await request(app).put('/webhooks/123').send({ url: 'https://new-example.com', events: ['event2'], active: false });
 
             expect(response.status).toBe(200);
-            //  Note:  We cannot test the exact return value, as the service does not return the updated object.
-            //  expect(response.body).toEqual(mockWebhook); // This would fail, as there is no return value
             expect(mockWebhookService.updateWebhook).toHaveBeenCalledWith('123', { url: 'https://new-example.com', events: ['event2'], active: false });
             expect(vi.mocked(validationResult).mock.calls.length).toBe(1);
         });
@@ -253,6 +258,60 @@ describe('WebhookController', () => {
             expect(response.body.error).toBe('Failed to delete webhook');
             expect(mockWebhookService.deleteWebhook).toHaveBeenCalledWith('123');
             expect(vi.mocked(validationResult).mock.calls.length).toBe(1);
+        });
+    });
+
+    describe('triggerWebhook', () => {
+        it('should call addWebhookJob for matching events', async () => {
+            const eventType: EventType = 'issue.created';
+            const eventData = { issueId: '123' };
+            const mockWebhooks: Webhook[] = [
+                { id: '1', url: 'https://example.com', events: ['issue.created'], active: true },
+                { id: '2', url: 'https://example.com/2', events: ['issue.updated'], active: false },
+            ];
+            const mockWebhookService = createMockWebhookService({ listWebhooks: vi.fn().mockResolvedValue(mockWebhooks) });
+
+            await triggerWebhook(eventType, eventData);
+
+            expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+            expect(addWebhookJob).toHaveBeenCalledWith({
+                url: 'https://example.com',
+                event: eventType,
+                data: eventData,
+            });
+            expect(addWebhookJob).not.toHaveBeenCalledWith({ // Ensure only the correct webhook is triggered
+                url: 'https://example.com/2',
+                event: eventType,
+                data: eventData,
+            });
+        });
+
+        it('should not call addWebhookJob if no webhooks match the event', async () => {
+            const eventType: EventType = 'issue.deleted';
+            const eventData = { issueId: '123' };
+            const mockWebhooks: Webhook[] = [
+                { id: '1', url: 'https://example.com', events: ['issue.created'], active: true },
+            ];
+            const mockWebhookService = createMockWebhookService({ listWebhooks: vi.fn().mockResolvedValue(mockWebhooks) });
+
+            await triggerWebhook(eventType, eventData);
+
+            expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+            expect(addWebhookJob).not.toHaveBeenCalled();
+        });
+
+        it('should handle errors when listing webhooks', async () => {
+            const eventType: EventType = 'issue.created';
+            const eventData = { issueId: '123' };
+            const errorMessage = 'Failed to list webhooks';
+            const mockWebhookService = createMockWebhookService({ listWebhooks: vi.fn().mockRejectedValue(new Error(errorMessage)) });
+
+            await triggerWebhook(eventType, eventData);
+
+            expect(mockWebhookService.listWebhooks).toHaveBeenCalled();
+            expect(addWebhookJob).not.toHaveBeenCalled(); // Ensure no job is added on error.
+            //  Add an assertion to check if console.error was called if you have logging
+            //  expect(console.error).toHaveBeenCalled();
         });
     });
 });
