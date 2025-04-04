@@ -1,10 +1,12 @@
 // src/api/routes/webhook.routes.ts
+
 import express from 'express';
-import { handleWebhook } from '../controllers/webhook.controller';
+import { registerWebhook, listWebhooks } from '../api/controllers/webhook.controller';
+import { validateWebhookRegistration } from '../api/middleware/webhookValidation';
 
 const router = express.Router();
 
-// POST /webhook - Handles incoming webhook events
-router.post('/webhook', handleWebhook);
+router.post('/webhooks', validateWebhookRegistration, registerWebhook);
+router.get('/webhooks', listWebhooks);
 
 export default router;
