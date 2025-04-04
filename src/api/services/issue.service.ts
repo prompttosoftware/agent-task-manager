@@ -60,7 +60,9 @@ export const createIssue = async (issueData: any): Promise<Issue> => {
     if (errors.length > 0) {
       const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
       logger.error(`Validation failed: ${errorMessages.join(', ')}`);
-      throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
+      const error = new Error(`Validation failed: ${errorMessages.join(', ')}`);
+      (error as any).status = 400; // Bad Request
+      throw error;
     }
 
     const insert = db.prepare(
@@ -86,7 +88,9 @@ export const createIssue = async (issueData: any): Promise<Issue> => {
     return newIssue;
   } catch (error: any) {
     logger.error('Error creating issue:', error);
-    throw new Error(error.message || 'Failed to create issue');
+    const err = new Error(error.message || 'Failed to create issue');
+    (err as any).status = error.status || 500; // Internal Server Error or original status
+    throw err;
   }
 };
 
@@ -106,7 +110,9 @@ export const updateIssue = async (id: number, issueData: any): Promise<Issue> =>
     if (errors.length > 0) {
       const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
       logger.error(`Validation failed: ${errorMessages.join(', ')}`);
-      throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
+      const error = new Error(`Validation failed: ${errorMessages.join(', ')}`);
+      (error as any).status = 400; // Bad Request
+      throw error;
     }
 
     // Build update query dynamically
@@ -120,7 +126,8 @@ export const updateIssue = async (id: number, issueData: any): Promise<Issue> =>
     if (issueDto.description !== undefined) {
       updateFields.push('description = ?');
       updateValues.push(issueDto.description);
-    }    if (issueDto.status !== undefined) {
+    }
+    if (issueDto.status !== undefined) {
       updateFields.push('status = ?');
       updateValues.push(issueDto.status);
     }
@@ -129,7 +136,9 @@ export const updateIssue = async (id: number, issueData: any): Promise<Issue> =>
       // Nothing to update, return the existing issue.
       const existingIssue = await getIssueById(id);
       if (!existingIssue) {
-        throw new Error(`Issue with ID ${id} not found`);
+        const error = new Error(`Issue with ID ${id} not found`);
+        (error as any).status = 404; // Not Found
+        throw error;
       }
       return existingIssue;
     }
@@ -145,20 +154,26 @@ export const updateIssue = async (id: number, issueData: any): Promise<Issue> =>
       // If no rows were changed, the issue might not exist.
       const existingIssue = await getIssueById(id);
       if (!existingIssue) {
-        throw new Error(`Issue with ID ${id} not found`);
+        const error = new Error(`Issue with ID ${id} not found`);
+        (error as any).status = 404; // Not Found
+        throw error;
       }
       return existingIssue;
     }
 
     const updatedIssue = await getIssueById(id);
     if (!updatedIssue) {
-      throw new Error(`Issue with ID ${id} not found after update`);
+      const error = new Error(`Issue with ID ${id} not found after update`);
+      (error as any).status = 404; // Not Found
+      throw error;
     }
     return updatedIssue;
 
   } catch (error: any) {
     logger.error('Error updating issue:', error);
-    throw new Error(error.message || 'Failed to update issue');
+    const err = new Error(error.message || 'Failed to update issue');
+    (err as any).status = error.status || 500; // Internal Server Error or original status
+    throw err;
   }
 };
 
