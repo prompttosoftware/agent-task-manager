@@ -1,23 +1,24 @@
-import { Board } from '../models/board';
-import { db } from '../../src/api/db/database';
+import { Board } from '../types/board';
+import { db } from '../../src/db/database'; // Assuming you have a database connection setup
 
 export class BoardService {
-  async createBoard(boardData: { name: string; description: string }): Promise<Board> {
+  async createBoard(boardData: Board): Promise<Board> {
     try {
-      const result = await db.query(
-        'INSERT INTO boards (name, description) VALUES ($1, $2) RETURNING id, name, description', // Returning the inserted data
-        [boardData.name, boardData.description]
-      );
+      // Example: Insert into the database.  Adjust based on your DB setup.
+      const result = await db.prepare(
+        `INSERT INTO boards (name, description) VALUES (?, ?)`
+      ).run(boardData.name, boardData.description);
 
-      if (result.rows.length === 0) {
-        throw new Error('Failed to create board');
-      }
+      const newBoard: Board = {
+        id: result.lastInsertRowid,
+        name: boardData.name,
+        description: boardData.description,
+      };
 
-      const createdBoard = result.rows[0];
-      return createdBoard;
+      return newBoard;
     } catch (error: any) {
-      console.error('Error in createBoard service:', error);
-      throw new Error(error.message || 'Failed to create board in the database');
+      console.error('Error creating board in service:', error);
+      throw new Error(`Failed to create board: ${error.message}`); // Re-throw for controller to handle
     }
   }
 }

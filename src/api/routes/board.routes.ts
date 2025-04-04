@@ -1,9 +1,10 @@
-import express from 'express';
+import { Router } from 'express';
 import { BoardController } from '../controllers/board.controller';
 
-const router = express.Router();
+const router = Router();
 const boardController = new BoardController();
 
-router.post('/boards', boardController.createBoard);
+// POST /api/boards - Create a new board
+router.post('/', boardController.createBoard);
 
 export default router;

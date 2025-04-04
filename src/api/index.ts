@@ -1,20 +1,17 @@
-import express, { Request, Response } from 'express';
-import boardRoutes from './api/routes/board.routes';
-import { errorMiddleware } from './api/middleware/error.middleware';
+import express from 'express';
+import boardRoutes from './routes/board.routes';
+import { errorMiddleware } from './middleware/error.middleware';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000; // Or your desired port
 
-app.use(express.json());
+app.use(express.json()); // for parsing application/json
 
-app.use('/api', boardRoutes);
+// API routes
+app.use('/api/boards', boardRoutes);
 
-// Error handling middleware
+// Error handling middleware (must be after routes)
 app.use(errorMiddleware);
-
-app.get('/', (req: Request, res: Response) => {
-  res.send('Agent Task Manager API');
-});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
