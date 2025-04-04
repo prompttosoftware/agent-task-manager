@@ -13,22 +13,15 @@ export const issueService = {
     }
   },
 
-  async addAttachment(issueKey: string, filePath: string): Promise<number> {
+  async addAttachment(issueKey: string, filePath: string, originalname: string, mimetype: string): Promise<number> {
     try {
       const fileContent = await fs.readFile(filePath);
-      const insert = db.prepare('INSERT INTO attachments (issue_key, file_name, file_content) VALUES (?, ?, ?)');
-      const info = insert.run(issueKey, filePath.split('/').pop(), fileContent);
+      const insert = db.prepare('INSERT INTO attachments (issue_key, file_name, file_content, mimetype) VALUES (?, ?, ?, ?)');
+      const info = insert.run(issueKey, originalname, fileContent, mimetype);
       return info.lastInsertRowid as number;
     } catch (error: any) {
       console.error('Error adding attachment:', error);
       throw new Error(error.message || 'Failed to add attachment');
-    } finally {
-      // Clean up the temporary file
-      try {
-        await fs.unlink(filePath);
-      } catch (unlinkError) {
-        console.error('Error deleting temporary file:', unlinkError);
-      }
-    }
+    } 
   }
 };
