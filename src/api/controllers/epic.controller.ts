@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { EpicService } from '../services/epic.service';
 import { validationResult, body, param } from 'express-validator';
+import { EpicCreateRequest, EpicUpdateRequest } from '../types/epic.d.ts';
 
 // Define the controller class
 export class EpicController {
@@ -54,8 +55,9 @@ export class EpicController {
         return res.status(400).json({ errors: errors.array() });
       }
       
-      const newEpic = await this.epicService.createEpic(req.body);
-      res.status(201).json(newEpic);
+      const newEpic: EpicCreateRequest = req.body;
+      const createdEpic = await this.epicService.createEpic(newEpic);
+      res.status(201).json(createdEpic);
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ message: error.message || 'Internal server error' });
@@ -75,7 +77,8 @@ export class EpicController {
       }
 
       const epicKey = req.params.epicKey;
-      const updatedEpic = await this.epicService.updateEpic(epicKey, req.body);
+      const updateData: EpicUpdateRequest = req.body;
+      const updatedEpic = await this.epicService.updateEpic(epicKey, updateData);
       res.status(200).json(updatedEpic);
     } catch (error: any) {
       console.error(error);
