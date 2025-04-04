@@ -23,5 +23,18 @@ export const issueService = {
       console.error('Error adding attachment:', error);
       throw new Error(error.message || 'Failed to add attachment');
     } 
+  },
+
+  async searchIssues(query: any) {
+    // TODO: Implement search functionality based on query parameters
+    // Example:
+    // const { keywords, status, assignee } = query;
+    // let sql = 'SELECT * FROM issues WHERE 1=1';
+    // if (keywords) {
+    //   sql += ' AND (summary LIKE ? OR description LIKE ?)';
+    // }
+    // ...
+    // const issues = await db.prepare(sql).all(...);
+    return []; // Placeholder
   }
 };
