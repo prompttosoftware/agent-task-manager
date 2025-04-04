@@ -1,15 +1,18 @@
 // src/api/services/issue.service.ts
 import { Issue, IssueCreateRequest, IssueUpdateRequest } from '../types/issue.d';
 import { validate, ValidationError } from 'class-validator';
-import { plainToClass, classToPlain } from 'class-transformer';
+import { plainToClass } from 'class-transformer';
 import { Logger } from '../../src/utils/logger';
-import { db } from '../../src/db/database';
+import db from '../../src/db/database';
 import { IsString, IsNotEmpty, IsOptional, IsIn, IsNumber } from 'class-validator';
 
 const logger = new Logger('IssueService');
 
 const validStatuses = ['open', 'in progress', 'resolved', 'closed'];
 
+/**
+ * Data transfer object for creating an issue.
+ */
 class IssueCreateDto implements IssueCreateRequest {
   @IsString()
   @IsNotEmpty()
@@ -24,6 +27,9 @@ class IssueCreateDto implements IssueCreateRequest {
   status: string;
 }
 
+/**
+ * Data transfer object for updating an issue.
+ */
 class IssueUpdateDto implements IssueUpdateRequest {
   @IsString()
   @IsOptional()
@@ -39,89 +45,135 @@ class IssueUpdateDto implements IssueUpdateRequest {
   status?: string;
 }
 
+/**
+ * Creates a new issue in the database.
+ *
+ * @param issueData - The data for the new issue.
+ * @returns A promise that resolves with the created issue.
+ * @throws Error if validation fails or if there's a database error.
+ */
 export const createIssue = async (issueData: any): Promise<Issue> => {
-    try {
-      const issueDto = plainToClass(IssueCreateDto, issueData);
-      const errors: ValidationError[] = await validate(issueDto);
-      if (errors.length > 0) {
-        const errorMessages = errors.map(err => Object.values(err.constraints)).flat();
-        logger.error(`Validation failed: ${errorMessages.join(', ')}`);
-        throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
-      }
+  try {
+    const issueDto = plainToClass(IssueCreateDto, issueData);
+    const errors: ValidationError[] = await validate(issueDto);
 
-      const newIssue: Issue = {
-        ...issueDto,
-        id: Math.floor(Math.random() * 1000000), // Generate a realistic ID
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      // Implement issue creation logic here, e.g., database interaction.
-      // For now, just return the issue data with a generated ID.
-      return newIssue;
-    } catch (error: any) {
-        logger.error('Error creating issue:', error);
-        throw new Error(error.message || 'Failed to create issue');
+    if (errors.length > 0) {
+      const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
+      logger.error(`Validation failed: ${errorMessages.join(', ')}`);
+      throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
     }
+
+    const insert = db.prepare(
+      `INSERT INTO issues (summary, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?) returning id;`
+    );
+    const now = new Date().toISOString();
+    const info = insert.run(
+      issueDto.summary,
+      issueDto.description || '',
+      issueDto.status,
+      now,
+      now
+    );
+    const issueId: number = info.lastInsertRowid as number;
+    const newIssue: Issue = {
+      id: issueId,
+      ...issueDto,
+      createdAt: now,
+      updatedAt: now,
+    } as Issue;
+    return newIssue;
+  } catch (error: any) {
+    logger.error('Error creating issue:', error);
+    throw new Error(error.message || 'Failed to create issue');
+  }
 };
 
+/**
+ * Updates an existing issue in the database.
+ *
+ * @param id - The ID of the issue to update.
+ * @param issueData - The data to update the issue with.
+ * @returns A promise that resolves with the updated issue.
+ * @throws Error if validation fails, the issue is not found, or if there's a database error.
+ */
 export const updateIssue = async (id: number, issueData: any): Promise<Issue> => {
   try {
     const issueDto = plainToClass(IssueUpdateDto, issueData);
     const errors: ValidationError[] = await validate(issueDto);
 
     if (errors.length > 0) {
-      const errorMessages = errors.map((err) =>
-        Object.values(err.constraints)
-      ).flat();
+      const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
       logger.error(`Validation failed: ${errorMessages.join(', ')}`);
       throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
     }
 
-    // Fetch the existing issue.  This is a placeholder.  Replace with actual DB call
-    let existingIssue: Issue | undefined = await getIssueById(id); // Replace with actual DB fetch
+    // Build update query dynamically
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
 
-    if (!existingIssue) {
-      throw new Error(`Issue with ID ${id} not found`);
-    }
-
-    // Apply updates.  Important:  Only update if a value was provided.
     if (issueDto.summary !== undefined) {
-      existingIssue.summary = issueDto.summary;
+      updateFields.push('summary = ?');
+      updateValues.push(issueDto.summary);
     }
     if (issueDto.description !== undefined) {
-      existingIssue.description = issueDto.description;
-    }
-    if (issueDto.status !== undefined) {
-      existingIssue.status = issueDto.status;
+      updateFields.push('description = ?');
+      updateValues.push(issueDto.description);
+    }    if (issueDto.status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(issueDto.status);
     }
 
-    existingIssue.updatedAt = new Date().toISOString();
+    if (updateFields.length === 0) {
+      // Nothing to update, return the existing issue.
+      const existingIssue = await getIssueById(id);
+      if (!existingIssue) {
+        throw new Error(`Issue with ID ${id} not found`);
+      }
+      return existingIssue;
+    }
 
-    // Save the updated issue.  Placeholder - replace with database save.
-    // await saveIssue(existingIssue);
-    // Return the updated issue.
-    return existingIssue;
+    const updateQuery = `UPDATE issues SET ${updateFields.join(', ')}, updated_at = ? WHERE id = ?`;
+    const update = db.prepare(updateQuery);
+    const now = new Date().toISOString();
+    updateValues.push(now, id);
+
+    const result = update.run(...updateValues);
+
+    if (result.changes === 0) {
+      // If no rows were changed, the issue might not exist.
+      const existingIssue = await getIssueById(id);
+      if (!existingIssue) {
+        throw new Error(`Issue with ID ${id} not found`);
+      }
+      return existingIssue;
+    }
+
+    const updatedIssue = await getIssueById(id);
+    if (!updatedIssue) {
+      throw new Error(`Issue with ID ${id} not found after update`);
+    }
+    return updatedIssue;
+
   } catch (error: any) {
     logger.error('Error updating issue:', error);
     throw new Error(error.message || 'Failed to update issue');
   }
 };
 
+/**
+ * Retrieves an issue from the database by its ID.
+ *
+ * @param id - The ID of the issue to retrieve.
+ * @returns A promise that resolves with the issue, or undefined if not found.
+ * @throws Error if there's a database error.
+ */
 export const getIssueById = async (id: number): Promise<Issue | undefined> => {
-    // Placeholder. Replace with actual database call.
-    // Simulate fetching an issue from a database.  For demonstration, just return a dummy
-    const issue: Issue | undefined =  {
-        id: id,
-        summary: `Issue ${id} Summary`,
-        description: `Description for issue ${id}`,
-        status: 'open',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    // Simulate a "not found" condition
-    if (id > 5) {
-        return undefined;
-    }
+  try {
+    const select = db.prepare('SELECT id, summary, description, status, created_at, updated_at FROM issues WHERE id = ?');
+    const issue = select.get(id) as Issue | undefined;
     return issue;
+  } catch (error: any) {
+    logger.error('Error getting issue by id:', error);
+    throw new Error(error.message || 'Failed to get issue by ID');
+  }
 };
