@@ -75,7 +75,7 @@ export const issueService = {
     const statement = db.prepare(sql);
     const issues = statement.all(...params);
 
-    return {
+    return {  
       issues: issues,
       total: total,
     };
@@ -92,9 +92,12 @@ export const issueService = {
         throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
       }
 
-      // Placeholder implementation
-      logger.info(`Updating issue ${issueKey} with data:`, issueData);
-      return { issueKey, ...issueData, updated_at: new Date() };
+      const { summary, description, status, assignee, priority } = issueData;
+      const update = db.prepare('UPDATE issues SET summary = ?, description = ?, status = ?, assignee = ?, priority = ?, updated_at = ? WHERE issue_key = ?');
+      update.run(summary, description, status, assignee, priority, new Date().toISOString(), issueKey);
+
+      const updatedIssue = await this.getIssue(issueKey);
+      return updatedIssue;
     } catch (error: any) {
       logger.error('Error updating issue:', error);
       throw new Error(error.message || 'Failed to update issue');
