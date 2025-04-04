@@ -22,19 +22,56 @@ export const issueService = {
     } catch (error: any) {
       console.error('Error adding attachment:', error);
       throw new Error(error.message || 'Failed to add attachment');
-    } 
+    }
   },
 
   async searchIssues(query: any) {
-    // TODO: Implement search functionality based on query parameters
-    // Example:
-    // const { keywords, status, assignee } = query;
-    // let sql = 'SELECT * FROM issues WHERE 1=1';
-    // if (keywords) {
-    //   sql += ' AND (summary LIKE ? OR description LIKE ?)';
-    // }
-    // ...
-    // const issues = await db.prepare(sql).all(...);
-    return []; // Placeholder
+    const { keywords, status, assignee, priority, reporter, page = 1, pageSize = 10 } = query;
+    const offset = (page - 1) * pageSize;
+    let sql = 'SELECT * FROM issues WHERE 1=1';
+    const params: any[] = [];
+
+    if (keywords) {
+      sql += ' AND (summary LIKE ? OR description LIKE ?)';
+      const keywordSearch = `%${keywords}%`;
+      params.push(keywordSearch, keywordSearch);
+    }
+
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+
+    if (assignee) {
+      sql += ' AND assignee = ?';
+      params.push(assignee);
+    }
+
+    if (priority) {
+      sql += ' AND priority = ?';
+      params.push(priority);
+    }
+
+    if (reporter) {
+      sql += ' AND reporter = ?';
+      params.push(reporter);
+    }
+
+    const countQuery = `SELECT COUNT(*) as total FROM issues WHERE 1=1 ${sql.substring(sql.indexOf('AND'))}`;
+    const countParams = [...params];
+    const countStatement = db.prepare(countQuery);
+    const countResult = countStatement.get(...countParams);
+    const total = countResult ? (countResult as any).total : 0;
+
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(pageSize, offset);
+
+    const statement = db.prepare(sql);
+    const issues = statement.all(...params);
+
+    return {
+      issues: issues,
+      total: total,
+    };
   }
 };
