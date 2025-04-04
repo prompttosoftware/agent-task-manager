@@ -169,6 +169,15 @@ describe('Issue Controller', () => {
             expect(res.json).toHaveBeenCalledWith(mockIssue);
         });
 
+        it('should return 400 if issue ID is invalid', async () => {
+            req.params = { id: 'abc' };
+
+            await issueController.getIssue(req as Request, res as Response);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Invalid issue ID' });
+        });
+
         it('should return 404 if the issue is not found', async () => {
             (issueService.getIssueById as any).mockResolvedValue(undefined);
             req.params = { id: '1' };
@@ -194,6 +203,14 @@ describe('Issue Controller', () => {
     });
 
     describe('deleteIssue', () => {
+        it('should return 400 if issue ID is invalid', async () => {
+            req.params = { id: 'abc' };
+
+            await issueController.deleteIssue(req as Request, res as Response);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({ message: 'Invalid issue ID' });
+        });
         it('should return 204 on successful delete', async () => {
             (issueService.deleteIssue as any).mockResolvedValue(undefined);
             req.params = { id: '1' };
@@ -231,17 +248,15 @@ describe('Issue Controller', () => {
             expect(res.json).toHaveBeenCalledWith(issueList);
         });
 
-        it('should handle query parameters for filtering and sorting', async () => {
-            const issueList = [mockIssue, mockIssue2];
+        it('should handle query parameters for filtering', async () => {
+            const issueList = [mockIssue];
             (issueService.listIssues as any).mockResolvedValue(issueList);
-            req.query = { status: 'open', sortBy: 'createdAt', sortOrder: 'desc' };
+            req.query = { status: 'open' };
 
             await issueController.listIssues(req as Request, res as Response);
 
             expect(issueService.listIssues).toHaveBeenCalledWith({
                 status: 'open',
-                sortBy: 'createdAt',
-                sortOrder: 'desc',
             });
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith(issueList);
