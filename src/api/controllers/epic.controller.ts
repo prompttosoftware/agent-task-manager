@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { EpicService } from '../services/epic.service';
+import { validationResult, body, param } from 'express-validator';
 
 // Define the controller class
 export class EpicController {
@@ -12,6 +13,13 @@ export class EpicController {
   // Implement GET /epics/:epicKey route handler
   async getEpicByKey(req: Request, res: Response) {
     try {
+      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
       const epicKey = req.params.epicKey;
       const epic = await this.epicService.getEpicByKey(epicKey);
       if (!epic) {
@@ -38,6 +46,14 @@ export class EpicController {
   // Implement POST /epics route handler
   async createEpic(req: Request, res: Response) {
     try {
+      await body('key').isString().notEmpty().withMessage('Key is required').trim().escape().run(req);
+      await body('name').isString().notEmpty().withMessage('Name is required').trim().escape().run(req);
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+      
       const newEpic = await this.epicService.createEpic(req.body);
       res.status(201).json(newEpic);
     } catch (error: any) {
@@ -49,6 +65,15 @@ export class EpicController {
   // Implement PUT /epics/:epicKey route handler
   async updateEpic(req: Request, res: Response) {
     try {
+      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
+      await body('name').optional().isString().trim().escape().run(req);
+      await body('key').optional().isString().trim().escape().run(req);
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
       const epicKey = req.params.epicKey;
       const updatedEpic = await this.epicService.updateEpic(epicKey, req.body);
       res.status(200).json(updatedEpic);
@@ -61,6 +86,12 @@ export class EpicController {
   // Implement DELETE /epics/:epicKey route handler
   async deleteEpic(req: Request, res: Response) {
     try {
+      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
       const epicKey = req.params.epicKey;
       await this.epicService.deleteEpic(epicKey);
       res.status(204).send(); // No content on success
@@ -73,6 +104,12 @@ export class EpicController {
   // Implement GET /epics/:epicKey/issues route handler
   async getIssuesByEpicKey(req: Request, res: Response) {
     try {
+      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
       const epicKey = req.params.epicKey;
       const issues = await this.epicService.getIssuesByEpicKey(epicKey);
       res.status(200).json(issues);
