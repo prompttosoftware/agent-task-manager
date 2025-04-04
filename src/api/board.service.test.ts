@@ -1,14 +1,14 @@
 // src/api/services/board.service.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BoardService } from './board.service';
-import db from '../../src/db/database'; // Corrected import path
-import { BoardCreateDto, BoardUpdateDto, Board } from '../../src/types/board.d'; // Corrected import path
+import db from '../../src/api/db/database';
+import { BoardCreateDto, BoardUpdateDto, Board } from '../types/board.d';
 import { StatusCodes } from 'http-status-codes';
 import { HttpException } from '../middleware/error.middleware';
 import { validateOrReject, ValidationError } from 'class-validator';
 
 // Mock the database module
-vi.mock('../../src/db/database', () => ({
+vi.mock('../../src/api/db/database', () => ({
     default: {
         prepare: vi.fn(),
     },
