@@ -1,10 +1,11 @@
 // src/services/webhookWorker.ts
-import { WebhookService } from './webhook.service';
-import { WebhookPayload } from '../api/types/webhook.d';
+import { processWebhookQueue } from './webhook.service';
+import { WebhookPayload } from '../types/webhook.d'; // Corrected import
 import winston from 'winston';
+import { config } from '../config';
 
 const logger = winston.createLogger({
-  level: 'info',
+  level: config.agent.logLevel || 'info',
   format: winston.format.json(),
   defaultMeta: { service: 'webhook-worker' },
   transports: [
@@ -13,14 +14,10 @@ const logger = winston.createLogger({
 });
 
 export class WebhookWorker {
-  private webhookService: WebhookService;
   private queue: WebhookPayload[] = [];
   private isProcessing: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
-
-  constructor(webhookService: WebhookService) {
-    this.webhookService = webhookService;
-  }
+  private queueInterval: number = config.webhookWorker.queueInterval || 1000; // Default to 1 second
 
   public enqueue(payload: WebhookPayload): void {
     this.queue.push(payload);
@@ -32,7 +29,7 @@ export class WebhookWorker {
       this.isProcessing = true;
       this.intervalId = setInterval(() => {
         this.processQueue();
-      }, 1000); // Process every second
+      }, this.queueInterval); // Process based on configuration
     }
   }
 
@@ -45,10 +42,10 @@ export class WebhookWorker {
     const payload = this.queue.shift();
     if (payload) {
       try {
-        await this.webhookService.processWebhookEvent(payload);
+        await processWebhookQueue(payload.webhookId, payload);
       } catch (error: any) {
         logger.error('Error processing webhook in worker:', { error: error.message, payload });
-        // Consider adding retry logic or dead-letter queue
+        // Consider adding retry logic or dead-letter queue.  For now, just log.
       }
     }
   }
