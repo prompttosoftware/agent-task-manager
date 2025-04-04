@@ -59,7 +59,9 @@ export class EpicService {
       if (errors.length > 0) {
         const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
         logger.error(`Validation failed: ${errorMessages.join(', ')}`);
-        throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
+        const error = new Error(`Validation failed: ${errorMessages.join(', ')}`);
+        (error as any).status = 400; // Bad Request
+        throw error;
       }
 
       const insert = db.prepare('INSERT INTO epics (key, name, created_at) VALUES (?, ?, ?) returning key;');
@@ -74,7 +76,9 @@ export class EpicService {
       return newEpic;
     } catch (error: any) {
       logger.error('Error creating epic:', error);
-      throw new Error(error.message || 'Failed to create epic');
+      const err = new Error(error.message || 'Failed to create epic');
+      (err as any).status = error.status || 500; // Internal Server Error or original status
+      throw err;
     }
   }
 
@@ -86,7 +90,9 @@ export class EpicService {
       if (errors.length > 0) {
         const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
         logger.error(`Validation failed: ${errorMessages.join(', ')}`);
-        throw new Error(`Validation failed: ${errorMessages.join(', ')}`);
+        const error = new Error(`Validation failed: ${errorMessages.join(', ')}`);
+        (error as any).status = 400; // Bad Request
+        throw error;
       }
 
       const updateFields: string[] = [];
@@ -117,20 +123,26 @@ export class EpicService {
       if (result.changes === 0) {
           const existingEpic = await this.getEpicByKey(epicKey);
           if (!existingEpic) {
-              throw new Error(`Epic with key ${epicKey} not found`);
+              const error = new Error(`Epic with key ${epicKey} not found`);
+              (error as any).status = 404; // Not Found
+              throw error;
           }
           return existingEpic;
       }
 
       const updatedEpic = await this.getEpicByKey(epicKey);
       if (!updatedEpic) {
-          throw new Error(`Epic with key ${epicKey} not found after update`);
+          const error = new Error(`Epic with key ${epicKey} not found after update`);
+          (error as any).status = 404; // Not Found
+          throw error;
       }
 
       return updatedEpic;
     } catch (error: any) {
       logger.error('Error updating epic:', error);
-      throw new Error(error.message || 'Failed to update epic');
+      const err = new Error(error.message || 'Failed to update epic');
+      (err as any).status = error.status || 500; // Internal Server Error or original status
+      throw err;
     }
   }
 
@@ -139,11 +151,15 @@ export class EpicService {
       const deleteStatement = db.prepare('DELETE FROM epics WHERE key = ?');
       const result = deleteStatement.run(epicKey);
       if (result.changes === 0) {
-        throw new Error(`Epic with key ${epicKey} not found`);
+        const error = new Error(`Epic with key ${epicKey} not found`);
+        (error as any).status = 404; // Not Found
+        throw error;
       }
     } catch (error: any) {
       logger.error('Error deleting epic:', error);
-      throw new Error(error.message || 'Failed to delete epic');
+      const err = new Error(error.message || 'Failed to delete epic');
+      (err as any).status = error.status || 500; // Internal Server Error or original status
+      throw err;
     }
   }
 
