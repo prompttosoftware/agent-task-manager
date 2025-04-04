@@ -24,7 +24,7 @@ db.exec(`
     priority TEXT,
     created_at DATETIME,
     updated_at DATETIME,
-    FOREIGN KEY (board_id) REFERENCES boards(id)
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
   )
 `);
 
@@ -35,8 +35,8 @@ db.exec(`
     issue_id_from INTEGER,
     issue_id_to INTEGER,
     type TEXT,
-    FOREIGN KEY (issue_id_from) REFERENCES issues(id),
-    FOREIGN KEY (issue_id_to) REFERENCES issues(id)
+    FOREIGN KEY (issue_id_from) REFERENCES issues(id) ON DELETE CASCADE,
+    FOREIGN KEY (issue_id_to) REFERENCES issues(id) ON DELETE CASCADE
   )
 `);
 
@@ -73,7 +73,7 @@ db.exec(`
     file_path TEXT,
     created_at DATETIME,
     updated_at DATETIME,
-    FOREIGN KEY (issue_id) REFERENCES issues(id)
+    FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
   )
 `);
 
