@@ -1,26 +1,12 @@
-import { Queue, Job } from 'bull';
-import Redis from 'ioredis';
+// src/config.ts
 
-const redisOptions = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD || undefined,
-};
+export const DEFAULT_ISSUE_TYPES = ['Task', 'Subtask', 'Story', 'Bug', 'Epic'];
 
-const getEnv = (key: string, defaultValue?: string) => {
-  return process.env[key] || defaultValue;
-};
+export const ISSUE_TYPE_STORAGE = 'string'; // or 'lookup_table'
 
-export const createQueue = (queueName: string): Queue => {
-  const redis = new Redis(redisOptions);
-  return new Queue(queueName, {
-    defaultJobOptions: {
-      attempts: parseInt(getEnv('JOB_ATTEMPTS', '3'), 10),
-      backoff: {
-        type: 'exponential',
-        delay: parseInt(getEnv('JOB_BACKOFF_DELAY', '1000'), 10),
-      },
-    },
-    redis,
-  });
-};
+export const DEFAULT_TRANSITIONS = [
+  { from: 'To Do', to: 'In Progress' },
+  { from: 'In Progress', to: 'Done' },
+  { from: 'To Do', to: 'Done' },
+  { from: 'In Progress', to: 'To Do' },
+];
