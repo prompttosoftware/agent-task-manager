@@ -165,6 +165,16 @@ export class EpicService {
     }
   }
 
+  async getIssuesForEpic(epicKey: string): Promise<EpicIssue[]> {
+    try {
+      const issues = await this.getIssuesByEpicKey(epicKey);
+      return issues;
+    } catch (error: any) {
+      logger.error('Error getting issues for epic:', error);
+      throw new Error(error.message || 'Failed to get issues for epic');
+    }
+  }
+
   async getIssuesByEpicKey(epicKey: string): Promise<EpicIssue[]> {
     try {
       const select = db.prepare(
