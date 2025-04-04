@@ -1,10 +1,9 @@
-// src/api/routes/board.routes.ts
-import express, { Request, Response } from 'express';
-import { getBoardById } from '../controllers/board.controller';
+import { Router } from 'express';
+import { BoardController } from '../controllers/board.controller';
 
-const router = express.Router();
+const router = Router();
+const boardController = new BoardController();
 
-// GET /api/boards/:boardId
-router.get('/boards/:boardId', getBoardById);
+router.get('/boards', boardController.getBoards.bind(boardController));
 
 export default router;
