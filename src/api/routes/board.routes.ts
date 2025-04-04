@@ -4,7 +4,7 @@ import { BoardController } from '../controllers/board.controller';
 const router = Router();
 const boardController = new BoardController();
 
-// POST /api/boards - Create a new board
-router.post('/', boardController.createBoard);
+router.post('/boards', boardController.createBoard);
+router.get('/boards', boardController.getBoards);
 
 export default router;
