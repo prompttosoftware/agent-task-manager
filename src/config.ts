@@ -7,14 +7,18 @@ const redisOptions = {
   password: process.env.REDIS_PASSWORD || undefined,
 };
 
+const getEnv = (key: string, defaultValue?: string) => {
+  return process.env[key] || defaultValue;
+};
+
 export const createQueue = (queueName: string): Queue => {
   const redis = new Redis(redisOptions);
   return new Queue(queueName, {
     defaultJobOptions: {
-      attempts: parseInt(process.env.JOB_ATTEMPTS || '3', 10),
+      attempts: parseInt(getEnv('JOB_ATTEMPTS', '3'), 10),
       backoff: {
         type: 'exponential',
-        delay: parseInt(process.env.JOB_BACKOFF_DELAY || '1000', 10),
+        delay: parseInt(getEnv('JOB_BACKOFF_DELAY', '1000'), 10),
       },
     },
     redis,
