@@ -1,132 +1,23 @@
-// src/api/services/board.service.ts
-import { validateOrReject } from 'class-validator';
-import { plainToClass } from 'class-transformer';
-import db from '../../db/database';
-import { Board, BoardCreateDto, BoardUpdateDto } from '../../types/board.d';
-import { StatusCodes } from 'http-status-codes';
-import { HttpException } from '../../exceptions/HttpException';
+import { Board } from '../models/board';
+import { db } from '../../src/api/db/database';
 
 export class BoardService {
-  async getBoard(boardId: string): Promise<Board | null> {
+  async createBoard(boardData: { name: string; description: string }): Promise<Board> {
     try {
-      const row = db.prepare('SELECT * FROM boards WHERE id = ?').get(boardId) as Board | undefined;
-      if (!row) {
-        return null;
-      }
-      return row;
-    } catch (error: any) {
-      console.error('Error fetching board:', error);
-      throw new HttpException(StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to fetch board.');
-    }
-  }
-
-  async listBoards(): Promise<Board[]> {
-    try {
-      const rows = db.prepare('SELECT * FROM boards').all() as Board[];
-      return rows;
-    } catch (error: any) {
-      console.error('Error listing boards:', error);
-      throw new HttpException(StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to list boards.');
-    }
-  }
-
-  async createBoard(boardData: BoardCreateDto): Promise<Board> {
-    try {
-      const boardCreateDto = plainToClass(BoardCreateDto, boardData);
-      await validateOrReject(boardCreateDto);
-
-      const result = db.prepare('INSERT INTO boards (name, description) VALUES (?, ?)').run(
-        boardCreateDto.name,
-        boardCreateDto.description,
+      const result = await db.query(
+        'INSERT INTO boards (name, description) VALUES ($1, $2) RETURNING id, name, description', // Returning the inserted data
+        [boardData.name, boardData.description]
       );
 
-      const createdBoard = {
-        id: result.lastInsertRowid as string, // Assuming 'id' is a string in Board type.
-        name: boardCreateDto.name,
-        description: boardCreateDto.description,
-      };
+      if (result.rows.length === 0) {
+        throw new Error('Failed to create board');
+      }
 
-      return createdBoard as Board;
+      const createdBoard = result.rows[0];
+      return createdBoard;
     } catch (error: any) {
-      console.error('Error creating board:', error);
-      if (Array.isArray(error) && error.length > 0 && error[0].constraints) {
-        throw new HttpException(StatusCodes.BAD_REQUEST, Object.values(error[0].constraints).join(', '));
-      }
-      throw new HttpException(StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to create board.');
-    }
-  }
-
-  async updateBoard(boardId: string, boardData: BoardUpdateDto): Promise<Board | null> {
-    try {
-      const boardUpdateDto = plainToClass(BoardUpdateDto, boardData);
-      await validateOrReject(boardUpdateDto);
-
-      const existingBoard = await this.getBoard(boardId);
-      if (!existingBoard) {
-        return null;
-      }
-
-      // Only update fields that are provided in boardData
-      const updateData: Partial<Board> = {};
-      if (boardUpdateDto.name !== undefined) {
-        updateData.name = boardUpdateDto.name;
-      }
-      if (boardUpdateDto.description !== undefined) {
-        updateData.description = boardUpdateDto.description;
-      }
-
-      // Build the SET clause for the SQL query dynamically
-      let setClause = '';
-      const params = [];
-      if (updateData.name !== undefined) {
-        setClause += `name = ?`;
-        params.push(updateData.name);
-        if (updateData.description !== undefined) {
-          setClause += `, `; 
-        }
-      }
-      if (updateData.description !== undefined) {
-        setClause += `description = ?`;
-        params.push(updateData.description);
-      }
-
-      if (setClause.length === 0) {
-        return existingBoard; // Nothing to update
-      }
-
-      params.push(boardId);
-
-      const sql = `UPDATE boards SET ${setClause} WHERE id = ?`;
-      const result = db.prepare(sql).run(...params);
-
-      if (result.changes === 0) {
-        return existingBoard; // Return the original board if no changes were made.
-      }
-
-      // Retrieve the updated board to return it.
-      const updatedBoard = await this.getBoard(boardId);
-      return updatedBoard;
-    } catch (error: any) {
-      console.error('Error updating board:', error);
-      if (Array.isArray(error) && error.length > 0 && error[0].constraints) {
-        throw new HttpException(StatusCodes.BAD_REQUEST, Object.values(error[0].constraints).join(', '));
-      }
-      throw new HttpException(StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to update board.');
-    }
-  }
-
-  async deleteBoard(boardId: string): Promise<void> {
-    try {
-      const result = db.prepare('DELETE FROM boards WHERE id = ?').run(boardId);
-      if (result.changes === 0) {
-        throw new HttpException(StatusCodes.NOT_FOUND, 'Board not found.');
-      }
-    } catch (error: any) {
-      console.error('Error deleting board:', error);
-      if (error instanceof HttpException) {
-        throw error; // Re-throw the HttpException to maintain the correct status code.
-      }
-      throw new HttpException(StatusCodes.INTERNAL_SERVER_ERROR, 'Failed to delete board.');
+      console.error('Error in createBoard service:', error);
+      throw new Error(error.message || 'Failed to create board in the database');
     }
   }
 }
