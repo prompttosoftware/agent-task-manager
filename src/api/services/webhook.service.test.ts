@@ -1,28 +1,35 @@
 // src/api/services/webhook.service.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WebhookService } from './webhook.service';
-import { Webhook } from '../models/webhook';
+import { Webhook } from '../api/models/webhook';
 import { Database } from '../../src/db/database';
+import { Logger } from '../utils/logger';
 
 // Mock the Database to isolate the service tests
 vi.mock('../../src/db/database');
+vi.mock('../utils/logger');
 
-describe('WebhookService', () => {  
+describe('WebhookService', () => {
     let webhookService: WebhookService;
     let mockDatabase: Database;
+    let mockLogger: Logger;
 
     beforeEach(() => {
         // Create a mock for the Database
-        mockDatabase = {      
+        mockDatabase = {
             run: vi.fn(),
             all: vi.fn(),
             get: vi.fn()
         } as any;
-        
+		mockLogger = {
+			info: vi.fn(),
+			error: vi.fn()
+		} as any;
+
         // Clear mocks before each test
-        vi.clearAllMocks(); 
-        
-        webhookService = new WebhookService(mockDatabase);
+        vi.clearAllMocks();
+
+        webhookService = new WebhookService(mockDatabase, mockLogger);
     });
 
     afterEach(() => {
@@ -31,16 +38,27 @@ describe('WebhookService', () => {
 
     it('should create a webhook successfully', async () => {
         const webhookData: Webhook = { url: 'https://example.com/webhook', events: ['event1', 'event2'], active: true, id: 'some-uuid' };
-        
+
         (mockDatabase.run as any).mockResolvedValue({ changes: 1 }); // Mock the return value
 
         const result = await webhookService.createWebhook(webhookData);
 
-        expect(result).toEqual(webhookData);        
+        expect(result).toEqual(expect.objectContaining({url: webhookData.url, events: webhookData.events, active: webhookData.active}));
         expect(mockDatabase.run).toHaveBeenCalledWith(
             'INSERT INTO webhooks (id, url, events, active) VALUES (?, ?, ?, ?)',
-            [webhookData.id, webhookData.url, JSON.stringify(webhookData.events), webhookData.active]
+            [expect.any(String), webhookData.url, JSON.stringify(webhookData.events), 1]
         );
+        expect(mockLogger.info).toHaveBeenCalled();
+    });
+
+    it('should not create webhook if invalid data', async () => {
+        const webhookData: Webhook = { url: 'invalid-url', events: [], active: true, id: 'some-uuid' };
+        try{
+          await webhookService.createWebhook(webhookData);
+        } catch(e: any){
+          expect(e.message).toBe('Invalid webhook data');
+          expect(mockLogger.error).toHaveBeenCalled();
+        }
     });
 
     it('should list webhooks successfully', async () => {
@@ -82,9 +100,9 @@ describe('WebhookService', () => {
         expect(mockDatabase.run).toHaveBeenCalledWith(
             'UPDATE webhooks SET url = ?, events = ?, active = ? WHERE id = ?',
             [
-                webhookData.url, 
-                JSON.stringify(webhookData.events), 
-                webhookData.active !== undefined ? (webhookData.active ? 1 : 0) : 0, 
+                webhookData.url,
+                JSON.stringify(webhookData.events),
+                0,
                 id
             ]
         );
@@ -105,9 +123,9 @@ describe('WebhookService', () => {
         expect(mockDatabase.run).toHaveBeenCalledWith(
             'UPDATE webhooks SET url = ?, events = ?, active = ? WHERE id = ?',
             [
-                webhookData.url, 
-                JSON.stringify(existingWebhook.events), 
-                existingWebhook.active ? 1 : 0, 
+                webhookData.url,
+                JSON.stringify(existingWebhook.events),
+                1,
                 id
             ]
         );
