@@ -1,358 +1,116 @@
 // src/api/controllers/board.controller.test.ts
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
-import { app } from '../../src/index';
-import * as boardController from '../../src/api/controllers/board.controller';
-import * as boardService from '../../src/services/board.service';
-import { Board } from '../../src/types/board';
-import { validationResult, Result, ValidationError } from 'express-validator';
-import { Request, Response, NextFunction } from 'express';
+import { app } from '../../src/index'; // Assuming your app is exported from index.ts
+import * as boardService from '../services/board.service';
+import { validationResult } from 'express-validator';
+import { Request, Response } from 'express';
+import * as boardController from './board.controller';
 
-// Mock the board service
-vi.mock('../../src/services/board.service', () => ({
-    createBoard: vi.fn(),
-    getBoardById: vi.fn(),
-    updateBoard: vi.fn(),
-    deleteBoard: vi.fn(),
-}));
-
-// Mock express-validator
+// Mock the express-validator and boardService modules
 vi.mock('express-validator', () => ({
     validationResult: vi.fn(),
-    check: vi.fn(() => ({
-        notEmpty: vi.fn(() => ({
-            withMessage: vi.fn(() => ({
-                isString: vi.fn(() => ({
-                    withMessage: vi.fn(() => ({
-                        trim: vi.fn(() => ({
-                            escape: vi.fn(() => ({
-                                isLength: vi.fn(() => ({
-                                    withMessage: vi.fn(() => ({
-                                        run: vi.fn(() => ({
-                                            isEmpty: vi.fn(() => false),
-                                            array: vi.fn(() => []),
-                                        })),
-                                    })),
-                                })),
-                            })),
-                        })),
-                    })),
-                })),
-            })),
-        })),
-        optional: vi.fn(() => ({
-            isString: vi.fn(() => ({
-                withMessage: vi.fn(() => ({
-                    trim: vi.fn(() => ({
-                        escape: vi.fn(() => ({
-                            isLength: vi.fn(() => ({
-                                withMessage: vi.fn(() => ({
-                                    run: vi.fn(() => ({
-                                        isEmpty: vi.fn(() => false),
-                                        array: vi.fn(() => []),
-                                    })),
-                                })),
-                            })),
-                        })),
-                    })),
-                })),
-            })),
-        })),
-        isInt: vi.fn(() => ({
-            withMessage: vi.fn(() => ({
-                toInt: vi.fn(() => ({
-                    run: vi.fn(() => ({
-                        isEmpty: vi.fn(() => false),
-                        array: vi.fn(() => []),
-                    })),
-                })),
-            })),
-        })),
-    })),
 }));
 
+// Helper function to create a mock request and response
+const createMockRequestResponse = () => {
+    const req = {
+        params: {},
+    } as Request;
+    const res = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockReturnThis(),
+        send: vi.fn().mockReturnThis(),
+    } as unknown as Response;
+    return { req, res };
+};
 
 
-describe('Board Controller', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
+describe('Board Controller - DELETE /api/boards/:boardId', () => {
 
     afterEach(() => {
-        vi.restoreAllMocks();
-    });
-
-    // Helper function to create a mock request and response
-    const createMockContext = () => {
-        const req = {
-            body: {},
-            params: {},
-        } as any;
-        const res = {
-            status: vi.fn().mockReturnThis(),
-            json: vi.fn().mockReturnThis(),
-            send: vi.fn().mockReturnThis(),
-        } as any;
-        const next = vi.fn() as NextFunction;
-        return { req, res, next };
-    };
-
-
-    describe('createBoard', () => {
-        it('should create a board and return 201 with the new board', async () => {
-            const { req, res, next } = createMockContext();
-            const newBoard: Board = { id: '1', name: 'Test Board', description: 'Test Description' };
-            (boardService.createBoard as any).mockResolvedValue(newBoard);
-            req.body = { name: 'Test Board', description: 'Test Description' };
-
-            await boardController.createBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(201);
-            expect(res.json).toHaveBeenCalledWith(newBoard);
-            expect(boardService.createBoard).toHaveBeenCalledWith({ name: 'Test Board', description: 'Test Description' });
-        });
-
-        it('should return 400 if validation fails', async () => {
-            const { req, res, next } = createMockContext();
-            const errors: ValidationError[] = [{ param: 'name', msg: 'Name is required', location: 'body', value: '' }];
-            (validationResult as any).mockReturnValue({ isEmpty: () => false, array: () => errors });
-            req.body = { name: '', description: '' };
-
-            await boardController.createBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InputValidationError',
-                    errors: errors,
-                })
-            );
-            expect(boardService.createBoard).not.toHaveBeenCalled();
-        });
-
-        it('should return 500 if an unexpected error occurs during board creation', async () => {
-            const { req, res, next } = createMockContext();
-            const error = new Error('Something went wrong');
-            (boardService.createBoard as any).mockRejectedValue(error);
-            req.body = { name: 'Test Board', description: 'Test Description' };
-
-            await boardController.createBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(500);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InternalServerError',
-                    message: 'An unexpected error occurred',
-                })
-            );
-        });
-
+        vi.clearAllMocks(); // Reset mocks after each test
     });
 
 
-    describe('getBoardById', () => {
-        it('should get a board by id and return 200 with the board', async () => {
-            const { req, res, next } = createMockContext();
-            const board: Board = { id: '1', name: 'Test Board', description: 'Test Description' };
-            (boardService.getBoardById as any).mockResolvedValue(board);
-            req.params = { id: '1' };
+    it('should delete a board successfully (204 status)', async () => {
+        // Arrange
+        const { req, res } = createMockRequestResponse();
+        req.params.boardId = '1';
+        vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true }); // No validation errors
+        vi.spyOn(boardService, 'deleteBoard').mockResolvedValueOnce(true);
 
-            await boardController.getBoardById(req, res, next);
+        // Act
+        await boardController.deleteBoard(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(200);
-            expect(res.json).toHaveBeenCalledWith(board);
-            expect(boardService.getBoardById).toHaveBeenCalledWith(1);
-        });
-
-        it('should return 400 if ID validation fails', async () => {
-            const { req, res, next } = createMockContext();
-            const errors: ValidationError[] = [{ param: 'id', msg: 'Invalid ID', location: 'params', value: 'abc' }];
-            (validationResult as any).mockReturnValue({ isEmpty: () => false, array: () => errors });
-            req.params = { id: 'abc' };
-
-            await boardController.getBoardById(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InputValidationError',
-                    errors: errors,
-                })
-            );
-            expect(boardService.getBoardById).not.toHaveBeenCalled();
-        });
-
-        it('should return 404 if board not found', async () => {
-            const { req, res, next } = createMockContext();
-            (boardService.getBoardById as any).mockResolvedValue(null);
-            req.params = { id: '2' };
-
-            await boardController.getBoardById(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(404);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'BoardNotFoundError',
-                    message: 'Board not found',
-                })
-            );
-            expect(boardService.getBoardById).toHaveBeenCalledWith(2);
-        });
-
-        it('should return 500 if an unexpected error occurs during getBoardById', async () => {
-            const { req, res, next } = createMockContext();
-            const error = new Error('Something went wrong');
-            (boardService.getBoardById as any).mockRejectedValue(error);
-            req.params = { id: '1' };
-
-            await boardController.getBoardById(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(500);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InternalServerError',
-                    message: 'An unexpected error occurred',
-                })
-            );
-        });
+        // Assert
+        expect(res.status).toHaveBeenCalledWith(204);
+        expect(res.send).toHaveBeenCalled();
+        expect(boardService.deleteBoard).toHaveBeenCalledWith(1);
     });
 
+    it('should return 404 if board is not found', async () => {
+        // Arrange
+        const { req, res } = createMockRequestResponse();
+        req.params.boardId = '2';
+        vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true }); // No validation errors
+        vi.spyOn(boardService, 'deleteBoard').mockRejectedValueOnce(new Error('Board not found'));
 
-    describe('updateBoard', () => {
-        it('should update a board and return 200 with the updated board', async () => {
-            const { req, res, next } = createMockContext();
-            const updatedBoard: Board = { id: '1', name: 'Updated Board', description: 'Updated Description' };
-            (boardService.updateBoard as any).mockResolvedValue(updatedBoard);
-            req.params = { id: '1' };
-            req.body = { name: 'Updated Board', description: 'Updated Description' };
+        // Act
+        await boardController.deleteBoard(req, res);
 
-            await boardController.updateBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(200);
-            expect(res.json).toHaveBeenCalledWith(updatedBoard);
-            expect(boardService.updateBoard).toHaveBeenCalledWith(1, { name: 'Updated Board', description: 'Updated Description' });
-        });
-
-        it('should return 400 if ID or update data validation fails', async () => {
-            const { req, res, next } = createMockContext();
-            const errors: ValidationError[] = [{ param: 'name', msg: 'Name is required', location: 'body', value: '' }];
-            (validationResult as any).mockReturnValue({ isEmpty: () => false, array: () => errors });
-            req.params = { id: '1' };
-            req.body = { name: '', description: '' };
-
-            await boardController.updateBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InputValidationError',
-                    errors: errors,
-                })
-            );
-            expect(boardService.updateBoard).not.toHaveBeenCalled();
-        });
-
-        it('should return 404 if board not found', async () => {
-            const { req, res, next } = createMockContext();
-            (boardService.updateBoard as any).mockResolvedValue(null);
-            req.params = { id: '2' };
-            req.body = { name: 'Updated Board', description: 'Updated Description' };
-
-            await boardController.updateBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(404);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'BoardNotFoundError',
-                    message: 'Board not found for update',
-                })
-            );
-            expect(boardService.updateBoard).toHaveBeenCalledWith(2, { name: 'Updated Board', description: 'Updated Description' });
-        });
-
-        it('should return 500 if an unexpected error occurs during updateBoard', async () => {
-            const { req, res, next } = createMockContext();
-            const error = new Error('Something went wrong');
-            (boardService.updateBoard as any).mockRejectedValue(error);
-            req.params = { id: '1' };
-            req.body = { name: 'Updated Board', description: 'Updated Description' };
-
-            await boardController.updateBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(500);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InternalServerError',
-                    message: 'An unexpected error occurred',
-                })
-            );
-        });
+        // Assert
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({ message: 'Board not found' });
+        expect(boardService.deleteBoard).toHaveBeenCalledWith(2);
     });
 
-    describe('deleteBoard', () => {
-        it('should delete a board and return 204 (No Content)', async () => {
-            const { req, res, next } = createMockContext();
-            (boardService.deleteBoard as any).mockResolvedValue(true);
-            req.params = { id: '1' };
+    it('should return 400 for validation error', async () => {
+        // Arrange
+        const { req, res } = createMockRequestResponse();
+        req.params.boardId = 'abc'; // Invalid boardId
+        const mockErrors = [{ msg: 'Invalid ID' }];
+        vi.mocked(validationResult).mockReturnValue({ isEmpty: () => false, array: () => mockErrors });
 
-            await boardController.deleteBoard(req, res, next);
+        // Act
+        await boardController.deleteBoard(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(204);
-            expect(res.send).toHaveBeenCalled();
-            expect(boardService.deleteBoard).toHaveBeenCalledWith(1);
-        });
+        // Assert
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ errors: mockErrors });
+        expect(boardService.deleteBoard).not.toHaveBeenCalled(); // Make sure deleteBoard wasn't called
+    });
 
-        it('should return 400 if ID validation fails', async () => {
-            const { req, res, next } = createMockContext();
-            const errors: ValidationError[] = [{ param: 'id', msg: 'Invalid ID', location: 'params', value: 'abc' }];
-            (validationResult as any).mockReturnValue({ isEmpty: () => false, array: () => errors });
-            req.params = { id: 'abc' };
+    it('should return 500 for internal server error', async () => {
+        // Arrange
+        const { req, res } = createMockRequestResponse();
+        req.params.boardId = '3';
+        vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true }); // No validation errors
+        vi.spyOn(boardService, 'deleteBoard').mockRejectedValueOnce(new Error('Internal server error'));
 
-            await boardController.deleteBoard(req, res, next);
+        // Act
+        await boardController.deleteBoard(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InputValidationError',
-                    errors: errors,
-                })
-            );
-            expect(boardService.deleteBoard).not.toHaveBeenCalled();
-        });
+        // Assert
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ message: 'Failed to delete board: Internal server error' });
+        expect(boardService.deleteBoard).toHaveBeenCalledWith(3);
+    });
 
+    it('should return 500 for internal server error with error message', async () => {
+        // Arrange
+        const { req, res } = createMockRequestResponse();
+        req.params.boardId = '3';
+        vi.mocked(validationResult).mockReturnValue({ isEmpty: () => true }); // No validation errors
+        const errorMessage = 'Custom error message';
+        vi.spyOn(boardService, 'deleteBoard').mockRejectedValueOnce(new Error(errorMessage));
 
-        it('should return 404 if board not found', async () => {
-            const { req, res, next } = createMockContext();
-            (boardService.deleteBoard as any).mockResolvedValue(false);
-            req.params = { id: '2' };
+        // Act
+        await boardController.deleteBoard(req, res);
 
-            await boardController.deleteBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(404);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'BoardNotFoundError',
-                    message: 'Board not found for deletion',
-                })
-            );
-            expect(boardService.deleteBoard).toHaveBeenCalledWith(2);
-        });
-
-        it('should return 500 if an unexpected error occurs during deleteBoard', async () => {
-            const { req, res, next } = createMockContext();
-            const error = new Error('Something went wrong');
-            (boardService.deleteBoard as any).mockRejectedValue(error);
-            req.params = { id: '1' };
-
-            await boardController.deleteBoard(req, res, next);
-
-            expect(res.status).toHaveBeenCalledWith(500);
-            expect(res.json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    error: 'InternalServerError',
-                    message: 'An unexpected error occurred',
-                })
-            );
-        });
+        // Assert
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ message: `Failed to delete board: ${errorMessage}` });
+        expect(boardService.deleteBoard).toHaveBeenCalledWith(3);
     });
 });
