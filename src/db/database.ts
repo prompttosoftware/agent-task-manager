@@ -1,18 +1,22 @@
-// src/db/database.ts
 import Database from 'better-sqlite3';
+import fs from 'fs';
 
-const db = new Database('data/task_manager.db', { verbose: console.log });
+const dbFilePath = './data/task_manager.db';
 
-// Define database schema here, e.g.:
-db.exec(`
-  CREATE TABLE IF NOT EXISTS issues (
-    id INTEGER PRIMARY KEY,
-    summary TEXT NOT NULL,
-    description TEXT,
-    status TEXT NOT NULL,
-    created_at DATETIME NOT NULL,
-    updated_at DATETIME NOT NULL
-  );
-`);
+// Ensure the data directory exists
+if (!fs.existsSync('./data')) {
+  fs.mkdirSync('./data');
+}
+
+const db = new Database(dbFilePath, { verbose: console.log });
+
+// Read the schema from epic1_database_setup.txt and execute it
+try {
+  const schema = fs.readFileSync('epic1_database_setup.txt', 'utf8');
+  db.exec(schema);
+  console.log('Database schema created successfully.');
+} catch (error) {
+  console.error('Error creating database schema:', error);
+}
 
 export default db;

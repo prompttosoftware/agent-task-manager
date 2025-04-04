@@ -1,0 +1,75 @@
+-- SQL schema for Task Manager Database
+
+-- Issues Table
+CREATE TABLE IF NOT EXISTS Issues (
+    id INTEGER PRIMARY KEY,
+    summary TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+-- Boards Table
+CREATE TABLE IF NOT EXISTS Boards (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT
+);
+
+-- IssueLinks Table
+CREATE TABLE IF NOT EXISTS IssueLinks (
+    id INTEGER PRIMARY KEY,
+    issue_id INTEGER NOT NULL,
+    linked_issue_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (issue_id) REFERENCES Issues(id),
+    FOREIGN KEY (linked_issue_id) REFERENCES Issues(id)
+);
+
+-- Webhooks Table
+CREATE TABLE IF NOT EXISTS Webhooks (
+    id INTEGER PRIMARY KEY,
+    url TEXT NOT NULL,
+    event TEXT NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME NOT NULL
+);
+
+-- Users Table
+CREATE TABLE IF NOT EXISTS Users (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    email TEXT UNIQUE,
+    created_at DATETIME NOT NULL
+);
+
+-- Attachments Table
+CREATE TABLE IF NOT EXISTS Attachments (
+    id INTEGER PRIMARY KEY,
+    issue_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (issue_id) REFERENCES Issues(id)
+);
+
+-- Transitions Table
+CREATE TABLE IF NOT EXISTS Transitions (
+    id INTEGER PRIMARY KEY,
+    issue_id INTEGER NOT NULL,
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (issue_id) REFERENCES Issues(id)
+);
+
+-- Epics Table
+CREATE TABLE IF NOT EXISTS Epics (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at DATETIME NOT NULL
+);
