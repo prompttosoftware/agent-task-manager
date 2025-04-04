@@ -1,124 +1,155 @@
-import { Request, Response } from 'express';
+import { Controller, Get, Post, Put, Delete, Body, Param, HttpCode, HttpStatus, Inject, ParseIntPipe } from '@nestjs/common';
 import { EpicService } from '../services/epic.service';
-import { validationResult, body, param } from 'express-validator';
-import { EpicCreateRequest, EpicUpdateRequest } from '../types/epic.d.ts';
+import { EpicCreateRequest, EpicResponse, EpicListResponse, EpicUpdateRequest, EpicIssuesResponse } from '../types/epic.d';
+import { ApiOperation, ApiResponse, ApiParam, ApiBody, ApiTags } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ValidationError } from 'class-validator';
 
-// Define the controller class
+@ApiTags('epics')
+@Controller('api/epics')
 export class EpicController {
-  private readonly epicService: EpicService;
+  constructor(private readonly epicService: EpicService) {}
 
-  constructor() {
-    this.epicService = new EpicService();
+  @Post()
+  @ApiOperation({ summary: 'Create a new epic' })
+  @ApiBody({ type: EpicCreateRequest })
+  @ApiResponse({ status: 201, description: 'Epic created successfully', type: EpicResponse })
+  @ApiResponse({ status: 400, description: 'Bad Request - Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  @HttpCode(HttpStatus.CREATED)
+  async createEpic(@Body() createEpicDto: EpicCreateRequest): Promise<EpicResponse> {
+    try {
+      const epicDto = plainToClass(EpicCreateDto, createEpicDto);
+      const errors: ValidationError[] = await validate(epicDto);
+
+      if (errors.length > 0) {
+        const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
+        throw { status: HttpStatus.BAD_REQUEST, message: `Validation failed: ${errorMessages.join(', ')}` };
+      }
+      return await this.epicService.createEpic(createEpicDto);
+    } catch (error: any) {
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw { status, message: error.message || 'Internal server error' };
+    }
   }
 
-  // Implement GET /epics/:epicKey route handler
-  async getEpicByKey(req: Request, res: Response) {
+  @Get()
+  @ApiOperation({ summary: 'Get all epics' })
+  @ApiResponse({ status: 200, description: 'List of epics', type: [EpicResponse] })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  async getAllEpics(): Promise<EpicListResponse> {
     try {
-      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
+      return await this.epicService.getAllEpics();
+    } catch (error: any) {
+      throw { status: HttpStatus.INTERNAL_SERVER_ERROR, message: error.message || 'Internal server error' };
+    }
+  }
 
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const epicKey = req.params.epicKey;
+  @Get(':epicKey')
+  @ApiOperation({ summary: 'Get a specific epic by key' })
+  @ApiParam({ name: 'epicKey', description: 'The key of the epic' })
+  @ApiResponse({ status: 200, description: 'Epic found', type: EpicResponse })
+  @ApiResponse({ status: 404, description: 'Epic not found' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  async getEpicByKey(@Param('epicKey') epicKey: string): Promise<EpicResponse> {
+    try {
       const epic = await this.epicService.getEpicByKey(epicKey);
       if (!epic) {
-        return res.status(404).json({ message: 'Epic not found' });
+        throw { status: HttpStatus.NOT_FOUND, message: 'Epic not found' };
       }
-      res.status(200).json(epic);
+      return epic;
     } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw { status, message: error.message || 'Internal server error' };
     }
   }
 
-  // Implement GET /epics route handler
-  async getAllEpics(req: Request, res: Response) {
+  @Put(':epicKey')
+  @ApiOperation({ summary: 'Update an epic' })
+  @ApiParam({ name: 'epicKey', description: 'The key of the epic' })
+  @ApiBody({ type: EpicUpdateRequest })
+  @ApiResponse({ status: 200, description: 'Epic updated successfully', type: EpicResponse })
+  @ApiResponse({ status: 400, description: 'Bad Request - Validation failed' })
+  @ApiResponse({ status: 404, description: 'Epic not found' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  async updateEpic(
+    @Param('epicKey') epicKey: string,
+    @Body() updateEpicDto: EpicUpdateRequest,
+  ): Promise<EpicResponse> {
     try {
-      const epics = await this.epicService.getAllEpics();
-      res.status(200).json(epics);
+
+      const epicDto = plainToClass(EpicUpdateDto, updateEpicDto);
+      const errors: ValidationError[] = await validate(epicDto);
+
+      if (errors.length > 0) {
+        const errorMessages = errors.map((err) => Object.values(err.constraints)).flat();
+        throw { status: HttpStatus.BAD_REQUEST, message: `Validation failed: ${errorMessages.join(', ')}` };
+      }
+
+      const updatedEpic = await this.epicService.updateEpic(epicKey, updateEpicDto);
+
+      if (!updatedEpic) {
+        throw { status: HttpStatus.NOT_FOUND, message: 'Epic not found' };
+      }
+      return updatedEpic;
     } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw { status, message: error.message || 'Internal server error' };
     }
   }
 
-  // Implement POST /epics route handler
-  async createEpic(req: Request, res: Response) {
+  @Delete(':epicKey')
+  @ApiOperation({ summary: 'Delete an epic' })
+  @ApiParam({ name: 'epicKey', description: 'The key of the epic' })
+  @ApiResponse({ status: 204, description: 'Epic deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Epic not found' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteEpic(@Param('epicKey') epicKey: string): Promise<void> {
     try {
-      await body('key').isString().notEmpty().withMessage('Key is required').trim().escape().run(req);
-      await body('name').isString().notEmpty().withMessage('Name is required').trim().escape().run(req);
-
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-      
-      const newEpic: EpicCreateRequest = req.body;
-      const createdEpic = await this.epicService.createEpic(newEpic);
-      res.status(201).json(createdEpic);
-    } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
-    }
-  }
-
-  // Implement PUT /epics/:epicKey route handler
-  async updateEpic(req: Request, res: Response) {
-    try {
-      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
-      await body('name').optional().isString().trim().escape().run(req);
-      await body('key').optional().isString().trim().escape().run(req);
-
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const epicKey = req.params.epicKey;
-      const updateData: EpicUpdateRequest = req.body;
-      const updatedEpic = await this.epicService.updateEpic(epicKey, updateData);
-      res.status(200).json(updatedEpic);
-    } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
-    }
-  }
-
-  // Implement DELETE /epics/:epicKey route handler
-  async deleteEpic(req: Request, res: Response) {
-    try {
-      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
-
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-      const epicKey = req.params.epicKey;
       await this.epicService.deleteEpic(epicKey);
-      res.status(204).send(); // No content on success
     } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw { status, message: error.message || 'Internal server error' };
     }
   }
 
-  // Implement GET /epics/:epicKey/issues route handler
-  async getIssuesByEpicKey(req: Request, res: Response) {
+  @Get(':epicKey/issues')
+  @ApiOperation({ summary: 'Get issues associated with an epic' })
+  @ApiParam({ name: 'epicKey', description: 'The key of the epic' })
+  @ApiResponse({ status: 200, description: 'List of issues', type: [EpicIssue] })
+  @ApiResponse({ status: 404, description: 'Epic not found' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  async getIssuesByEpicKey(@Param('epicKey') epicKey: string): Promise<EpicIssuesResponse> {
     try {
-      await param('epicKey').isString().notEmpty().withMessage('Epic Key is required').run(req);
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const epicKey = req.params.epicKey;
-      const issues = await this.epicService.getIssuesByEpicKey(epicKey);
-      res.status(200).json(issues);
+      return await this.epicService.getIssuesByEpicKey(epicKey);
     } catch (error: any) {
-      console.error(error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
+      const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw { status, message: error.message || 'Internal server error' };
     }
   }
+}
+
+
+// DTOs for validation
+class EpicCreateDto {
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+}
+
+class EpicUpdateDto {
+  @IsString()
+  @IsOptional()
+  key?: string;
+
+  @IsString()
+  @IsOptional()
+  name?: string;
 }

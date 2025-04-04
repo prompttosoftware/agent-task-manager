@@ -1,9 +1,23 @@
-import { Router } from 'express';
-import { getEpics, deleteEpic } from '../controllers/epic.controller';
+import { Module } from '@nestjs/common';
+import { RouterModule, Routes } from '@nestjs/core';
+import { EpicController } from './epic.controller';
+import { EpicService } from '../services/epic.service';
 
-const router = Router();
+const routes: Routes = [
+  {
+    path: '/api',
+    children: [
+      {
+        path: '/epics',
+        module: EpicModule,
+      },
+    ],
+  },
+];
 
-router.get('/epics', getEpics);
-router.delete('/epics/:epicKey', deleteEpic);
-
-export default router;
+@Module({
+  imports: [RouterModule.register(routes)],
+  controllers: [EpicController],
+  providers: [EpicService],
+})
+export class EpicModule {}
