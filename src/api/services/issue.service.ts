@@ -1,16 +1,14 @@
-// src/types/issue.d.ts
+import { Issue } from '../types/issue.d';
+import db from '../db/database';
 
-// Placeholder for issue types
-export interface Issue {
-  id: string;
-  description: string;
-  status: 'open' | 'in progress' | 'resolved' | 'closed'; // Example: added status
-  createdAt: Date; // Example: added creation date
-  updatedAt: Date; // Example: added update date
-}
-
-export interface IssueLink {
-  sourceIssueId: string;
-  targetIssueId: string;
-  type: 'relates_to' | 'blocks' | 'is_blocked_by'; // Example: Issue Link Types
-}
+export const issueService = {
+    async getIssue(issueKey: string): Promise<Issue | undefined> {
+        try {
+            const issue = db.prepare('SELECT * FROM Issues WHERE issue_key = ?').get(issueKey) as Issue | undefined;
+            return issue;
+        } catch (error: any) {
+            console.error('Error fetching issue:', error);
+            throw new Error(`Failed to get issue: ${error.message}`);
+        }
+    }
+};
