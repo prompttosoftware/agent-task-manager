@@ -8,25 +8,26 @@ import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 const logger = new Logger('EpicService');
 
 // DTOs for validation
-class EpicCreateDto implements EpicCreateRequest {
-  @IsString()
-  @IsNotEmpty()
-  key: string;
+class EpicCreateDto {
+    @IsString()
+    @IsNotEmpty()
+    key: string;
 
-  @IsString()
-  @IsNotEmpty()
-  name: string;
+    @IsString()
+    @IsNotEmpty()
+    name: string;
 }
 
-class EpicUpdateDto implements EpicUpdateRequest {
-  @IsString()
-  @IsOptional()
-  key?: string;
+class EpicUpdateDto {
+    @IsString()
+    @IsOptional()
+    key?: string;
 
-  @IsString()
-  @IsOptional()
-  name?: string;
+    @IsString()
+    @IsOptional()
+    name?: string;
 }
+
 
 export class EpicService {
   async getEpicByKey(epicKey: string): Promise<Epic | undefined> {
@@ -48,7 +49,8 @@ export class EpicService {
     } catch (error: any) {
       logger.error('Error getting all epics:', error);
       throw new Error(error.message || 'Failed to get all epics');
-    }  }
+    }
+  }
 
   async createEpic(epicData: EpicCreateRequest): Promise<Epic> {
     try {
@@ -71,7 +73,7 @@ export class EpicService {
         key: epicDto.key,
         name: epicDto.name,
         createdAt: now,
-        self: "",
+        self: '',
       };
       return epic;
     } catch (error: any) {
@@ -143,7 +145,8 @@ export class EpicService {
       const err = new Error(error.message || 'Failed to update epic');
       (err as any).status = error.status || 500; // Internal Server Error or original status
       throw err;
-    }  }
+    }
+  }
 
   async deleteEpic(epicKey: string): Promise<void> {
     try {
@@ -159,13 +162,13 @@ export class EpicService {
       const err = new Error(error.message || 'Failed to delete epic');
       (err as any).status = error.status || 500; // Internal Server Error or original status
       throw err;
-    }  }
+    }
+  }
 
-  async getIssuesByEpicKey(epicKey: string): Promise<any[]> {
-    // Assuming you have a way to link issues to epics
+  async getIssuesByEpicKey(epicKey: string): Promise<EpicIssue[]> {
     try {
       const select = db.prepare(
-        `SELECT i.id, i.key, i.summary, i.description, i.status, i.created_at, i.updated_at, it.name as issue_type_name, it.iconUrl as issue_type_icon_url
+        `SELECT i.id, i.key, i.summary, i.status, it.name as issue_type_name, it.iconUrl as issue_type_icon_url
          FROM issues i
          JOIN epic_issues ei ON i.id = ei.issue_id
          JOIN epics e ON ei.epic_key = e.key
@@ -173,17 +176,18 @@ export class EpicService {
          WHERE e.key = ?`
       );
       const issues = select.all(epicKey);
+
       const formattedIssues: EpicIssue[] = issues.map((issue: any) => ({
-        id: issue.id,
+        id: issue.id.toString(), // Ensure id is a string
         key: issue.key,
         self: '', // Jira doesn't have self for issues, but we include it for consistency
         fields: {
           summary: issue.summary,
           status: {
             name: issue.status,
-            id: '', // Not available in the current query, needs adjustment
+            id: '', // Needs to be fetched or mapped from a status ID
             statusCategory: {
-              key: '' // Needs adjustment based on status value
+              key: '' // Needs to be mapped from status
             }
           },
           issuetype: {
