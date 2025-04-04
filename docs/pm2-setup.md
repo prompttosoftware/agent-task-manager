@@ -20,6 +20,7 @@ npm install -g pm2
 ### Example `pm2.config.js`
 
 ```javascript
+// pm2.config.js
 module.exports = {
   apps: [
     {
@@ -30,7 +31,9 @@ module.exports = {
       watch: false,
       max_memory_restart: '1G',
       env: {
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        PORT: process.env.PORT || 3000,
+        DATABASE_PATH: process.env.DATABASE_PATH || './data/task_manager.db'
       }
     }
   ]
@@ -57,6 +60,18 @@ module.exports = {
 *   `pm2 monit`:  Monitors the application in real-time.
 *   `pm2 save`: Saves the current process list to be automatically restarted on server boot.
 *   `pm2 startup`: Generates a startup script to automatically start PM2 on server boot.
+
+## Monitoring with PM2
+
+PM2 provides built-in monitoring capabilities. You can use the following command to monitor your application in real-time:
+
+```bash
+pm2 monit
+```
+
+This command displays a dashboard with various metrics, including CPU usage, memory usage, and more.
+
+PM2 also provides the ability to set up alerts and notifications based on these metrics.  This can be configured in the `pm2.config.js` file.
 
 ## Troubleshooting
 
