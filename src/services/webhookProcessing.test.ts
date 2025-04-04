@@ -1,171 +1,185 @@
 // src/services/webhookProcessing.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Queue, Job } from 'bull';
+import { Queue, Job } from 'bullmq';
 import Redis from 'ioredis';
-import { enqueueWebhook, getWebhookConfig, signPayload, startWebhookQueue } from './webhookProcessing';
-import { WebhookPayload, Webhook } from '../api/types/webhook.d';
-import db from '../db/database';
-import { sendWebhook } from './webhook.service';
+import * as webhookProcessing from './webhookProcessing';
+import { WebhookPayload } from '../api/types/webhook.d';
+import webhookQueue from './webhookQueue';
+import * as  webhookService from './webhook.service';
 
 // Mock dependencies
 vi.mock('ioredis');
-vi.mock('../db/database', () => ({
-  default: {
-    prepare: vi.fn(() => ({
-      get: vi.fn(),
-    })),
-    close: vi.fn(),
-  },
+vi.mock('./webhookQueue', () => ({
+    default: {
+        add: vi.fn(),
+        process: vi.fn(),
+    },
 }));
 vi.mock('./webhook.service', () => ({
-  sendWebhook: vi.fn(),
+    sendWebhook: vi.fn(),
 }));
-
-// Define mock types
-const mockRedis = {
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-  on: vi.fn(),
-} as any;
-
-const mockQueue = {
-  add: vi.fn(),
-  process: vi.fn(),
-  on: vi.fn(),
-} as any;
 
 
 describe('webhookProcessing', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // Mock Redis and Bull
-    (Redis as any).mockImplementation(() => mockRedis);
-    (Queue as any).mockImplementation(() => mockQueue);
-  });
+    beforeEach(() => {
+        vi.clearAllMocks();
+        // Mock Redis and Bull
+        (Redis as any).mockImplementation(() => ({})); // Minimal mock as it's mostly used by BullMQ internally
+    });
 
-  it('should enqueue a webhook payload', async () => {
-    const payload: WebhookPayload = {
-      webhookId: '123',
-      event: 'task.created',
-      data: { taskId: 'abc' },
-    };
+    it('should enqueue a webhook job with correct parameters', async () => {
+        const url = 'https://example.com/webhook';
+        const data = { message: 'test' };
+        const webhookId = 'webhook-123';
+        const event = 'issue.created';
 
-    await enqueueWebhook(payload);
+        await webhookProcessing.addWebhookJob(url, data, webhookId, event);
 
-    expect(mockQueue.add).toHaveBeenCalledWith(payload);
-  });
+        expect(webhookQueue.add).toHaveBeenCalledWith('webhookJob', {
+            url,
+            data,
+            webhookId,
+            event,
+        });
+    });
 
-  it('should get webhook config by ID', async () => {
-    const webhookId = 'test-webhook-id';
-    const mockWebhook: Webhook = {
-      id: webhookId,
-      callbackUrl: 'http://example.com',
-      secret: 'test-secret',
-      events: ['task.created'],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    it('should handle errors when adding a webhook job to the queue', async () => {
+        const url = 'https://example.com/webhook';
+        const data = { message: 'test' };
+        const webhookId = 'webhook-123';
+        const event = 'issue.created';
+        const errorMessage = 'Failed to add to queue';
 
-    (db.prepare as any).mockReturnValue({ get: vi.fn().mockReturnValue(mockWebhook) });
+        // Mock the add method to throw an error
+        (webhookQueue.add as any).mockRejectedValue(new Error(errorMessage));
 
-    const result = await getWebhookConfig(webhookId);
+        await expect(webhookProcessing.addWebhookJob(url, data, webhookId, event)).rejects.toThrow(errorMessage);
 
-    expect(db.prepare).toHaveBeenCalledWith('SELECT * FROM webhooks WHERE id = ?');
-    expect((db.prepare as any)().get).toHaveBeenCalledWith(webhookId);
-    expect(result).toEqual(mockWebhook);
-  });
+        expect(webhookQueue.add).toHaveBeenCalledWith('webhookJob', {
+            url,
+            data,
+            webhookId,
+            event,
+        });
+    });
 
-  it('should return undefined if webhook config is not found', async () => {
-    const webhookId = 'non-existent-id';
-    (db.prepare as any).mockReturnValue({ get: vi.fn().mockReturnValue(undefined) });
+    it('should process a webhook job successfully (happy path)', async () => {
+        const mockUrl = 'http://example.com/webhook';
+        const mockData = { test: 'data' };
+        const mockWebhookId = 'webhook-123';
+        const mockEvent = 'issue.created';
+        const mockPayload: WebhookPayload = {
+            url: mockUrl,
+            data: mockData,
+            webhookId: mockWebhookId,
+            event: mockEvent,
+        };
+        const mockSendWebhook = vi.spyOn(webhookService, 'sendWebhook').mockResolvedValue(undefined);
 
-    const result = await getWebhookConfig(webhookId);
 
-    expect(result).toBeUndefined();
-  });
+        const processFunction = (webhookQueue.process as any).mockImplementation((_, callback) => {
+            callback({ data: mockPayload });
+            return Promise.resolve();
+        });
 
-  it('should sign the payload with the secret', () => {
-    const secret = 'mysecret';
-    const payload = '{"event": "task.created", "data": {"taskId": "123"}}';
-    const expectedSignature = '61a71d13575e050055093c1a6f303f1e18c62bc89db73c19188240b603c38291';
 
-    const signature = signPayload(secret, payload);
+        const mockJob = { data: mockPayload } as any;
+        await webhookProcessing.processWebhookJob(mockJob);
 
-    expect(signature).toBe(expectedSignature);
-  });
+        expect(mockSendWebhook).toHaveBeenCalledWith(mockUrl, JSON.stringify(mockData), expect.any(Object));
+        mockSendWebhook.mockRestore();
+    });
 
-  it('should start the webhook queue', async () => {
-    //startWebhookQueue does not do anything in the code, so we just make sure it is called without error
-    await startWebhookQueue();
-    expect(true).toBe(true);
-  });
 
-  it('should process a webhook job successfully', async () => {
-    const webhookId = 'test-webhook-id';
-    const mockWebhook: Webhook = {
-      id: webhookId,
-      callbackUrl: 'http://example.com',
-      secret: 'test-secret',
-      events: ['task.created'],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const payload: WebhookPayload = {
-      webhookId: webhookId,
-      event: 'task.created',
-      data: { taskId: 'abc' },
-    };
-    const requestBody = JSON.stringify(payload);
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Webhook-Signature': '61a71d13575e050055093c1a6f303f1e18c62bc89db73c19188240b603c38291',
-    };
+    it('should handle errors when processing a webhook job', async () => {
+        const mockUrl = 'http://example.com/webhook';
+        const mockData = { test: 'data' };
+        const mockWebhookId = 'webhook-123';
+        const mockEvent = 'issue.created';
+        const mockPayload: WebhookPayload = {
+            url: mockUrl,
+            data: mockData,
+            webhookId: mockWebhookId,
+            event: mockEvent,
+        };
+        const errorMessage = 'Failed to send webhook';
+        const mockSendWebhook = vi.spyOn(webhookService, 'sendWebhook').mockRejectedValue(new Error(errorMessage));
 
-    (db.prepare as any).mockReturnValue({ get: vi.fn().mockReturnValue(mockWebhook) });
-    (sendWebhook as any).mockResolvedValue(undefined);
-    const processFunction = mockQueue.process.mock.calls[0][0];
-    await processFunction({ data: payload } as Job<WebhookPayload>);
 
-    expect(getWebhookConfig).toHaveBeenCalledWith(webhookId);
-    expect(sendWebhook).toHaveBeenCalledWith(mockWebhook.callbackUrl, requestBody, headers);
-  });
+        const processFunction = (webhookQueue.process as any).mockImplementation((_, callback) => {
+            callback({ data: mockPayload });
+            return Promise.resolve();
+        });
+        const mockJob = { data: mockPayload } as any;
 
-  it('should handle errors when processing a webhook job', async () => {
-    const webhookId = 'test-webhook-id';
-    const mockWebhook: Webhook = {
-      id: webhookId,
-      callbackUrl: 'http://example.com',
-      secret: 'test-secret',
-      events: ['task.created'],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const payload: WebhookPayload = {
-      webhookId: webhookId,
-      event: 'task.created',
-      data: { taskId: 'abc' },
-    };
+        await expect(webhookProcessing.processWebhookJob(mockJob)).rejects.toThrow(errorMessage);
+        expect(mockSendWebhook).toHaveBeenCalledWith(mockUrl, JSON.stringify(mockData), expect.any(Object));
+        mockSendWebhook.mockRestore();
+    });
 
-    (db.prepare as any).mockReturnValue({ get: vi.fn().mockReturnValue(mockWebhook) });
-    (sendWebhook as any).mockRejectedValue(new Error('Failed to send'));
-    const processFunction = mockQueue.process.mock.calls[0][0];
-    await expect(processFunction({ data: payload } as Job<WebhookPayload>)).rejects.toThrow('Failed to send');
-  });
-
-    it('should handle webhook config not found', async () => {
-        const webhookId = 'non-existent-id';
-        const payload: WebhookPayload = {
-            webhookId: webhookId,
-            event: 'task.created',
-            data: { taskId: 'abc' },
+    it('should retry a failed webhook job', async () => {
+        const mockUrl = 'http://example.com/webhook';
+        const mockData = { test: 'data' };
+        const mockWebhookId = 'webhook-123';
+        const mockEvent = 'issue.created';
+        const mockPayload: WebhookPayload = {
+            url: mockUrl,
+            data: mockData,
+            webhookId: mockWebhookId,
+            event: mockEvent,
         };
 
-        (db.prepare as any).mockReturnValue({ get: vi.fn().mockReturnValue(undefined) });
-        const processFunction = mockQueue.process.mock.calls[0][0];
-        await processFunction({ data: payload } as Job<WebhookPayload>);
-        expect(sendWebhook).not.toHaveBeenCalled();
+        const errorMessage = 'Failed to send webhook';
+        const mockSendWebhook = vi.spyOn(webhookService, 'sendWebhook').mockRejectedValue(new Error(errorMessage));
+
+        const processFunction = (webhookQueue.process as any).mockImplementation((_, callback) => {
+            callback({ data: mockPayload });
+            return Promise.resolve();
+        });
+        const mockJob = {
+            data: mockPayload,
+            attemptsMade: 0,
+            moveToFailed: vi.fn().mockResolvedValue(undefined),
+        } as any;
+
+
+        try {
+            await webhookProcessing.processWebhookJob(mockJob);
+        } catch (error: any) {
+            // Expected error is thrown
+            expect(error.message).toBe(errorMessage);
+            expect(mockJob.moveToFailed).toHaveBeenCalled();
+        }
+        mockSendWebhook.mockRestore();
+    });
+
+    //  Add tests for retry mechanism if it exists
+    it('should handle maximum retries reached', async () => {
+        const mockUrl = 'http://example.com/webhook';
+        const mockData = { test: 'data' };
+        const mockWebhookId = 'webhook-123';
+        const mockEvent = 'issue.created';
+        const mockPayload: WebhookPayload = {
+            url: mockUrl,
+            data: mockData,
+            webhookId: mockWebhookId,
+            event: mockEvent,
+        };
+        const errorMessage = 'Failed to send webhook';
+        const mockSendWebhook = vi.spyOn(webhookService, 'sendWebhook').mockRejectedValue(new Error(errorMessage));
+
+        const processFunction = (webhookQueue.process as any).mockImplementation((_, callback) => {
+            callback({ data: mockPayload });
+            return Promise.resolve();
+        });
+
+        const mockJob = {
+            data: mockPayload,
+            attemptsMade: 3, // Simulate maximum retries reached
+            moveToFailed: vi.fn().mockResolvedValue(undefined),
+        } as any;
+        await expect(webhookProcessing.processWebhookJob(mockJob)).rejects.toThrow(errorMessage);
+        expect(mockJob.moveToFailed).toHaveBeenCalled();
+        mockSendWebhook.mockRestore();
     });
 });

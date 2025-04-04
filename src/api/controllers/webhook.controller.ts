@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { register, remove, list } from '../services/webhook.service';
+import { validationResult } from 'express-validator';
 
 // POST /api/webhooks - Register webhook
 export const registerWebhook = async (req: Request, res: Response) => {
