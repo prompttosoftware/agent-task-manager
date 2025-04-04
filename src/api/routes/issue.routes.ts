@@ -1,10 +1,8 @@
-import express from 'express';
-import { issueController } from '../controllers/issue.controller';
-import { validateIssueKey } from '../controllers/issue.validation';
+// src/api/routes/issue.routes.ts
+import { Router } from 'express';
 
-const router = express.Router();
+const router = Router();
 
-router.get('/:issueKey', validateIssueKey, issueController.getIssue);
-router.post('/:issueKey/attachments', validateIssueKey, issueController.addAttachment);
+// Define your issue routes here
 
 export default router;
