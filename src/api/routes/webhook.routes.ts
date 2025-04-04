@@ -1,15 +1,16 @@
-// src/api/routes/webhook.routes.ts
+import { Router } from 'express';
+import { registerWebhook, deleteWebhook, listWebhooks } from '../controllers/webhook.controller';
+import { webhookValidation } from '../middleware/webhookValidation';
 
-import express, { Router } from 'express';
-import { createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook } from '../controllers/webhook.controller';
-import { validateWebhookCreate, validateWebhookUpdate } from '../middleware/webhookValidation';
+const router = Router();
 
-const router: Router = express.Router();
+// POST /api/webhooks - Register webhook
+router.post('/api/webhooks', webhookValidation, registerWebhook);
 
-router.post('/webhooks', validateWebhookCreate, createWebhook);
-router.get('/webhooks', listWebhooks);
-router.get('/webhooks/:id', getWebhook);
-router.put('/webhooks/:id', validateWebhookUpdate, updateWebhook);
-router.delete('/webhooks/:id', deleteWebhook);
+// DELETE /api/webhooks/:webhookId - Delete webhook
+router.delete('/api/webhooks/:webhookId', deleteWebhook);
 
-export default router
+// GET /api/webhooks - List webhooks
+router.get('/api/webhooks', listWebhooks);
+
+export default router;
