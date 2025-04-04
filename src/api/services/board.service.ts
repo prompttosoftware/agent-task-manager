@@ -66,11 +66,38 @@ export class BoardService {
         return null;
       }
 
-      const result = db.prepare('UPDATE boards SET name = ?, description = ? WHERE id = ?').run(
-        boardUpdateDto.name !== undefined ? boardUpdateDto.name : existingBoard.name,
-        boardUpdateDto.description !== undefined ? boardUpdateDto.description : existingBoard.description,
-        boardId,
-      );
+      // Only update fields that are provided in boardData
+      const updateData: Partial<Board> = {};
+      if (boardUpdateDto.name !== undefined) {
+        updateData.name = boardUpdateDto.name;
+      }
+      if (boardUpdateDto.description !== undefined) {
+        updateData.description = boardUpdateDto.description;
+      }
+
+      // Build the SET clause for the SQL query dynamically
+      let setClause = '';
+      const params = [];
+      if (updateData.name !== undefined) {
+        setClause += `name = ?`;
+        params.push(updateData.name);
+        if (updateData.description !== undefined) {
+          setClause += `, `; 
+        }
+      }
+      if (updateData.description !== undefined) {
+        setClause += `description = ?`;
+        params.push(updateData.description);
+      }
+
+      if (setClause.length === 0) {
+        return existingBoard; // Nothing to update
+      }
+
+      params.push(boardId);
+
+      const sql = `UPDATE boards SET ${setClause} WHERE id = ?`;
+      const result = db.prepare(sql).run(...params);
 
       if (result.changes === 0) {
         return existingBoard; // Return the original board if no changes were made.
