@@ -1,15 +1,20 @@
 // src/api/routes/issue.routes.ts
-import { Router } from 'express';
-import { createIssue, getIssue, updateIssue, deleteIssue, listIssues } from '../controllers/issue.controller';
-import { searchIssues } from '../controllers/issue.controller';
+import express from 'express';
+import { body } from 'express-validator';
+import * as issueController from '../controllers/issue.controller';
 
-const router = Router();
+const router = express.Router();
 
-router.post('/', createIssue);
-router.get('/:id', getIssue);
-router.put('/:id', updateIssue);
-router.delete('/:id', deleteIssue);
-router.get('/', listIssues);
-router.get('/search', searchIssues);
+router.post(
+  '/issues',
+  [ // Add validation middleware here
+    body('summary').notEmpty().withMessage('Summary is required'),
+    body('description').optional(),
+    body('issueType').notEmpty().withMessage('Issue type is required'),
+    body('project').notEmpty().withMessage('Project is required'),
+    // Add more validations as needed
+  ],
+  issueController.addIssue
+);
 
 export default router;

@@ -1,63 +1,21 @@
 // src/api/controllers/issue.controller.ts
 import { Request, Response } from 'express';
+import { validationResult } from 'express-validator';
 import * as issueService from '../services/issue.service';
+import { Issue } from '../types/issue.d';
 
-export const createIssue = async (req: Request, res: Response) => { 
-  try {
-    const issue = await issueService.createIssue(req.body);
-    res.status(201).json(issue);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
+export const addIssue = async (req: Request, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
-};
 
-export const getIssue = async (req: Request, res: Response) => {
   try {
-    const issue = await issueService.getIssue(req.params.id);
-    if (!issue) {
-      return res.status(404).json({ message: 'Issue not found' });
-    }
-    res.status(200).json(issue);
+    const issueData: Issue = req.body;
+    const newIssue = await issueService.createIssue(issueData);
+    res.status(201).json(newIssue);
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const updateIssue = async (req: Request, res: Response) => {
-  try {
-    const issue = await issueService.updateIssue(req.params.id, req.body);
-    if (!issue) {
-      return res.status(404).json({ message: 'Issue not found' });
-    }
-    res.status(200).json(issue);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const deleteIssue = async (req: Request, res: Response) => {
-  try {
-    await issueService.deleteIssue(req.params.id);
-    res.status(204).send();
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const listIssues = async (req: Request, res: Response) => {
-  try {
-    const issues = await issueService.listIssues();
-    res.status(200).json(issues);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const searchIssues = async (req: Request, res: Response) => {
-  try {
-    const searchResults = await issueService.searchIssues(req.query);
-    res.status(200).json(searchResults);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
+    console.error('Error creating issue:', error);
+    res.status(500).json({ message: error.message || 'Failed to create issue' });
   }
 };
