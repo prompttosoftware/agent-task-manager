@@ -4,7 +4,6 @@ import { db } from '../../src/db/database'; // Assuming you have a database conn
 export class BoardService {
   async createBoard(boardData: Board): Promise<Board> {
     try {
-      // Example: Insert into the database.  Adjust based on your DB setup.
       const result = await db.prepare(
         `INSERT INTO boards (name, description) VALUES (?, ?)`
       ).run(boardData.name, boardData.description);
@@ -18,7 +17,17 @@ export class BoardService {
       return newBoard;
     } catch (error: any) {
       console.error('Error creating board in service:', error);
-      throw new Error(`Failed to create board: ${error.message}`); // Re-throw for controller to handle
+      throw new Error(`Failed to create board: ${error.message}`);
+    }
+  }
+
+  async getBoards(): Promise<Board[]> {
+    try {
+      const rows = db.prepare('SELECT id, name, description FROM boards').all() as Board[];
+      return rows;
+    } catch (error: any) {
+      console.error('Error getting boards in service:', error);
+      throw new Error(`Failed to get boards: ${error.message}`);
     }
   }
 }
