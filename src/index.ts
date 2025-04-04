@@ -1,38 +1,38 @@
-// Entry point for the application. Imports and starts the express server.
-
-import express from 'express';
-import { issueRoutes } from './api/routes/issue.routes';
-import { webhookRoutes } from './api/routes/webhook.routes';
-import { config } from './config';
-import { WebhookWorker } from './services/webhookWorker';
-import Database from './db/database';
+import express, { Request, Response } from 'express';
+import bodyParser from 'body-parser';
+import issueRoutes from './src/api/routes/issue.routes';
+import webhookRoutes from './src/api/routes/webhook.routes';
+import boardRoutes from './src/api/routes/board.routes';
+import { startWebhookWorker } from './src/services/webhookWorker';
+import { connect } from './src/db/database';
+import { createQueue } from './src/config';
 
 const app = express();
-const port = config.server.port;
+const port = process.env.PORT || 3000;
 
-// Initialize the database
-const db = new Database(config.database.databasePath);
-console.log('Attempting to initialize database at:', config.database.databasePath);
-db.init().then(() => {
-  console.log('Database initialized successfully.');
+app.use(bodyParser.json());
 
-  // Initialize WebhookService and WebhookWorker
-  const webhookWorker = new WebhookWorker(db);
-  console.log('Starting WebhookWorker...');
-  webhookWorker.start();
+// Routes
+app.use('/api/issues', issueRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/boards', boardRoutes);
 
-  app.use(express.json());
-
-  app.use('/issues', issueRoutes);
-  app.use('/webhooks', webhookRoutes);
-
-  app.get('/', (req, res) => {
-    res.send('Agent Task Manager');
+// Initialize database connection
+connect()
+  .then(() => {
+    console.log('Connected to the database');
+  })
+  .catch((err) => {
+    console.error('Failed to connect to the database:', err);
   });
 
-  app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
+
+// Start webhook worker
+startWebhookWorker().catch(console.error);
+
+//Start the queue
+//createQueue('webhook-queue'); //TODO: remove if not needed. Queue is started in webhookProcessing.ts
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
