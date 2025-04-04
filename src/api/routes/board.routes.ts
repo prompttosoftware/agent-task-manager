@@ -1,7 +1,9 @@
 // src/api/routes/board.routes.ts
 import { Router } from 'express';
-import { body, param } from 'express-validator';
+import { param } from 'express-validator';
 import * as boardController from '../controllers/board.controller';
+import { validationMiddleware } from '../middleware/validation.middleware';
+import { BoardCreateDto, BoardUpdateDto } from '../types/board.d';
 
 const router = Router();
 
@@ -12,12 +14,12 @@ router.get('/:boardId', boardController.getBoard);
 router.get('/', boardController.listBoards);
 
 // POST /api/boards
-router.post('/', boardController.createBoard);
+router.post('/', validationMiddleware(BoardCreateDto), boardController.createBoard);
 
 // PUT /api/boards/:boardId
-router.put('/:boardId', boardController.updateBoard);
+router.put('/:boardId', param('boardId').isString().withMessage('Invalid board ID'), validationMiddleware(BoardUpdateDto), boardController.updateBoard);
 
 // DELETE /api/boards/:boardId
-router.delete('/:boardId', boardController.deleteBoard);
+router.delete('/:boardId', param('boardId').isString().withMessage('Invalid board ID'), boardController.deleteBoard);
 
 export default router;
