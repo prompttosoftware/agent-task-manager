@@ -1,21 +1,24 @@
 import express from 'express';
-import { createIssue, getIssue, updateIssue, deleteIssue, listIssues, searchIssues, getIssueTransitions, transitionIssue, addAttachment, linkIssues, updateAssignee, getCreateIssueMetadata, getIssueByKey } from '../controllers/issue.controller';
+import { issueController } from '../controllers/issue.controller';
+import { validateAddAttachment } from '../api/controllers/issue.validation';
 import multer from 'multer';
 
-const router = express.Router();
-const upload = multer({ dest: 'uploads/' }); // Configure multer for file uploads
+const upload = multer({
+  storage: multer.diskStorage({}), // Use disk storage for now, configure as needed
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file size limit
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'application/pdf'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(null, false);
+      return cb(new Error('Invalid file type.'));
+    }
+  },
+});
 
-router.post('/', createIssue);
-router.get('/:issueKey', getIssueByKey);
-router.put('/:id', updateIssue);
-router.delete('/:id', deleteIssue);
-router.get('/', listIssues);
-router.get('/search', searchIssues);
-router.get('/:issueKey/transitions', getIssueTransitions);
-router.post('/:issueKey/transitions', transitionIssue);
-router.post('/:issueKey/attachments', upload.array('attachments'), addAttachment);
-router.post('/issuelinks', linkIssues);
-router.put('/:issueKey/assignee', updateAssignee);
-router.get('/issue/createmeta', getCreateIssueMetadata);
+const router = express.Router();
+
+router.get('/:issueKey', issueController.getIssue);
+router.post('/:issueKey/attachments', validateAddAttachment, upload.array('attachments'), issueController.addAttachment);
 
 export default router;
