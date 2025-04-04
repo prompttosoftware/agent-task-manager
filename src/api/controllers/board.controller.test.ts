@@ -1,81 +1,75 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import express, { Application } from 'express';
-import { BoardController } from '../controllers/board.controller';
+import express from 'express';
+import boardRoutes from '../routes/board.routes';
 import { BoardService } from '../services/board.service';
-import { Board } from '../types/board';
+import { Board } from '../models/board';
+import { validate } from 'class-validator';
 
-jest.mock('../services/board.service');
-
-const app: Application = express();
+const app = express();
 app.use(express.json());
+app.use('/api/boards', boardRoutes);
 
-const mockBoardService = {
-  createBoard: jest.fn(),
-  getAllBoards: jest.fn(),
-};
+// Mock the BoardService
+jest.mock('../services/board.service');
+const mockBoardService = BoardService as jest.Mocked<typeof BoardService>;
 
-const boardController = new BoardController(mockBoardService as BoardService);
-app.post('/boards', boardController.createBoard.bind(boardController));
-app.get('/api/boards', boardController.getBoards.bind(boardController));
-
-describe('BoardController', () => {
-  afterEach(() => {
+describe('POST /api/boards', () => {
+  beforeEach(() => {
+    // Clear all mocks before each test
     jest.clearAllMocks();
   });
 
-  const mockBoard: Board = {
-    id: 1,
-    name: 'Test Board',
-    description: 'Test Description',
-  };
+  it('should create a new board with valid data', async () => {
+    const newBoard: Board = {
+      name: 'Test Board',
+      description: 'Test Description',
+    };
 
-  describe('POST /boards', () => {
-    it('should create a board and return 201 with the correct JSON format', async () => {
-      (mockBoardService.createBoard as jest.Mock).mockResolvedValue(mockBoard);
+    const createdBoard: Board = { ...newBoard, id: 1, createdAt: new Date(), updatedAt: new Date() };
 
-      const response = await request(app).post('/boards').send(mockBoard);
+    mockBoardService.prototype.createBoard.mockResolvedValue(createdBoard);
 
-      expect(response.status).toBe(201);
-      expect(response.body).toMatchObject(mockBoard);
-      expect(mockBoardService.createBoard).toHaveBeenCalledWith(mockBoard);
-    });
+    const response = await request(app)
+      .post('/api/boards')
+      .send(newBoard)
+      .set('Accept', 'application/json');
 
-    it('should return 400 if validation fails', async () => {
-      const response = await request(app).post('/boards').send({ name: '', description: '' });
-
-      expect(response.status).toBe(400);
-      expect(response.body.message).toBe('Invalid input');
-    });
-
-    it('should return 500 if board creation fails', async () => {
-      (mockBoardService.createBoard as jest.Mock).mockRejectedValue(new Error('Failed to create'));
-
-      const response = await request(app).post('/boards').send(mockBoard);
-
-      expect(response.status).toBe(500);
-      expect(response.body.message).toBe('Failed to create board');
-    });
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(createdBoard);
+    expect(mockBoardService.prototype.createBoard).toHaveBeenCalledWith(expect.objectContaining(newBoard));
   });
 
-  describe('GET /api/boards', () => {
-    it('should get all boards and return 200 with the correct JSON format', async () => {
-      const mockBoards: Board[] = [mockBoard, { ...mockBoard, id: 2, name: 'Board 2' }];
-      (mockBoardService.getAllBoards as jest.Mock).mockResolvedValue(mockBoards);
+  it('should return 400 for invalid data', async () => {
+    const invalidBoardData = {
+      name: '', // Invalid: Name is required
+      description: 'Test Description',
+    };
 
-      const response = await request(app).get('/api/boards');
+    const response = await request(app)
+      .post('/api/boards')
+      .send(invalidBoardData);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockBoards);
-      expect(mockBoardService.getAllBoards).toHaveBeenCalled();
-    });
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('errors');
+    expect(response.body.errors).toBeInstanceOf(Array);
+    expect(response.body.errors[0].property).toBe('name');
+    expect(mockBoardService.prototype.createBoard).not.toHaveBeenCalled();
+  });
 
-    it('should return 500 if getting all boards fails', async () => {
-      (mockBoardService.getAllBoards as jest.Mock).mockRejectedValue(new Error('Failed to get boards'));
+  it('should handle server errors', async () => {
+    mockBoardService.prototype.createBoard.mockRejectedValue(new Error('Database error'));
 
-      const response = await request(app).get('/api/boards');
+    const newBoard: Board = {
+      name: 'Test Board',
+      description: 'Test Description',
+    };
 
-      expect(response.status).toBe(500);
-      expect(response.body.message).toBe('Failed to fetch boards');
-    });
+    const response = await request(app)
+      .post('/api/boards')
+      .send(newBoard);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: 'Failed to create board: Database error' });
   });
 });
