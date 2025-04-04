@@ -1,38 +1,36 @@
-import express, { Request, Response } from 'express';
+import express, { Express, Request, Response } from 'express';
 import bodyParser from 'body-parser';
-import issueRoutes from './src/api/routes/issue.routes';
-import webhookRoutes from './src/api/routes/webhook.routes';
-import boardRoutes from './src/api/routes/board.routes';
-import { startWebhookWorker } from './src/services/webhookWorker';
-import { connect } from './src/db/database';
-import { createQueue } from './src/config';
+import { boardRoutes } from './src/api/routes/board.routes';
+import { issueRoutes } from './src/api/routes/issue.routes';
+import { webhookRoutes } from './src/api/routes/webhook.routes';
+import { initializeDatabase } from './src/db/database';
+import { config } from './src/config';
+import webhookWorker from './src/services/webhookWorker';
 
-const app = express();
-const port = process.env.PORT || 3000;
+const app: Express = express();
+const port = config.port;
 
 app.use(bodyParser.json());
 
 // Routes
-app.use('/api/issues', issueRoutes);
-app.use('/api/webhooks', webhookRoutes);
-app.use('/api/boards', boardRoutes);
+app.use('/boards', boardRoutes);
+app.use('/issues', issueRoutes);
+app.use('/webhooks', webhookRoutes);
 
-// Initialize database connection
-connect()
-  .then(() => {
-    console.log('Connected to the database');
-  })
-  .catch((err) => {
-    console.error('Failed to connect to the database:', err);
-  });
-
-
-// Start webhook worker
-startWebhookWorker().catch(console.error);
-
-//Start the queue
-//createQueue('webhook-queue'); //TODO: remove if not needed. Queue is started in webhookProcessing.ts
-
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.get('/', (req: Request, res: Response) => {
+  res.send('Agent Task Manager');
 });
+
+const startServer = async () => {
+  try {
+    await initializeDatabase();
+    await webhookWorker; // Initialize the worker
+    app.listen(port, () => {
+      console.log(`Server is running at http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error('Error starting server:', error);
+  }
+};
+
+startServer();
