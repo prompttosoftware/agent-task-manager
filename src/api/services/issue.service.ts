@@ -77,7 +77,9 @@ export const createIssue = async (issueData: any): Promise<Issue> => {
     const issueId: number = info.lastInsertRowid as number;
     const newIssue: Issue = {
       id: issueId,
-      ...issueDto,
+      summary: issueDto.summary,
+      description: issueDto.description,
+      status: issueDto.status,
       createdAt: now,
       updatedAt: now,
     } as Issue;

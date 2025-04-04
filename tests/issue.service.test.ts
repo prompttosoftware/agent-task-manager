@@ -1,585 +1,303 @@
-// src/services/issue.service.test.ts
+// src/api/services/issue.service.test.ts
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { IssueService } from './issue.service';
+import { createIssue, updateIssue, getIssueById } from './issue.service';
 import Database from 'better-sqlite3';
-import { Issue, IssuePriority, IssueStatus, User, Comment } from '../types/issue';
+import { Issue, IssueCreateRequest, IssueUpdateRequest } from '../types/issue.d'; // Import the types
 
 // Mock the better-sqlite3 module
 vi.mock('better-sqlite3');
+const mockDb = {
+    prepare: vi.fn().mockReturnValue({
+        run: vi.fn(),
+        get: vi.fn(),
+    }),
+};
 
 describe('IssueService', () => {
-    let issueService: IssueService;
-    let mockDb: any; // Use 'any' to bypass type checking for the mock
-
     beforeEach(() => {
-        // Initialize a mock database
-        mockDb = {
-            exec: vi.fn(),
-            prepare: vi.fn().mockReturnValue({
-                run: vi.fn(),
-                get: vi.fn(),
-                all: vi.fn(),
-            }),
-        };
-
-        // Instantiate the IssueService with the mock database
-        issueService = new IssueService(mockDb);
+        // Reset mocks before each test
+        vi.clearAllMocks();
     });
-
-    it('should initialize the database tables on construction', () => {
-        expect(mockDb.exec).toHaveBeenCalledTimes(3); // Assuming 3 table creation queries
-        expect(mockDb.exec).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS issues'));
-        expect(mockDb.exec).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS users'));
-        expect(mockDb.exec).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS comments'));
-    });
-
 
     describe('createIssue', () => {
         it('should create an issue successfully', async () => {
-            const issue: Issue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                comments: [],
+            const issueData: IssueCreateRequest = {
+                summary: 'Test Summary',
+                description: 'Test Description',
+                status: 'open',
             };
 
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                run: vi.fn(),
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ lastInsertRowid: 1 });
 
-            // Mock the getIssueById method to return the created issue
-            const getIssueByIdMock = vi.spyOn(issueService, 'getIssueById').mockResolvedValue(issue);
+            const result = await createIssue(issueData);
 
-            const result = await issueService.createIssue(issue);
-
-            expect(mockDb.exec).toHaveBeenCalledWith('BEGIN');
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'));
-            expect(mockStmt.run).toHaveBeenCalledWith(
-                issue.id,
-                issue.title,
-                issue.description,
-                issue.reporter.id,
-                issue.assignee?.id,
-                issue.priority,
-                issue.status,
-                issue.createdAt,
-                issue.updatedAt,
-                undefined,
-                undefined,
+            expect(mockDb.prepare).toHaveBeenCalledWith(
+                'INSERT INTO issues (summary, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?) returning id;'
             );
-            expect(mockDb.exec).toHaveBeenCalledWith('COMMIT');
-            expect(getIssueByIdMock).toHaveBeenCalledWith(issue.id); // Verify getIssueById was called
-            expect(result).toEqual(issue);
+            expect(mockRun).toHaveBeenCalledWith(
+                issueData.summary,
+                issueData.description,
+                issueData.status,
+                expect.any(String),
+                expect.any(String)
+            );
+            expect(result).toEqual({
+                id: 1,
+                summary: issueData.summary,
+                description: issueData.description,
+                status: issueData.status,
+                createdAt: expect.any(String),
+                updatedAt: expect.any(String),
+            });
         });
 
-        it('should handle errors during issue creation', async () => {
-            const issue: Issue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                comments: [],
+        it('should handle validation errors', async () => {
+            const issueData = {
+                summary: '', // Invalid - empty string
+                description: 'Test Description',
+                status: 'invalid', // Invalid status
             };
-            const errorMessage = 'Database error';
 
-            // Mock the prepare method to throw an error
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
+            await expect(createIssue(issueData)).rejects.toThrowError(
+                'Validation failed: summary must not be empty, status must be one of the following values: open, in progress, resolved, closed'
+            );
+        });
+
+        it('should handle database errors', async () => {
+            const issueData: IssueCreateRequest = {
+                summary: 'Test Summary',
+                description: 'Test Description',
+                status: 'open',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockImplementation(() => {
+                throw new Error('Database error');
             });
 
-            await expect(issueService.createIssue(issue)).rejects.toThrowError(`Failed to create issue: ${errorMessage}`);
-            expect(mockDb.exec).toHaveBeenCalledWith('ROLLBACK');
-        });
-    });
-
-    describe('getAllIssues', () => {
-        it('should get all issues successfully', async () => {
-            const issues: Issue[] = [
-                {
-                    id: '1',
-                    title: 'Test Issue 1',
-                    description: 'Description 1',
-                    reporter: { id: 'reporter1', name: 'Reporter 1', email: 'reporter1@example.com' },
-                    assignee: { id: 'assignee1', name: 'Assignee 1', email: 'assignee1@example.com' },
-                    priority: IssuePriority.High,
-                    status: IssueStatus.Open,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    comments: [],
-                },
-                {
-                    id: '2',
-                    title: 'Test Issue 2',
-                    description: 'Description 2',
-                    reporter: { id: 'reporter2', name: 'Reporter 2', email: 'reporter2@example.com' },
-                    assignee: { id: 'assignee2', name: 'Assignee 2', email: 'assignee2@example.com' },
-                    priority: IssuePriority.Medium,
-                    status: IssueStatus.InProgress,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    comments: [],
-                },
-            ];
-
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                all: vi.fn().mockReturnValue(issues.map(issue => ({...issue, labels: undefined, dueDate: undefined}))), // Simulate database results
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
-            const mapIssueFromDbMock = vi.spyOn(issueService, 'mapIssueFromDb').mockImplementation(async (issue) => issue as Issue);
-
-            const result = await issueService.getAllIssues();
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues'));
-            expect(mockStmt.all).toHaveBeenCalled();
-            expect(mapIssueFromDbMock).toHaveBeenCalledTimes(2);
-            expect(result).toEqual(issues);
-        });
-
-        it('should handle errors when getting all issues', async () => {
-            const errorMessage = 'Database error';
-
-            // Mock the prepare method to throw an error
-            mockDb.prepare.mockReturnValue({
-                all: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            await expect(issueService.getAllIssues()).rejects.toThrowError(`Failed to get all issues: ${errorMessage}`);
-        });
-    });
-
-    describe('getIssueById', () => {
-        it('should get an issue by ID successfully', async () => {
-            const issue: Issue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                comments: [],
-            };
-
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                get: vi.fn().mockReturnValue({...issue, labels: undefined, dueDate: undefined}), // Simulate database result
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            const mapIssueFromDbMock = vi.spyOn(issueService, 'mapIssueFromDb').mockResolvedValue(issue);
-
-            const result = await issueService.getIssueById('1');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE id = ?'));
-            expect(mockStmt.get).toHaveBeenCalledWith('1');
-            expect(mapIssueFromDbMock).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
-            expect(result).toEqual(issue);
-        });
-
-        it('should return undefined if issue is not found', async () => {
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                get: vi.fn().mockReturnValue(undefined), // Simulate database result
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            const result = await issueService.getIssueById('nonexistent');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE id = ?'));
-            expect(mockStmt.get).toHaveBeenCalledWith('nonexistent');
-            expect(result).toBeUndefined();
-        });
-
-        it('should handle errors when getting issue by ID', async () => {
-            const errorMessage = 'Database error';
-
-            // Mock the prepare method to throw an error
-            mockDb.prepare.mockReturnValue({
-                get: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            await expect(issueService.getIssueById('1')).rejects.toThrowError(`Failed to get issue by ID: ${errorMessage}`);
+            await expect(createIssue(issueData)).rejects.toThrowError('Failed to create issue');
         });
     });
 
     describe('updateIssue', () => {
         it('should update an issue successfully', async () => {
-            const updatedIssue: Issue = {
-                id: '1',
-                title: 'Updated Test Issue',
-                description: 'This is an updated test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.Medium,
-                status: IssueStatus.InProgress,
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {
+                summary: 'Updated Summary',
+                description: 'Updated Description',
+                status: 'in progress',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ changes: 1 }); // Simulate successful update
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue({
+                id: issueId,
+                summary: issueData.summary,
+                description: issueData.description,
+                status: issueData.status,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                comments: [],
-            };
+            });
 
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                run: vi.fn(),
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
 
-            // Mock the getIssueById method to return the updated issue
-            const getIssueByIdMock = vi.spyOn(issueService, 'getIssueById').mockResolvedValue(updatedIssue);
+            const result = await updateIssue(issueId, issueData);
 
-            const result = await issueService.updateIssue(updatedIssue);
-
-            expect(mockDb.exec).toHaveBeenCalledWith('BEGIN');
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues'));
-            expect(mockStmt.run).toHaveBeenCalledWith(
-                updatedIssue.title,
-                updatedIssue.description,
-                updatedIssue.reporter.id,
-                updatedIssue.assignee?.id,
-                updatedIssue.priority,
-                updatedIssue.status,
-                expect.any(String), // updatedAt - check for any string
-                undefined,
-                undefined,
-                updatedIssue.id,
+            expect(mockDb.prepare).toHaveBeenCalledWith(
+                expect.stringContaining('UPDATE issues SET summary = ?, description = ?, status = ?, updated_at = ? WHERE id = ?')
             );
-            expect(mockDb.exec).toHaveBeenCalledWith('COMMIT');
-            expect(getIssueByIdMock).toHaveBeenCalledWith(updatedIssue.id); // Verify getIssueById was called
-            expect(result).toEqual(updatedIssue);
+            expect(mockRun).toHaveBeenCalledWith(
+                issueData.summary,
+                issueData.description,
+                issueData.status,
+                expect.any(String),
+                issueId
+            );
+            expect(mockGet).toHaveBeenCalledWith(issueId);
+            expect(result).toEqual({
+                id: issueId,
+                summary: issueData.summary,
+                description: issueData.description,
+                status: issueData.status,
+                createdAt: expect.any(String),
+                updatedAt: expect.any(String),
+            });
         });
 
-        it('should handle errors when updating an issue', async () => {
-            const issue: Issue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
+        it('should handle partial updates', async () => {
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {
+                summary: 'Updated Summary',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ changes: 1 }); // Simulate successful update
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue({
+                id: issueId,
+                summary: issueData.summary,
+                description: 'Original Description',
+                status: 'open',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                comments: [],
-            };
-            const errorMessage = 'Database error';
-
-            // Mock the prepare method to throw an error
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
             });
 
-            await expect(issueService.updateIssue(issue)).rejects.toThrowError(`Failed to update issue: ${errorMessage}`);
-            expect(mockDb.exec).toHaveBeenCalledWith('ROLLBACK');
+            const result = await updateIssue(issueId, issueData);
+
+            expect(mockDb.prepare).toHaveBeenCalledWith(
+                expect.stringContaining('UPDATE issues SET summary = ?, updated_at = ? WHERE id = ?')
+            );
+            expect(mockRun).toHaveBeenCalledWith(
+                issueData.summary,
+                expect.any(String),
+                issueId
+            );
+            expect(mockGet).toHaveBeenCalledWith(issueId);
+
+            expect(result).toEqual({
+                id: issueId,
+                summary: issueData.summary,
+                description: 'Original Description',
+                status: 'open',
+                createdAt: expect.any(String),
+                updatedAt: expect.any(String),
+            });
+        });
+
+        it('should return existing issue if no fields to update', async () => {
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {};
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ changes: 0 });
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue({
+                id: issueId,
+                summary: 'Original Summary',
+                description: 'Original Description',
+                status: 'open',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+
+            const result = await updateIssue(issueId, issueData);
+
+            expect(mockDb.prepare).not.toHaveBeenCalled();
+            expect(mockGet).toHaveBeenCalledWith(issueId);
+            expect(result).toEqual({
+                id: issueId,
+                summary: 'Original Summary',
+                description: 'Original Description',
+                status: 'open',
+                createdAt: expect.any(String),
+                updatedAt: expect.any(String),
+            });
+        });
+
+        it('should handle validation errors', async () => {
+            const issueId = 1;
+            const issueData = {
+                status: 'invalid', // Invalid status
+            };
+
+            await expect(updateIssue(issueId, issueData)).rejects.toThrowError(
+                'Validation failed: status must be one of the following values: open, in progress, resolved, closed'
+            );
+        });
+
+        it('should handle database errors during update', async () => {
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {
+                summary: 'Updated Summary',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockImplementation(() => {
+                throw new Error('Database error');
+            });
+
+            await expect(updateIssue(issueId, issueData)).rejects.toThrowError('Failed to update issue');
+        });
+
+        it('should handle issue not found during update', async () => {
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {
+                summary: 'Updated Summary',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ changes: 0 }); // Simulate no rows updated
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue(undefined);
+
+            await expect(updateIssue(issueId, issueData)).rejects.toThrowError(`Issue with ID ${issueId} not found`);
+        });
+
+        it('should handle issue not found after update', async () => {
+            const issueId = 1;
+            const issueData: IssueUpdateRequest = {
+                summary: 'Updated Summary',
+            };
+
+            const mockRun = mockDb.prepare().run as vi.Mock;
+            mockRun.mockReturnValue({ changes: 1 }); // Simulate one row updated
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue(undefined);
+
+            await expect(updateIssue(issueId, issueData)).rejects.toThrowError(`Issue with ID ${issueId} not found after update`);
         });
     });
 
-    describe('deleteIssue', () => {
-        it('should delete an issue successfully', async () => {
-            // Mock the prepare method to return a mock statement
-            const mockStmt = {
-                run: vi.fn(),
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            await issueService.deleteIssue('1');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM issues WHERE id = ?'));
-            expect(mockStmt.run).toHaveBeenCalledWith('1');
-        });
-
-        it('should handle errors when deleting an issue', async () => {
-            const errorMessage = 'Database error';
-
-            // Mock the prepare method to throw an error
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            await expect(issueService.deleteIssue('1')).rejects.toThrowError(`Failed to delete issue: ${errorMessage}`);
-        });
-    });
-
-    describe('mapIssueFromDb', () => {
-        it('should correctly map issue data from the database', async () => {
-            const dbIssue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporterId: 'reporter1',
-                assigneeId: 'assignee1',
-                priority: 'High',
-                status: 'Open',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                labels: JSON.stringify(['label1', 'label2']),
-                dueDate: new Date().toISOString(),
-            };
+    describe('getIssueById', () => {
+        it('should get an issue by ID successfully', async () => {
+            const issueId = 1;
             const expectedIssue: Issue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: dbIssue.createdAt,
-                updatedAt: dbIssue.updatedAt,
-                labels: ['label1', 'label2'],
-                dueDate: dbIssue.dueDate,
-                comments: [],
-            };
-            // Mock getUserById to return a user
-            vi.spyOn(issueService, 'getUserById').mockImplementation(async (id: string) => {
-                if (id === 'reporter1') {
-                    return { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' };
-                }
-                if (id === 'assignee1') {
-                    return { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' };
-                }
-                return undefined;
-            });
-            // Mock getCommentsByIssueId to return an empty array
-            vi.spyOn(issueService, 'getCommentsByIssueId').mockResolvedValue([]);
-
-            const result = await issueService.mapIssueFromDb(dbIssue);
-
-            expect(result).toEqual(expect.objectContaining({
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: { id: 'assignee1', name: 'Assignee', email: 'assignee@example.com' },
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: dbIssue.createdAt,
-                updatedAt: dbIssue.updatedAt,
-                labels: ['label1', 'label2'],
-                dueDate: dbIssue.dueDate,
-                comments: [],
-            }));
-        });
-
-        it('should handle null or undefined values correctly', async () => {
-            const dbIssue = {
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporterId: 'reporter1',
-                assigneeId: null,
-                priority: 'High',
-                status: 'Open',
+                id: issueId,
+                summary: 'Test Summary',
+                description: 'Test Description',
+                status: 'open',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                labels: null,
-                dueDate: null,
             };
 
-            // Mock getUserById to return a user
-            vi.spyOn(issueService, 'getUserById').mockResolvedValue({ id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' });
-            vi.spyOn(issueService, 'getCommentsByIssueId').mockResolvedValue([]);
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue(expectedIssue);
 
-            const result = await issueService.mapIssueFromDb(dbIssue);
+            const result = await getIssueById(issueId);
 
-            expect(result).toEqual(expect.objectContaining({
-                id: '1',
-                title: 'Test Issue',
-                description: 'This is a test issue',
-                reporter: { id: 'reporter1', name: 'Reporter', email: 'reporter@example.com' },
-                assignee: undefined,
-                priority: IssuePriority.High,
-                status: IssueStatus.Open,
-                createdAt: dbIssue.createdAt,
-                updatedAt: dbIssue.updatedAt,
-                labels: undefined,
-                dueDate: undefined,
-                comments: [],
-            }));
-        });
-    });
-
-    describe('insertOrUpdateUser', () => {
-        it('should insert or update a user successfully', () => {
-            const user: User = { id: 'user1', name: 'Test User', email: 'test@example.com' };
-            const mockStmt = { run: vi.fn() };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            issueService.insertOrUpdateUser(user);
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT OR REPLACE INTO users'));
-            expect(mockStmt.run).toHaveBeenCalledWith(user.id, user.name, user.email);
+            expect(mockDb.prepare).toHaveBeenCalledWith('SELECT id, summary, description, status, created_at, updated_at FROM issues WHERE id = ?');
+            expect(mockGet).toHaveBeenCalledWith(issueId);
+            expect(result).toEqual(expectedIssue);
         });
 
-        it('should handle errors during user insertion/update', () => {
-            const user: User = { id: 'user1', name: 'Test User', email: 'test@example.com' };
-            const errorMessage = 'Database error';
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
+        it('should return undefined if issue is not found', async () => {
+            const issueId = 999;
 
-            expect(() => issueService.insertOrUpdateUser(user)).toThrowError(`Failed to insert/update user: ${errorMessage}`);
-        });
-    });
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockReturnValue(undefined);
 
-    describe('getUserById', () => {
-        it('should get a user by ID successfully', async () => {
-            const user: User = { id: 'user1', name: 'Test User', email: 'test@example.com' };
-            const mockStmt = { get: vi.fn().mockReturnValue({id: 'user1', name: 'Test User', email: 'test@example.com'}) };
-            mockDb.prepare.mockReturnValue(mockStmt);
+            const result = await getIssueById(issueId);
 
-            const result = await issueService.getUserById('user1');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM users WHERE id = ?'));
-            expect(mockStmt.get).toHaveBeenCalledWith('user1');
-            expect(result).toEqual(user);
-        });
-
-        it('should return undefined if user is not found', async () => {
-            const mockStmt = { get: vi.fn().mockReturnValue(undefined) };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            const result = await issueService.getUserById('nonexistent');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM users WHERE id = ?'));
-            expect(mockStmt.get).toHaveBeenCalledWith('nonexistent');
+            expect(mockDb.prepare).toHaveBeenCalledWith('SELECT id, summary, description, status, created_at, updated_at FROM issues WHERE id = ?');
+            expect(mockGet).toHaveBeenCalledWith(issueId);
             expect(result).toBeUndefined();
         });
 
-        it('should handle errors when getting user by ID', async () => {
-            const errorMessage = 'Database error';
-            mockDb.prepare.mockReturnValue({
-                get: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
+        it('should handle database errors', async () => {
+            const issueId = 1;
+
+            const mockGet = mockDb.prepare().get as vi.Mock;
+            mockGet.mockImplementation(() => {
+                throw new Error('Database error');
             });
 
-            await expect(issueService.getUserById('user1')).rejects.toThrowError(`Failed to get user by ID: ${errorMessage}`);
-        });
-    });
-
-    describe('insertComment', () => {
-        it('should insert a comment successfully', () => {
-            const comment: Comment = {
-                id: 'comment1',
-                author: { id: 'user1', name: 'Test User', email: 'test@example.com' },
-                content: 'Test comment',
-                createdAt: new Date().toISOString(),
-            };
-
-            const mockStmt = { run: vi.fn() };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            issueService.insertComment('issue1', comment);
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO comments'));
-            expect(mockStmt.run).toHaveBeenCalledWith(comment.id, 'issue1', comment.author.id, comment.content, comment.createdAt);
-        });
-
-        it('should handle errors during comment insertion', () => {
-            const comment: Comment = {
-                id: 'comment1',
-                author: { id: 'user1', name: 'Test User', email: 'test@example.com' },
-                content: 'Test comment',
-                createdAt: new Date().toISOString(),
-            };
-            const errorMessage = 'Database error';
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            expect(() => issueService.insertComment('issue1', comment)).toThrowError(`Failed to insert comment: ${errorMessage}`);
-        });
-    });
-
-    describe('getCommentsByIssueId', () => {
-        it('should get comments by issue ID successfully', async () => {
-            const comments: Comment[] = [
-                {
-                    id: 'comment1',
-                    author: { id: 'user1', name: 'Test User', email: 'test@example.com' },
-                    content: 'Test comment 1',
-                    createdAt: new Date().toISOString(),
-                },
-                {
-                    id: 'comment2',
-                    author: { id: 'user2', name: 'Another User', email: 'another@example.com' },
-                    content: 'Test comment 2',
-                    createdAt: new Date().toISOString(),
-                },
-            ];
-
-            const mockStmt = {
-                all: vi.fn().mockReturnValue(comments.map(comment => ({...comment, authorName: comment.author.name, authorEmail: comment.author.email}))),
-            };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            const result = await issueService.getCommentsByIssueId('issue1');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT c.*, u.name AS authorName, u.email AS authorEmail'));
-            expect(mockStmt.all).toHaveBeenCalledWith('issue1');
-            expect(result).toEqual(comments);
-        });
-
-        it('should handle errors when getting comments by issue ID', async () => {
-            const errorMessage = 'Database error';
-            mockDb.prepare.mockReturnValue({
-                all: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            await expect(issueService.getCommentsByIssueId('issue1')).rejects.toThrowError(`Failed to get comments by issue ID: ${errorMessage}`);
-        });
-    });
-
-    describe('deleteCommentsForIssue', () => {
-        it('should delete comments for an issue successfully', () => {
-            const mockStmt = { run: vi.fn() };
-            mockDb.prepare.mockReturnValue(mockStmt);
-
-            issueService.deleteCommentsForIssue('issue1');
-
-            expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM comments WHERE issueId = ?'));
-            expect(mockStmt.run).toHaveBeenCalledWith('issue1');
-        });
-
-        it('should handle errors when deleting comments for an issue', () => {
-            const errorMessage = 'Database error';
-            mockDb.prepare.mockReturnValue({
-                run: vi.fn().mockImplementation(() => {
-                    throw new Error(errorMessage);
-                }),
-            });
-
-            expect(() => issueService.deleteCommentsForIssue('issue1')).toThrowError(`Failed to delete comments for issue: ${errorMessage}`);
+            await expect(getIssueById(issueId)).rejects.toThrowError('Failed to get issue by ID');
         });
     });
 });
