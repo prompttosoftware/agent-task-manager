@@ -1,49 +1,73 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { Request, Response } from 'express';
 import { BoardController } from './board.controller';
 import { BoardService } from '../services/board.service';
 import { Board } from '../types/board';
 
-vi.mock('../services/board.service');
+// Mock the BoardService
+jest.mock('../services/board.service');
 
 describe('BoardController', () => {
   let boardController: BoardController;
-  let mockBoardService: BoardService;
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
+  let mockBoardService: jest.Mocked<BoardService>;
 
   beforeEach(() => {
-    mockBoardService = new BoardService() as any;
+    // Reset the mock before each test
+    jest.clearAllMocks();
+    mockBoardService = new BoardService() as jest.Mocked<BoardService>;
     boardController = new BoardController();
-    mockRequest = {};
-    mockResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn()
-    };
   });
 
-  it('should get all boards', async () => {
-    const mockBoards: Board[] = [
-      { id: 1, name: 'Board 1', description: 'Description 1' },
-      { id: 2, name: 'Board 2', description: 'Description 2' },
-    ];
-    (mockBoardService.getBoards as any).mockResolvedValue(mockBoards);
+  describe('getBoardById', () => {
+    it('should return 200 and the board if found', async () => {
+      const mockBoard: Board = { id: 1, name: 'Test Board', description: 'Test Description' };
+      mockBoardService.getBoardById.mockResolvedValue(mockBoard);
 
-    await boardController.getBoards(mockRequest as Request, mockResponse as Response);
+      const mockReq = { params: { boardId: '1' } } as unknown as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
 
-    expect(mockBoardService.getBoards).toHaveBeenCalled();
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.json).toHaveBeenCalledWith(mockBoards);
-  });
+      await boardController.getBoardById(mockReq, mockRes);
 
-  it('should handle errors when getting boards', async () => {
-    const errorMessage = 'Failed to get boards';
-    (mockBoardService.getBoards as any).mockRejectedValue(new Error(errorMessage));
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith(mockBoard);
+      expect(mockBoardService.getBoardById).toHaveBeenCalledWith(1);
+    });
 
-    await boardController.getBoards(mockRequest as Request, mockResponse as Response);
+    it('should return 400 if boardId is invalid', async () => {
+      const mockReq = { params: { boardId: 'abc' } } as unknown as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
 
-    expect(mockBoardService.getBoards).toHaveBeenCalled();
-    expect(mockResponse.status).toHaveBeenCalledWith(500);
-    expect(mockResponse.json).toHaveBeenCalledWith({ message: errorMessage });
+      await boardController.getBoardById(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Invalid boardId' });
+      expect(mockBoardService.getBoardById).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 if board is not found', async () => {
+      mockBoardService.getBoardById.mockResolvedValue(undefined);
+
+      const mockReq = { params: { boardId: '1' } } as unknown as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
+
+      await boardController.getBoardById(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Board not found' });
+      expect(mockBoardService.getBoardById).toHaveBeenCalledWith(1);
+    });
+
+    it('should return 500 if an error occurs', async () => {
+      const errorMessage = 'Database error';
+      mockBoardService.getBoardById.mockRejectedValue(new Error(errorMessage));
+
+      const mockReq = { params: { boardId: '1' } } as unknown as Request;
+      const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
+
+      await boardController.getBoardById(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Error getting board' });
+      expect(mockBoardService.getBoardById).toHaveBeenCalledWith(1);
+    });
   });
 });
