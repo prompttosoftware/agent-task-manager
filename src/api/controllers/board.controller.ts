@@ -1,34 +1,25 @@
 import { Request, Response } from 'express';
 import { BoardService } from '../services/board.service';
-import { validate } from 'class-validator';
-import { Board } from '../models/board';
+import { ApiResponse, HttpCode, HttpStatus } from '@nestjs/common';
+import { Board } from '../types/board';
+import { Controller, Get } from '@nestjs/common';
 
+@Controller('/api/boards')
 export class BoardController {
   private boardService: BoardService;
 
-  constructor() {
-    this.boardService = new BoardService();
+  constructor(boardService: BoardService) {
+    this.boardService = boardService;
   }
 
-  async createBoard(req: Request, res: Response) {
+  @Get()
+  async getBoards(req: Request, res: Response): Promise<void> {
     try {
-      const { name, description } = req.body;
-
-      // Input validation using class-validator
-      const board = new Board();
-      board.name = name;
-      board.description = description;
-      const errors = await validate(board);
-
-      if (errors.length > 0) {
-        return res.status(400).json({ errors: errors.map(err => err.constraints) });
-      }
-
-      const newBoard = await this.boardService.createBoard({ name, description });
-      res.status(201).json(newBoard);
+      const boards = await this.boardService.getAllBoards();
+      res.status(200).json(boards);
     } catch (error: any) {
-      console.error('Error creating board:', error);
-      res.status(500).json({ message: error.message || 'Internal server error' });
+      console.error('Error fetching boards:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch boards' });
     }
   }
 }
