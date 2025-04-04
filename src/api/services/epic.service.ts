@@ -1,4 +1,4 @@
-import { Epic, EpicCreateRequest, EpicUpdateRequest } from '../types/epic.d';
+import { Epic, EpicCreateRequest, EpicUpdateRequest, EpicIssue } from '../types/epic.d';
 import db from '../../src/db/database';
 import { Logger } from '../../src/utils/logger';
 import { validate, ValidationError } from 'class-validator';
@@ -31,7 +31,7 @@ class EpicUpdateDto implements EpicUpdateRequest {
 export class EpicService {
   async getEpicByKey(epicKey: string): Promise<Epic | undefined> {
     try {
-      const select = db.prepare('SELECT key, name, created_at FROM epics WHERE key = ?');
+      const select = db.prepare('SELECT id, key, name, created_at FROM epics WHERE key = ?');
       const epic = select.get(epicKey) as Epic | undefined;
       return epic;
     } catch (error: any) {
@@ -42,14 +42,13 @@ export class EpicService {
 
   async getAllEpics(): Promise<Epic[]> {
     try {
-      const select = db.prepare('SELECT key, name, created_at FROM epics');
+      const select = db.prepare('SELECT id, key, name, created_at FROM epics');
       const epics = select.all() as Epic[];
       return epics;
     } catch (error: any) {
       logger.error('Error getting all epics:', error);
       throw new Error(error.message || 'Failed to get all epics');
-    }
-  }
+    }  }
 
   async createEpic(epicData: EpicCreateRequest): Promise<Epic> {
     try {
@@ -64,16 +63,17 @@ export class EpicService {
         throw error;
       }
 
-      const insert = db.prepare('INSERT INTO epics (key, name, created_at) VALUES (?, ?, ?) returning key;');
+      const insert = db.prepare('INSERT INTO epics (key, name, created_at) VALUES (?, ?, ?) returning id, key, name, created_at;');
       const now = new Date().toISOString();
       const info = insert.run(epicDto.key, epicDto.name, now);
-      const epicKey: string = info.lastInsertRowid as any; // Correctly get the key
-      const newEpic: Epic = {
+      const epic: Epic = {
+        id: info.lastInsertRowid as number, // Correctly get the key
         key: epicDto.key,
         name: epicDto.name,
         createdAt: now,
+        self: "",
       };
-      return newEpic;
+      return epic;
     } catch (error: any) {
       logger.error('Error creating epic:', error);
       const err = new Error(error.message || 'Failed to create epic');
@@ -143,8 +143,7 @@ export class EpicService {
       const err = new Error(error.message || 'Failed to update epic');
       (err as any).status = error.status || 500; // Internal Server Error or original status
       throw err;
-    }
-  }
+    }  }
 
   async deleteEpic(epicKey: string): Promise<void> {
     try {
@@ -160,21 +159,40 @@ export class EpicService {
       const err = new Error(error.message || 'Failed to delete epic');
       (err as any).status = error.status || 500; // Internal Server Error or original status
       throw err;
-    }
-  }
+    }  }
 
   async getIssuesByEpicKey(epicKey: string): Promise<any[]> {
     // Assuming you have a way to link issues to epics
     try {
       const select = db.prepare(
-        `SELECT i.id, i.summary, i.description, i.status, i.created_at, i.updated_at
+        `SELECT i.id, i.key, i.summary, i.description, i.status, i.created_at, i.updated_at, it.name as issue_type_name, it.iconUrl as issue_type_icon_url
          FROM issues i
          JOIN epic_issues ei ON i.id = ei.issue_id
          JOIN epics e ON ei.epic_key = e.key
+         JOIN issue_types it ON i.issue_type_id = it.id
          WHERE e.key = ?`
       );
       const issues = select.all(epicKey);
-      return issues;
+      const formattedIssues: EpicIssue[] = issues.map((issue: any) => ({
+        id: issue.id,
+        key: issue.key,
+        self: '', // Jira doesn't have self for issues, but we include it for consistency
+        fields: {
+          summary: issue.summary,
+          status: {
+            name: issue.status,
+            id: '', // Not available in the current query, needs adjustment
+            statusCategory: {
+              key: '' // Needs adjustment based on status value
+            }
+          },
+          issuetype: {
+            name: issue.issue_type_name,
+            iconUrl: issue.issue_type_icon_url,
+          }
+        }
+      }));
+      return formattedIssues;
     } catch (error: any) {
       logger.error('Error getting issues by epic key:', error);
       throw new Error(error.message || 'Failed to get issues by epic key');
