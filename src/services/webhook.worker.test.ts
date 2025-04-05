@@ -1,123 +1,113 @@
-// src/services/webhook.worker.test.ts
 import { Job, Queue } from 'bullmq';
 import { mock } from 'vitest-mock-extended';
-import { WebhookWorker } from './webhookWorker';
+import WebhookWorker from './webhookWorker';
 import { processWebhookJob } from './webhookProcessing';
-import axios from 'axios';
-import { logger } from '../config';
+import { createWebhook, getWebhook } from './webhook.service';
+import {  Webhook } from '../types/webhook';
+import { Redis } from 'ioredis';
 
-vi.mock('axios');
-vi.mock('./webhookProcessing');
+// Mock the bullmq Queue and Job types
+vi.mock('bullmq', async (importOriginal) => {  
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    Queue: class MockQueue extends actual.Queue {
+      add = vi.fn();
+      close = vi.fn();
+    },
+    Job: class MockJob extends actual.Job {
+      data: any;
+      id: string;
+      constructor(queue: any, id: string, data: any) {
+        super(queue, id, data);
+        this.data = data;
+        this.id = id;
+      }
+      async isFailed() {
+        return false;
+      }
+      async remove() {
+        return;
+      }
+    },
+  };
+});
+
+// Mock the webhookService
+vi.mock('./webhook.service');
+
 
 describe('WebhookWorker', () => {
   let webhookQueue: Queue;
   let webhookWorker: WebhookWorker;
+  const mockWebhook: Webhook = {
+      id: '1',
+      url: 'http://example.com',
+      events: ['issue.created'],
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+  }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Initialize queue and worker
-    webhookQueue = new Queue('webhookQueue', { connection: { host: 'localhost', port: 6379 } }); // Provide a mock connection
+    webhookQueue = new (require('bullmq').Queue)('webhookQueue', { connection: { host: 'localhost', port: 6379 } });
     webhookWorker = new WebhookWorker(webhookQueue);
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    // Clean up the queue after each test
-    await webhookQueue.obliterate({ force: true });
+    await webhookQueue.close();
   });
 
   it('should add a job to the queue', async () => {
     const addSpy = vi.spyOn(webhookQueue, 'add');
-    await webhookQueue.add('webhookJob', { url: 'http://example.com', payload: { data: 'test' } });
-    expect(addSpy).toHaveBeenCalledWith('webhookJob', { url: 'http://example.com', payload: { data: 'test' } });
+    const jobData = { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' };
+    await webhookQueue.add('webhookJob', jobData);
+    expect(addSpy).toHaveBeenCalledWith('webhookJob', jobData);
   });
 
   it('should process a successful webhook job', async () => {
-    const mockAxios = axios as any;
-    const mockResponse = { status: 200, data: { message: 'success' } };
-    mockAxios.post.mockResolvedValue(mockResponse);
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockResolvedValue(undefined);
-
-    await processWebhookJob(job.data.url, job.data.payload);
-
-    expect(mockAxios.post).toHaveBeenCalledWith(job.data.url, job.data.payload);
-    expect(processWebhookJobMock).toHaveBeenCalledWith(job.data.url, job.data.payload);
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockResolvedValue({ status: 200 });
+    await webhookWorker.process(mockJob);
+    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
   });
 
   it('should handle a failed webhook request', async () => {
-    const mockAxios = axios as any;
-    mockAxios.post.mockRejectedValue(new Error('Request failed'));
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockRejectedValue(new Error('Request failed'));
-
-    await expect(processWebhookJob(job.data.url, job.data.payload)).rejects.toThrow('Request failed');
-
-    expect(mockAxios.post).toHaveBeenCalledWith(job.data.url, job.data.payload);
-    expect(processWebhookJobMock).toHaveBeenCalledWith(job.data.url, job.data.payload);
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
+    await webhookWorker.process(mockJob);
+    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
   });
 
   it('should handle network errors', async () => {
-    const mockAxios = axios as any;
-    mockAxios.post.mockRejectedValue(new Error('Network Error'));
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockRejectedValue(new Error('Network Error'));
-
-    await expect(processWebhookJob(job.data.url, job.data.payload)).rejects.toThrow('Network Error');
-
-    expect(mockAxios.post).toHaveBeenCalledWith(job.data.url, job.data.payload);
-    expect(processWebhookJobMock).toHaveBeenCalledWith(job.data.url, job.data.payload);
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
+    await webhookWorker.process(mockJob);
+    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
   });
 
   it('should handle timeout errors', async () => {
-    const mockAxios = axios as any;
-    mockAxios.post.mockRejectedValue(new Error('Timeout exceeded'));
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockRejectedValue(new Error('Timeout exceeded'));
-
-    await expect(processWebhookJob(job.data.url, job.data.payload)).rejects.toThrow('Timeout exceeded');
-
-    expect(mockAxios.post).toHaveBeenCalledWith(job.data.url, job.data.payload);
-    expect(processWebhookJobMock).toHaveBeenCalledWith(job.data.url, job.data.payload);
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('timeout'));
+    await webhookWorker.process(mockJob);
+    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
   });
 
   it('should log job completion on success', async () => {
-    const mockAxios = axios as any;
-    const mockResponse = { status: 200, data: { message: 'success' } };
-    mockAxios.post.mockResolvedValue(mockResponse);
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockResolvedValue(undefined);
-
-    await processWebhookJob(job.data.url, job.data.payload);
-
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('Webhook job completed successfully'),
-    );
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const consoleLogSpy = vi.spyOn(console, 'log');
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockResolvedValue({ status: 200 });
+    await webhookWorker.process(mockJob);
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Job 1 completed'));
   });
 
   it('should log job failure on error', async () => {
-    const mockAxios = axios as any;
-    mockAxios.post.mockRejectedValue(new Error('Request failed'));
-
-    const job = { data: { url: 'http://example.com', payload: { data: 'test' } } } as any;
-    const processWebhookJobMock = vi.mocked(processWebhookJob);
-    processWebhookJobMock.mockRejectedValue(new Error('Request failed'));
-
-    try {
-      await processWebhookJob(job.data.url, job.data.payload);
-    } catch (error) {
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Webhook job failed'),
-      );
-    }
+    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
+    const consoleErrorSpy = vi.spyOn(console, 'error');
+    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
+    await webhookWorker.process(mockJob);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Job 1 failed with error'));
   });
 });
