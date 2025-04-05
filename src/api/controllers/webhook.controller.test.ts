@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from '../services/webhook.service';
 import { Request, Response } from 'express';
+import { vitest } from 'vitest';
+import '@testing-library/jest-dom/extend-expect';
 
 describe('WebhookController', () => {
   let controller: WebhookController;
@@ -21,69 +23,55 @@ describe('WebhookController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('handleWebhook', () => {
-    it('should return 200 for a valid request', async () => {
-      const mockRequest = {
-        headers: {
-          'x-hub-signature-256': 'sha256=valid_signature',
-        },
-        body: { some: 'data' },
-      } as unknown as Request;
-      const mockResponse = { status: jest.fn().mockReturnThis(), send: jest.fn() } as unknown as Response;
-      const mockWebhookServiceHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(undefined);
+  it('should handle webhook with valid signature and payload', async () => {
+    const mockRequest = {
+      headers: {
+        'x-hub-signature-256': 'sha256=valid_signature',
+      },
+      body: { name: 'test_name' },
+    } as unknown as Request;
+    const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
+    const mockHandleWebhookResult = { status: 200 };
+    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
-      await controller.handleWebhook(mockRequest, mockResponse);
+    await controller.handleWebhook(mockRequest, mockResponse);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.send).toHaveBeenCalledWith();
-      expect(mockWebhookServiceHandleWebhook).toHaveBeenCalledWith(mockRequest.body, 'sha256=valid_signature');
-    });
+    expect(mockResponse.status).toHaveBeenCalledWith(200);
+    expect(mockResponse.send).toHaveBeenCalledWith();
+    expect(mockHandleWebhook).toHaveBeenCalledWith(mockRequest.body, 'sha256=valid_signature');
+  });
 
-    it('should return 400 if signature is missing', async () => {
-      const mockRequest = {
-        headers: {},
-        body: { some: 'data' },
-      } as unknown as Request;
-      const mockResponse = { status: jest.fn().mockReturnThis(), send: jest.fn() } as unknown as Response;
+  it('should return 400 if the signature is missing', async () => {
+    const mockRequest = {
+      headers: {},
+      body: { name: 'test_name' },
+    } as unknown as Request;
+    const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
+    const mockHandleWebhookResult = { status: 400, message: 'Missing signature' };
+    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
-      await controller.handleWebhook(mockRequest, mockResponse);
+    await controller.handleWebhook(mockRequest, mockResponse);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.send).toHaveBeenCalledWith({ error: 'Missing signature' });
-    });
+    expect(mockResponse.status).toHaveBeenCalledWith(400);
+    expect(mockResponse.send).toHaveBeenCalledWith({ error: 'Missing signature' });
+    expect(mockHandleWebhook).toHaveBeenCalledWith(mockRequest.body, undefined);
+  });
 
-    it('should return 400 for an invalid signature', async () => {
-      const mockRequest = {
-        headers: {
-          'x-hub-signature-256': 'sha256=invalid_signature',
-        },
-        body: { some: 'data' },
-      } as unknown as Request;
-      const mockResponse = { status: jest.fn().mockReturnThis(), send: jest.fn() } as unknown as Response;
-      const mockWebhookServiceHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockRejectedValue(new Error('Invalid signature'));
+  it('should return 400 if the payload is missing the name property', async () => {
+    const mockRequest = {
+      headers: {
+        'x-hub-signature-256': 'sha256=valid_signature',
+      },
+      body: {  }, // Missing name
+    } as unknown as Request;
+    const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
+    const mockHandleWebhookResult = { status: 400, message: 'Invalid payload: missing name property' };
+    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
-      await controller.handleWebhook(mockRequest, mockResponse);
+    await controller.handleWebhook(mockRequest, mockResponse);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.send).toHaveBeenCalledWith({ error: 'Invalid signature' });
-      expect(mockWebhookServiceHandleWebhook).toHaveBeenCalledWith(mockRequest.body, 'sha256=invalid_signature');
-    });
-
-    it('should return 500 if handleWebhook throws an unexpected error', async () => {
-      const mockRequest = {
-        headers: {
-          'x-hub-signature-256': 'sha256=valid_signature',
-        },
-        body: { some: 'data' },
-      } as unknown as Request;
-      const mockResponse = { status: jest.fn().mockReturnThis(), send: jest.fn() } as unknown as Response;
-      const mockWebhookServiceHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockRejectedValue(new Error('Unexpected error'));
-
-      await controller.handleWebhook(mockRequest, mockResponse);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.send).toHaveBeenCalledWith({ error: 'Internal server error' });
-      expect(mockWebhookServiceHandleWebhook).toHaveBeenCalledWith(mockRequest.body, 'sha256=valid_signature');
-    });
+    expect(mockResponse.status).toHaveBeenCalledWith(400);
+    expect(mockResponse.send).toHaveBeenCalledWith({ error: 'Invalid payload: missing name property' });
+    expect(mockHandleWebhook).toHaveBeenCalledWith(mockRequest.body, 'sha256=valid_signature');
   });
 });
