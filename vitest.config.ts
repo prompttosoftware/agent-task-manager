@@ -1,7 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  plugins: [tsconfigPaths()],
   test: {
     globals: true,
     environment: 'node',
@@ -9,9 +11,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': './src',
-      'supertest': path.resolve(__dirname, './node_modules/supertest'),
-      'uuid': path.resolve(__dirname, './node_modules/uuid')
-    }
+      '@': path.resolve(__dirname, './src'),
+      supertest: 'supertest',
+      uuid: 'uuid',
+      bullmq: 'bullmq',
+      'express-validator': 'express-validator',
+      '@nestjs/testing': '@nestjs/testing',
+      'better-sqlite3': 'better-sqlite3'
+    },
+    extensions: ['.ts', '.js']
   }
 });
