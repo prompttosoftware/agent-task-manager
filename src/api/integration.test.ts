@@ -1,6 +1,6 @@
 // src/tests/integration/integration.test.ts
 import * as request from 'supertest';
-import { app } from '../index'; // Import the app from index.ts
+import { app } from '../../index'; // Import the app from index.ts
 import { WebhookService } from '../api/services/webhook.service';
 import { Database } from '../db/database';
 
