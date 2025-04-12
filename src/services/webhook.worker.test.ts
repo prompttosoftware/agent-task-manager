@@ -3,11 +3,7 @@ import { WebhookWorker } from './webhookWorker';
 import { WebhookService } from '../src/services/webhook.service';
 import { WebhookQueue } from '../src/services/webhookQueue';
 import { Logger } from '../src/api/utils/logger';
-
-// Mock dependencies
-jest.mock('../src/services/webhook.service');
-jest.mock('../src/services/webhookQueue');
-jest.mock('../src/api/utils/logger');
+import { vi } from 'vitest';
 
 describe('WebhookWorker', () => {
   let worker: WebhookWorker;
@@ -16,6 +12,13 @@ describe('WebhookWorker', () => {
   let logger: Logger;
 
   beforeEach(async () => {
+    // Mock environment variables BEFORE creating the module
+    vi.stubEnv({
+        WEBHOOK_URL: 'http://localhost:3000/webhook',
+        QUEUE_NAME: 'test_queue',
+        LOG_LEVEL: 'debug'
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WebhookWorker,
@@ -30,6 +33,10 @@ describe('WebhookWorker', () => {
     webhookQueue = module.get<WebhookQueue>(WebhookQueue);
     logger = module.get<Logger>(Logger);
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+      vi.unstubAllEnvs();
   });
 
   it('should be defined', () => {
@@ -48,6 +55,33 @@ describe('WebhookWorker', () => {
 
     expect(webhookService.handleWebhook).toHaveBeenCalledWith(job.data.payload, undefined);
     expect(logger.info).toHaveBeenCalledWith('Webhook processed successfully', { webhookId: '1', status: 200 });
+  });
+
+  it('should handle API errors during webhook processing', async () => {
+      const job = { data: { webhookId: '1', payload: { event: 'issue.created', data: { issue: { key: 'TEST-1' } } } } };
+      const apiError = new Error('API Error');
+
+      // Use vi.spyOn to mock the handleWebhook method and simulate an API error.
+      const handleWebhookSpy = vi.spyOn(webhookService, 'handleWebhook').mockRejectedValue(apiError);
+
+      await worker.process(job);
+
+      expect(handleWebhookSpy).toHaveBeenCalledWith(job.data.payload, undefined); // Verify correct arguments
+      expect(logger.error).toHaveBeenCalledWith('Error processing webhook', expect.objectContaining({ message: 'API Error' }));
+
+      handleWebhookSpy.mockRestore(); // Restore the original method after the test. Crucial!
+  });
+
+  it('should handle webhook successfully with a specific response', async () => {
+    const job = { data: { webhookId: '1', payload: { event: 'issue.created', data: { issue: { key: 'TEST-1' } } } } };
+    const mockResponse = { status: 202, data: { message: 'Accepted' } };
+    const handleWebhookSpy = vi.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockResponse);
+
+    await worker.process(job);
+
+    expect(handleWebhookSpy).toHaveBeenCalledWith(job.data.payload, undefined);
+    expect(logger.info).toHaveBeenCalledWith('Webhook processed successfully', { webhookId: '1', status: 202 });
+    handleWebhookSpy.mockRestore();
   });
 
   it('should handle errors during webhook processing', async () => {

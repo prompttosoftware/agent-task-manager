@@ -12,12 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      supertest: 'supertest',
-      uuid: 'uuid',
-      bullmq: 'bullmq',
-      'express-validator': 'express-validator',
       '@nestjs/testing': '@nestjs/testing',
-      'better-sqlite3': 'better-sqlite3'
     },
     extensions: ['.ts', '.js']
   }
