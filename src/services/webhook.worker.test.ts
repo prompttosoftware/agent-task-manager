@@ -1,113 +1,62 @@
-import { Job, Queue } from 'bullmq';
-import { mock } from 'vitest-mock-extended';
-import WebhookWorker from './webhookWorker';
-import { processWebhookJob } from './webhookProcessing';
-import { createWebhook, getWebhook } from './webhook.service';
-import {  Webhook } from '../types/webhook';
-import { Redis } from 'ioredis';
+import { Test, TestingModule } from '@nestjs/testing';
+import { WebhookWorker } from './webhookWorker';
+import { WebhookService } from '../src/services/webhook.service';
+import { WebhookQueue } from '../src/services/webhookQueue';
+import { Logger } from '../src/api/utils/logger';
 
-// Mock the bullmq Queue and Job types
-vi.mock('bullmq', async (importOriginal) => {  
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    Queue: class MockQueue extends actual.Queue {
-      add = vi.fn();
-      close = vi.fn();
-    },
-    Job: class MockJob extends actual.Job {
-      data: any;
-      id: string;
-      constructor(queue: any, id: string, data: any) {
-        super(queue, id, data);
-        this.data = data;
-        this.id = id;
-      }
-      async isFailed() {
-        return false;
-      }
-      async remove() {
-        return;
-      }
-    },
-  };
-});
-
-// Mock the webhookService
-vi.mock('./webhook.service');
-
+// Mock dependencies
+jest.mock('../src/services/webhook.service');
+jest.mock('../src/services/webhookQueue');
+jest.mock('../src/api/utils/logger');
 
 describe('WebhookWorker', () => {
-  let webhookQueue: Queue;
-  let webhookWorker: WebhookWorker;
-  const mockWebhook: Webhook = {
-      id: '1',
-      url: 'http://example.com',
-      events: ['issue.created'],
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-  }
+  let worker: WebhookWorker;
+  let webhookService: WebhookService;
+  let webhookQueue: WebhookQueue;
+  let logger: Logger;
 
   beforeEach(async () => {
-    // Initialize queue and worker
-    webhookQueue = new (require('bullmq').Queue)('webhookQueue', { connection: { host: 'localhost', port: 6379 } });
-    webhookWorker = new WebhookWorker(webhookQueue);
-    vi.clearAllMocks();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WebhookWorker,
+        WebhookService,
+        WebhookQueue,
+        Logger,
+      ],
+    }).compile();
+
+    worker = module.get<WebhookWorker>(WebhookWorker);
+    webhookService = module.get<WebhookService>(WebhookService);
+    webhookQueue = module.get<WebhookQueue>(WebhookQueue);
+    logger = module.get<Logger>(Logger);
+    jest.clearAllMocks();
   });
 
-  afterEach(async () => {
-    await webhookQueue.close();
+  it('should be defined', () => {
+    expect(worker).toBeDefined();
+    expect(webhookService).toBeDefined();
+    expect(webhookQueue).toBeDefined();
+    expect(logger).toBeDefined();
   });
 
-  it('should add a job to the queue', async () => {
-    const addSpy = vi.spyOn(webhookQueue, 'add');
-    const jobData = { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' };
-    await webhookQueue.add('webhookJob', jobData);
-    expect(addSpy).toHaveBeenCalledWith('webhookJob', jobData);
+  it('should process a webhook job successfully', async () => {
+    const job = { data: { webhookId: '1', payload: { event: 'issue.created', data: { issue: { key: 'TEST-1' } } } } };
+    const mockHandleWebhookResult = { status: 200 };
+    (webhookService.handleWebhook as jest.Mock).mockResolvedValue(mockHandleWebhookResult);
+
+    await worker.process(job);
+
+    expect(webhookService.handleWebhook).toHaveBeenCalledWith(job.data.payload, undefined);
+    expect(logger.info).toHaveBeenCalledWith('Webhook processed successfully', { webhookId: '1', status: 200 });
   });
 
-  it('should process a successful webhook job', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockResolvedValue({ status: 200 });
-    await webhookWorker.process(mockJob);
-    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
-  });
+  it('should handle errors during webhook processing', async () => {
+    const job = { data: { webhookId: '1', payload: { event: 'issue.created', data: { issue: { key: 'TEST-1' } } } } };
+    const errorMessage = 'Failed to process webhook';
+    (webhookService.handleWebhook as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-  it('should handle a failed webhook request', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
-    await webhookWorker.process(mockJob);
-    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
-  });
+    await worker.process(job);
 
-  it('should handle network errors', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
-    await webhookWorker.process(mockJob);
-    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
-  });
-
-  it('should handle timeout errors', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('timeout'));
-    await webhookWorker.process(mockJob);
-    expect(axiosPostSpy).toHaveBeenCalledWith('http://example.com', { issue: { id: '123' } }, expect.anything());
-  });
-
-  it('should log job completion on success', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const consoleLogSpy = vi.spyOn(console, 'log');
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockResolvedValue({ status: 200 });
-    await webhookWorker.process(mockJob);
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Job 1 completed'));
-  });
-
-  it('should log job failure on error', async () => {
-    const mockJob = new (require('bullmq').Job)(webhookQueue, '1', { url: 'http://example.com', data: { issue: { id: '123' } }, webhookId: '123', event: 'issue.created' });
-    const consoleErrorSpy = vi.spyOn(console, 'error');
-    const axiosPostSpy = vi.spyOn(require('axios'), 'post').mockRejectedValue(new Error('Network Error'));
-    await webhookWorker.process(mockJob);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Job 1 failed with error'));
+    expect(logger.error).toHaveBeenCalledWith('Error processing webhook', expect.objectContaining({ message: errorMessage }));
   });
 });

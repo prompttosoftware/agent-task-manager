@@ -1,18 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { EpicController } from '../src/controllers/epic.controller';
-import { EpicService } from '../src/services/epic.service';
-import {
-  EpicCreateRequest,
-  EpicResponse,
-  EpicListResponse,
-  EpicUpdateRequest,
-  EpicIssue,
-} from '../src/types/epic.d';
+import { EpicController } from '../src/api/controllers/epic.controller';
+import { EpicService } from '../src/api/services/epic.service';
+import { EpicCreateRequest, EpicResponse, EpicListResponse, EpicUpdateRequest, EpicIssue } from '../src/api/types/epic.d';
 import { HttpStatus } from '@nestjs/common';
 
-jest.mock('../src/services/epic.service');
+// Mock the EpicService
+jest.mock('../src/api/services/epic.service');
 
-describe('EpicController', {
+// Define mock data
+const mockEpicResponse: EpicResponse = {
   key: 'EPIC-123',
   name: 'Test Epic',
   createdAt: new Date().toISOString(),
@@ -28,8 +24,15 @@ const mockEpicIssues: EpicIssue[] = [
     self: 'http://example.com/issues/ISSUE-1',
     fields: {
       summary: 'Test Issue',
-      status: { name: 'Open', id: '1', statusCategory: { key: 'new' } },
-      issuetype: { name: 'Story', iconUrl: 'http://example.com/story.png' },
+      status: {
+        name: 'Open',
+        id: '1',
+        statusCategory: { key: 'new' },
+      },
+      issuetype: {
+        name: 'Story',
+        iconUrl: 'http://example.com/story.png',
+      },
     },
   },
 ];

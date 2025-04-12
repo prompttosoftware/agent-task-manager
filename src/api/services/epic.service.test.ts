@@ -1,5 +1,6 @@
+import { Test, TestingModule } from '@nestjs/testing';
 import { EpicService } from './epic.service';
-import db from '../../src/db/database';
+import { db } from '../../src/db/database';
 import { Epic, EpicCreateRequest, EpicUpdateRequest } from '../types/epic.d';
 import { ValidationError } from 'class-validator';
 
@@ -9,10 +10,14 @@ jest.mock('../../src/db/database');
 describe('EpicService', () => {
   let epicService: EpicService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [EpicService],
+    }).compile();
+
+    epicService = module.get<EpicService>(EpicService);
     // Clear mocks before each test
     jest.clearAllMocks();
-    epicService = new EpicService();
   });
 
   describe('createEpic', () => {
