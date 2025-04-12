@@ -5,6 +5,9 @@ import { Request, Response } from 'express';
 import { vitest } from 'vitest';
 import '@testing-library/jest-dom/extend-expect';
 
+// Mock the WebhookService
+jest.mock('../services/webhook.service');
+
 describe('WebhookController', () => {
   let controller: WebhookController;
   let webhookService: WebhookService;
@@ -17,6 +20,8 @@ describe('WebhookController', () => {
 
     controller = module.get<WebhookController>(WebhookController);
     webhookService = module.get<WebhookService>(WebhookService);
+
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -32,7 +37,7 @@ describe('WebhookController', () => {
     } as unknown as Request;
     const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
     const mockHandleWebhookResult = { status: 200 };
-    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
+    const mockHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
     await controller.handleWebhook(mockRequest, mockResponse);
 
@@ -48,7 +53,7 @@ describe('WebhookController', () => {
     } as unknown as Request;
     const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
     const mockHandleWebhookResult = { status: 400, message: 'Missing signature' };
-    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
+    const mockHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
     await controller.handleWebhook(mockRequest, mockResponse);
 
@@ -66,7 +71,7 @@ describe('WebhookController', () => {
     } as unknown as Request;
     const mockResponse = { status: vitest.fn().mockReturnThis(), send: vitest.fn() } as unknown as Response;
     const mockHandleWebhookResult = { status: 400, message: 'Invalid payload: missing name property' };
-    const mockHandleWebhook = vitest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
+    const mockHandleWebhook = jest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(mockHandleWebhookResult);
 
     await controller.handleWebhook(mockRequest, mockResponse);
 

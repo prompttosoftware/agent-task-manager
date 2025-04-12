@@ -1,34 +1,39 @@
-// tests/webhook.service.test.ts
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { WebhookService } from '../src/api/services/webhook.service';
-import { Database } from '../src/db/database';
-import { Logger } from '../src/api/utils/logger';
-import { Webhook } from '../src/api/models/webhook';
+import { Test, TestingModule } from '@nestjs/testing';
+import { WebhookService } from './webhook.service';
+import { Database } from '../../src/db/database';
+import { Logger } from '../../src/api/utils/logger';
+import { Webhook } from '../types/webhook.d';
 
 // Mock dependencies
-vi.mock('../src/db/database');
-vi.mock('../src/api/utils/logger');
+jest.mock('../../src/db/database');
+jest.mock('../../src/api/utils/logger');
 
 describe('WebhookService', () => {
     let webhookService: WebhookService;
     let mockDatabase: any;
     let mockLogger: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [WebhookService],
+      }).compile();
+
+      webhookService = module.get<WebhookService>(WebhookService);
         mockDatabase = {
-            run: vi.fn(),
-            all: vi.fn(),
-            get: vi.fn(),
+            run: jest.fn(),
+            all: jest.fn(),
+            get: jest.fn(),
         };
         mockLogger = {
-            info: vi.fn(),
-            error: vi.fn(),
+            info: jest.fn(),
+            error: jest.fn(),
         };
-        webhookService = new WebhookService(mockDatabase, mockLogger);
+        
     });
 
     afterEach(() => {
-        vi.restoreAllMocks();
+        jest.restoreAllMocks();
+        jest.clearAllMocks();
     });
 
     const validWebhook: Webhook = {
