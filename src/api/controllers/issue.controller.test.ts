@@ -5,12 +5,19 @@ import * as issueController from './issue.controller';
 import * as issueService from '../services/issue.service';
 import { Issue } from '../types/issue.d';
 import { validationResult } from 'express-validator';
-import { HttpException } from '../../api/middleware/error.middleware';
 
-vi.mock('../services/issue.service');
-vi.mock('express-validator', () => ({
-    validationResult: vi.fn(),
-}));
+// Mock the entire module, providing mock implementations
+vi.mock('../services/issue.service', () => {
+    return {
+        createIssue: vi.fn(),
+        updateIssue: vi.fn(),
+        getIssueById: vi.fn(),
+        listIssues: vi.fn(),
+        deleteIssue: vi.fn(),
+    };
+});
+
+vi.mock('express-validator', () => ({    validationResult: vi.fn(),}));
 
 const mockIssue: Issue = {
     id: '1',
@@ -45,12 +52,7 @@ describe('Issue Controller', () => {
             json: vi.fn(),
             send: vi.fn()
         };
-        (issueService.createIssue as any).mockClear();
-        (issueService.updateIssue as any).mockClear();
-        (issueService.getIssueById as any).mockClear();
-        (issueService.listIssues as any).mockClear();
-        (issueService.deleteIssue as any).mockClear();
-        (validationResult as any).mockClear();
+        vi.clearAllMocks();
     });
 
     describe('addIssue', () => {
@@ -135,7 +137,7 @@ describe('Issue Controller', () => {
             await issueController.updateIssue(req as Request, res as Response);
 
             expect(validationResult).toHaveBeenCalled();
-            expect(issueService.updateIssue).toHaveBeenCalledWith(1, req.body);
+            expect(issueService.updateIssue).toHaveBeenCalledWith('1', req.body); // Correct assertion
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith(updatedIssue);
         });
@@ -151,7 +153,7 @@ describe('Issue Controller', () => {
 
             await issueController.updateIssue(req as Request, res as Response);
 
-            expect(issueService.updateIssue).toHaveBeenCalledWith(1, req.body);
+            expect(issueService.updateIssue).toHaveBeenCalledWith('1', req.body); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
         });
@@ -164,7 +166,7 @@ describe('Issue Controller', () => {
 
             await issueController.getIssue(req as Request, res as Response);
 
-            expect(issueService.getIssueById).toHaveBeenCalledWith(1);
+            expect(issueService.getIssueById).toHaveBeenCalledWith('1'); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith(mockIssue);
         });
@@ -184,7 +186,7 @@ describe('Issue Controller', () => {
 
             await issueController.getIssue(req as Request, res as Response);
 
-            expect(issueService.getIssueById).toHaveBeenCalledWith(1);
+            expect(issueService.getIssueById).toHaveBeenCalledWith('1'); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith({ message: 'Issue not found' });
         });
@@ -196,7 +198,7 @@ describe('Issue Controller', () => {
 
             await issueController.getIssue(req as Request, res as Response);
 
-            expect(issueService.getIssueById).toHaveBeenCalledWith(1);
+            expect(issueService.getIssueById).toHaveBeenCalledWith('1'); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
         });
@@ -217,7 +219,7 @@ describe('Issue Controller', () => {
 
             await issueController.deleteIssue(req as Request, res as Response);
 
-            expect(issueService.deleteIssue).toHaveBeenCalledWith(1);
+            expect(issueService.deleteIssue).toHaveBeenCalledWith('1'); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(204);
             expect(res.send).toHaveBeenCalled();
         });
@@ -229,7 +231,7 @@ describe('Issue Controller', () => {
 
             await issueController.deleteIssue(req as Request, res as Response);
 
-            expect(issueService.deleteIssue).toHaveBeenCalledWith(1);
+            expect(issueService.deleteIssue).toHaveBeenCalledWith('1'); // Changed to '1'
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
         });
