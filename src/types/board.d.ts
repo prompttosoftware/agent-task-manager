@@ -1,1 +1,8 @@
-// Placeholder for board type definitions
+export interface Board {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  ownerId: string;
+}
