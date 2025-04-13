@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
-import { WebhookService } from './webhook.service';
+import { WebhookService } from '../../services/webhook.service';
+import { WebhookPayload } from '../../types/webhook.d';
 
 /**
  * @class WebhookController
- * Handles webhook related API requests.
+ * @classdesc Handles incoming webhook requests.
  */
 export class WebhookController {
   private readonly webhookService: WebhookService;
@@ -13,61 +14,27 @@ export class WebhookController {
   }
 
   /**
-   * Registers a new webhook.
-   *
-   * @param {Request} req - The Express request object.
-   * @param {Response} res - The Express response object.
-   * @returns {Promise<void>} - A promise that resolves when the webhook is registered.
-   * @throws {Error} If there's an error during webhook registration.
+   * @method handleWebhook
+   * @param {Request} req - Express request object.
+   * @param {Response} res - Express response object.
+   * @returns {Promise<void>}
+   * @description Handles incoming webhook requests, validates the payload, and passes it to the webhook service for processing.
    */
-  async registerWebhook(req: Request, res: Response): Promise<void> {
+  async handleWebhook(req: Request, res: Response): Promise<void> {
     try {
-      const webhookData = req.body;
-      const newWebhook = await this.webhookService.createWebhook(webhookData);
-      res.status(201).json(newWebhook);
-    } catch (error: any) {
-      // Implement centralized error handling here
-      console.error('Error registering webhook:', error);
-      res.status(500).json({ message: error.message || 'Failed to register webhook' });
-    }
-  }
+      const payload: WebhookPayload = req.body;
 
-  /**
-   * Deletes a webhook.
-   *
-   * @param {Request} req - The Express request object.
-   * @param {Response} res - The Express response object.
-   * @returns {Promise<void>} - A promise that resolves when the webhook is deleted.
-   * @throws {Error} If there's an error during webhook deletion.
-   */
-  async deleteWebhook(req: Request, res: Response): Promise<void> {
-    try {
-      const webhookId = req.params.webhookId;
-      await this.webhookService.deleteWebhook(webhookId);
-      res.status(200).json({ message: 'Webhook deleted successfully' });
-    } catch (error: any) {
-      // Implement centralized error handling here
-      console.error('Error deleting webhook:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete webhook' });
-    }
-  }
+      // Validate the payload (e.g., using a schema or library like Zod)
+      if (!payload || !payload.event || !payload.data) {
+        res.status(400).send({ message: 'Invalid webhook payload' });
+        return;
+      }
 
-  /**
-   * Lists all webhooks.
-   *
-   * @param {Request} req - The Express request object.
-   * @param {Response} res - The Express response object.
-   * @returns {Promise<void>} - A promise that resolves with the list of webhooks.
-   * @throws {Error} If there's an error during fetching webhooks.
-   */
-  async listWebhooks(req: Request, res: Response): Promise<void> {
-    try {
-      const webhooks = await this.webhookService.getAllWebhooks();
-      res.status(200).json(webhooks);
+      await this.webhookService.handleEvent(payload);
+      res.status(200).send({ message: 'Webhook processed successfully' });
     } catch (error: any) {
-      // Implement centralized error handling here
-      console.error('Error listing webhooks:', error);
-      res.status(500).json({ message: error.message || 'Failed to list webhooks' });
+      console.error('Error processing webhook:', error);
+      res.status(500).send({ message: 'Error processing webhook', error: error.message });
     }
   }
 }
