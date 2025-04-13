@@ -1,7 +1,6 @@
-// src/api/controllers/issue.controller.ts
-
 import { Request, Response } from 'express';
-import { addIssue, updateIssue, deleteIssue, updateAssignee } from '../services/issue.service';
+import { addIssue, updateIssue, deleteIssue, updateAssignee, searchIssuesService } from '../services/issue.service';
+import { Issue } from '../../models/issue'; // Import the Issue model
 
 export const createIssue = async (req: Request, res: Response) => {
   try {
@@ -54,6 +53,35 @@ export const assignIssue = async (req: Request, res: Response) => {
     res.status(200).json(updatedIssue);
   } catch (error: any) {
     console.error('Error assigning issue:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const searchIssues = async (req: Request, res: Response) => {
+  try {
+    const { keywords, status, assignee, page = 1, pageSize = 10 } = req.query;
+
+    const searchParams = {
+      keywords: keywords ? String(keywords) : undefined,
+      status: status ? String(status) : undefined,
+      assignee: assignee ? String(assignee) : undefined,
+      page: Number(page),
+      pageSize: Number(pageSize),
+    };
+
+    const { issues, totalCount } = await searchIssuesService(searchParams);
+
+    const totalPages = Math.ceil(totalCount / Number(pageSize));
+
+    res.status(200).json({
+      issues,
+      page: Number(page),
+      pageSize: Number(pageSize),
+      totalCount,
+      totalPages,
+    });
+  } catch (error: any) {
+    console.error('Error searching issues:', error);
     res.status(500).json({ message: error.message });
   }
 };
