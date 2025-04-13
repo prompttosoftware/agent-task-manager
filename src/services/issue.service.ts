@@ -21,7 +21,7 @@ export class IssueService {
         [`%${searchTerm}%`]
       );
       return result.rows;
-    } catch (error) {
+    } catch (error) { 
       console.error('Error searching issues:', error);
       throw new Error('Failed to search issues.');
     }
@@ -91,14 +91,13 @@ export class IssueService {
     }
   }
 
-  async addAttachment(issueKey: string, filePath: string): Promise<string | undefined> {
-    // In a real implementation, you would use file handling middleware (e.g., multer)
-    // to save the file and associate it with the issue.
-    // For now, return the file path.
+  async addAttachment(issueKey: string, filePath: string, originalFilename: string, fileSize: number, mimeType: string): Promise<any> {
     try {
-        // Assuming you have an attachments table with columns issue_key and file_path
-        await this.db.query('INSERT INTO attachments (issue_key, file_path) VALUES ($1, $2)', [issueKey, filePath]);
-        return filePath;
+        const result = await this.db.query(
+            'INSERT INTO attachments (issue_key, file_path, original_filename, file_size, mime_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [issueKey, filePath, originalFilename, fileSize, mimeType]
+        );
+        return result.rows[0];
     } catch (error) {
         console.error('Error adding attachment:', error);
         throw new Error('Failed to add attachment.');
@@ -165,7 +164,7 @@ export class IssueService {
       }, []);
 
       return {
-          projects: projects.map((project: any) => ({
+          projects: projects.map((project: any) => ({   
               id: project.id.toString(),
               key: project.key,
               name: project.name,
