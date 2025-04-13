@@ -35,3 +35,11 @@ coverage/
 
 # Environment files
 .env
+
+#  Add build artifacts
+/build
+
+#  Add npm artifacts
+/npm-debug.log
+/yarn-error.log
+.cache
