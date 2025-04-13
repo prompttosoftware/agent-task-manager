@@ -5,6 +5,9 @@ import { IssueService } from '../services/issue.service';
 import { BoardService } from '../services/board.service';
 import { Issue } from '../types/issue';
 import multer from 'multer';
+import { describe, it, expect, beforeEach, jest } from 'vitest';
+import { validationResult } from 'express-validator';
+import { addIssueValidator } from '../validators/issue.validator';
 
 // Mock the IssueService
 jest.mock('../services/issue.service');
@@ -143,6 +146,18 @@ describe('IssueController', () => {
             expect(mockJson).toHaveBeenCalledWith(mockIssue);
         });
 
+        it('should return 400 if validation fails', async () => {
+            const mockRequest = { body: {} } as Request;
+            const mockResponse = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            } as unknown as Response;
+
+            await issueController.addIssue(mockRequest, mockResponse);
+            expect(mockResponse.status).toHaveBeenCalledWith(400);
+            expect(mockResponse.json).toHaveBeenCalled();
+        });
+
         it('should return 500 if an error occurs while adding the issue', async () => {
             const mockIssue: Issue = { issueKey: 'TEST-1', summary: 'Test Issue', description: 'Test Description', issueType: 'Task', boardId: '1', assignee: 'user1' };
             mockIssueService.addIssue.mockRejectedValue(new Error('Failed to add issue'));
@@ -251,9 +266,9 @@ describe('IssueController', () => {
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
 
             // Assertions
-            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', mockFilePath);
+            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', mockFilePath, undefined, undefined, undefined);
             expect(mockStatus).toHaveBeenCalledWith(201);
-            expect(mockJson).toHaveBeenCalledWith({ message: 'Attachment added', filePath: mockFilePath });
+            expect(mockJson).toHaveBeenCalledWith({ message: 'Attachment added', filePath: mockFilePath, attachment: { filename: undefined, filePath: mockFilePath, fileSize: undefined, mimeType: undefined, issueKey: 'TEST-1' } });
 
             // Restore the original module
             jest.unmock('multer');
@@ -299,11 +314,13 @@ describe('IssueController', () => {
             // Replace the actual upload.single with the mock
             jest.mock('multer', () => ({
                 __esModule: true,
-                default: () => ({ single: mockUploadSingle, }),
+                default: () => ({
+                    single: mockUploadSingle,
+                }),
             }));
 
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
-            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', 'uploads/attachment.txt');
+            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', 'uploads/attachment.txt', undefined, undefined, undefined);
             expect(mockStatus).toHaveBeenCalledWith(404);
             expect(mockJson).toHaveBeenCalledWith({ error: 'Issue not found' });
             jest.unmock('multer');
