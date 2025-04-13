@@ -6,6 +6,8 @@ import { Issue } from '../types/issue';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { validationResult } from 'express-validator';
+import { addIssueValidator } from '../validators/issue.validator';
 
 // File size limit in bytes (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -114,6 +116,12 @@ export class IssueController {
      */
     async addIssue(req: Request, res: Response): Promise<void> {
         try {
+            await addIssueValidator(req);
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
             const issueData: Issue = req.body;
             const newIssue = await this.issueService.addIssue(issueData);
             res.status(201).json(newIssue);
