@@ -1,8 +1,8 @@
 // src/api/controllers/board.controller.ts
 import { Request, Response } from 'express';
 import { BoardService } from '../services/board.service';
-import { validationResult,  check } from 'express-validator';
 import { Board } from '../types/board.d.ts';
+import { boardSchema } from '../validators/board.validator';
 
 export class BoardController {
     private boardService: BoardService;
@@ -13,14 +13,15 @@ export class BoardController {
 
     async getBoard(req: Request, res: Response): Promise<void> {
         try {
-            await check('boardId').isUUID().withMessage('Invalid boardId').run(req);
-            const errors = validationResult(req);
-            if (!errors.isEmpty()) {
-                res.status(400).json({ errors: errors.array() });
+            const boardId = req.params.boardId;
+
+            const validationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
+
+            if (!validationResult.success) {
+                res.status(400).json({ errors: validationResult.error.errors });
                 return;
             }
 
-            const boardId = req.params.boardId;
             const board: Board | null = await this.boardService.getBoardById(boardId);
 
             if (!board) {
@@ -47,16 +48,14 @@ export class BoardController {
 
     async createBoard(req: Request, res: Response): Promise<void> {
         try {
-            await check('name').notEmpty().withMessage('Name is required').run(req);
-            await check('description').optional().isString().withMessage('Description must be a string').run(req);
+            const validationResult = boardSchema.omit({ id: true }).safeParse(req.body);
 
-            const errors = validationResult(req);
-            if (!errors.isEmpty()) {
-                res.status(400).json({ errors: errors.array() });
+            if (!validationResult.success) {
+                res.status(400).json({ errors: validationResult.error.errors });
                 return;
             }
 
-            const { name, description } = req.body;
+            const { name, description } = validationResult.data;
             const newBoard: Board = await this.boardService.createBoard({ name, description });
             res.status(201).json(newBoard);
         } catch (error: any) {
@@ -67,18 +66,23 @@ export class BoardController {
 
     async updateBoard(req: Request, res: Response): Promise<void> {
         try {
-            await check('boardId').isUUID().withMessage('Invalid boardId').run(req);
-            await check('name').optional().notEmpty().withMessage('Name cannot be empty').run(req);
-            await check('description').optional().isString().withMessage('Description must be a string').run(req);
+            const boardId = req.params.boardId;
 
-            const errors = validationResult(req);
-            if (!errors.isEmpty()) {
-                res.status(400).json({ errors: errors.array() });
+            const idValidationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
+
+            if (!idValidationResult.success) {
+                res.status(400).json({ errors: idValidationResult.error.errors });
                 return;
             }
 
-            const boardId = req.params.boardId;
-            const { name, description } = req.body;
+            const validationResult = boardSchema.omit({ id: true }).partial().safeParse(req.body);
+
+            if (!validationResult.success) {
+                res.status(400).json({ errors: validationResult.error.errors });
+                return;
+            }
+
+            const { name, description } = validationResult.data;
             const updatedBoard: Board | null = await this.boardService.updateBoard(boardId, { name, description });
 
             if (!updatedBoard) {
@@ -95,15 +99,14 @@ export class BoardController {
 
     async deleteBoard(req: Request, res: Response): Promise<void> {
         try {
-            await check('boardId').isUUID().withMessage('Invalid boardId').run(req);
+            const boardId = req.params.boardId;
+            const validationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
 
-            const errors = validationResult(req);
-            if (!errors.isEmpty()) {
-                res.status(400).json({ errors: errors.array() });
+            if (!validationResult.success) {
+                res.status(400).json({ errors: validationResult.error.errors });
                 return;
             }
 
-            const boardId = req.params.boardId;
             const deleted: boolean = await this.boardService.deleteBoard(boardId);
 
             if (!deleted) {
