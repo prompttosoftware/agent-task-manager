@@ -13,7 +13,7 @@ export interface BoardService {
 export class BoardServiceImpl implements BoardService {
   async getBoard(boardId: string): Promise<Board | undefined> {
     try {
-      const board = db.getBoards().find((b) => b.id === boardId);
+      const board = db.getBoard(boardId);
       return board;
     } catch (error: any) {
       console.error('Error getting board:', error);
@@ -23,7 +23,7 @@ export class BoardServiceImpl implements BoardService {
 
   async getAllBoards(): Promise<Board[]> {
     try {
-      return db.getBoards();
+      return db.getAllBoards();
     } catch (error: any) {
       console.error('Error getting all boards:', error);
       throw new Error(error.message || 'Failed to get all boards');
@@ -38,7 +38,7 @@ export class BoardServiceImpl implements BoardService {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      db.setBoards([...db.getBoards(), newBoard]);
+      await db.createBoard(newBoard);
       return newBoard;
     } catch (error: any) {
       console.error('Error creating board:', error);
@@ -48,22 +48,7 @@ export class BoardServiceImpl implements BoardService {
 
   async updateBoard(boardId: string, boardUpdate: BoardUpdate): Promise<Board | undefined> {
     try {
-      const boards = db.getBoards();
-      const index = boards.findIndex((b) => b.id === boardId);
-
-      if (index === -1) {
-        return undefined;
-      }
-
-      const existingBoard = boards[index];
-      const updatedBoard: Board = {
-        ...existingBoard,
-        ...boardUpdate,
-        updatedAt: new Date(),
-      };
-      const newBoards = [...boards];
-      newBoards[index] = updatedBoard;
-      db.setBoards(newBoards);
+      const updatedBoard = await db.updateBoard(boardId, boardUpdate);
       return updatedBoard;
     } catch (error: any) {
       console.error('Error updating board:', error);
@@ -73,9 +58,7 @@ export class BoardServiceImpl implements BoardService {
 
   async deleteBoard(boardId: string): Promise<void> {
     try {
-      const boards = db.getBoards();
-      const newBoards = boards.filter((board) => board.id !== boardId);
-      db.setBoards(newBoards);
+      await db.deleteBoard(boardId);
     } catch (error: any) {
       console.error('Error deleting board:', error);
       throw new Error(error.message || 'Failed to delete board');
