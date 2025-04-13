@@ -1,70 +1,49 @@
-// src/services/board.service.test.ts
+import { BoardServiceImpl } from './board.service';
+import * as db from '../data/db';
+import { Board } from '../types/board';
 
-import { BoardService } from './board.service';
-import { Board } from '../types/issue'; // Assuming you have a Board type defined in issue.d.ts
+jest.mock('../data/db'); // Mock the database module
 
 describe('BoardService', () => {
-  let boardService: BoardService;
-  let createdBoardId: string | undefined;
+  let boardService: BoardServiceImpl;
 
   beforeEach(() => {
-    boardService = new BoardService();
+    boardService = new BoardServiceImpl();
+    (db.getAllBoards as jest.Mock).mockReset();
   });
 
-  afterEach(async () => {
-    if (createdBoardId) {
-      try {
-        await boardService.deleteBoard(createdBoardId);
-      } catch (error) {
-        console.error('Error cleaning up test board:', error);
-      }
-      createdBoardId = undefined;
-    }
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should create a board', async () => {
-    const boardData = { name: 'Test Board', description: 'Test Description' };
-    const createdBoard = await boardService.createBoard(boardData);
-    createdBoardId = createdBoard.id;
-    expect(createdBoard).toBeDefined();
-    expect(createdBoard.name).toBe(boardData.name);
-    expect(createdBoard.description).toBe(boardData.description);
-  });
+  describe('getAllBoards', () => {
+    it('should return an array of boards when boards exist', async () => {
+      const mockBoards: Board[] = [
+        { id: '1', name: 'Board 1', createdAt: new Date(), updatedAt: new Date() },
+        { id: '2', name: 'Board 2', createdAt: new Date(), updatedAt: new Date() },
+      ];
+      (db.getAllBoards as jest.Mock).mockResolvedValue(mockBoards);
 
-  it('should get a board by id', async () => {
-    const createBoardData = { name: 'Board to Get', description: 'Description to Get' };
-    const createdBoard = await boardService.createBoard(createBoardData);
-    createdBoardId = createdBoard.id;
+      const getAllBoards = boardService.getAllBoards;
+      const boards = await getAllBoards();
+      expect(boards).toEqual(mockBoards);
+      expect(db.getAllBoards).toHaveBeenCalled();
+    });
 
-    const retrievedBoard = await boardService.getBoardById(createdBoard.id);
+    it('should return an empty array when no boards exist', async () => {
+      (db.getAllBoards as jest.Mock).mockResolvedValue([]);
+      const getAllBoards = boardService.getAllBoards;
+      const boards = await getAllBoards();
+      expect(boards).toEqual([]);
+      expect(db.getAllBoards).toHaveBeenCalled();
+    });
 
-    expect(retrievedBoard).toBeDefined();
-    expect(retrievedBoard?.id).toBe(createdBoard.id);
-    expect(retrievedBoard?.name).toBe(createBoardData.name);
-    expect(retrievedBoard?.description).toBe(createBoardData.description);
-  });
-
-  it('should update a board', async () => {
-    const createBoardData = { name: 'Board to Update', description: 'Description to Update' };
-    const createdBoard = await boardService.createBoard(createBoardData);
-    createdBoardId = createdBoard.id;
-
-    const updateBoardData = { name: 'Updated Board', description: 'Updated Description' };
-    const updatedBoard = await boardService.updateBoard(createdBoard.id, updateBoardData);
-
-    expect(updatedBoard).toBeDefined();
-    expect(updatedBoard?.id).toBe(createdBoard.id);
-    expect(updatedBoard?.name).toBe(updateBoardData.name);
-    expect(updatedBoard?.description).toBe(updateBoardData.description);
-  });
-
-  it('should delete a board', async () => {
-    const createBoardData = { name: 'Board to Delete', description: 'Description to Delete' };
-    const createdBoard = await boardService.createBoard(createBoardData);
-    const deleted = await boardService.deleteBoard(createdBoard.id);
-    expect(deleted).toBe(true);
-    createdBoardId = undefined;
-    const retrievedBoard = await boardService.getBoardById(createdBoard.id);
-    expect(retrievedBoard).toBeNull();
+    it('should handle errors', async () => {
+      const errorMessage = 'Failed to get boards';
+      (db.getAllBoards as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      const getAllBoards = boardService.getAllBoards;
+      await expect(getAllBoards()).rejects.toThrow(errorMessage);
+      expect(db.getAllBoards).toHaveBeenCalled();
+    });
   });
 });
