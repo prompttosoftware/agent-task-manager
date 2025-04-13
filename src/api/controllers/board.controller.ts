@@ -1,8 +1,9 @@
 // src/api/controllers/board.controller.ts
 import { Request, Response } from 'express';
 import { BoardService } from '../services/board.service';
+import { validationResult } from 'express-validator';
 import { Board } from '../types/board.d.ts';
-import { boardSchema } from '../validators/board.validator';
+import { createBoardValidator, updateBoardValidator } from '../validators/board.validator';
 
 export class BoardController {
     private boardService: BoardService;
@@ -14,14 +15,6 @@ export class BoardController {
     async getBoard(req: Request, res: Response): Promise<void> {
         try {
             const boardId = req.params.boardId;
-
-            const validationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
-
-            if (!validationResult.success) {
-                res.status(400).json({ errors: validationResult.error.errors });
-                return;
-            }
-
             const board: Board | null = await this.boardService.getBoardById(boardId);
 
             if (!board) {
@@ -48,14 +41,13 @@ export class BoardController {
 
     async createBoard(req: Request, res: Response): Promise<void> {
         try {
-            const validationResult = boardSchema.omit({ id: true }).safeParse(req.body);
-
-            if (!validationResult.success) {
-                res.status(400).json({ errors: validationResult.error.errors });
-                return;
+            await Promise.all(createBoardValidator.map(validation => validation.run(req)));
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
             }
 
-            const { name, description } = validationResult.data;
+            const { name, description } = req.body;
             const newBoard: Board = await this.boardService.createBoard({ name, description });
             res.status(201).json(newBoard);
         } catch (error: any) {
@@ -66,23 +58,14 @@ export class BoardController {
 
     async updateBoard(req: Request, res: Response): Promise<void> {
         try {
+            await Promise.all(updateBoardValidator.map(validation => validation.run(req)));
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
             const boardId = req.params.boardId;
-
-            const idValidationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
-
-            if (!idValidationResult.success) {
-                res.status(400).json({ errors: idValidationResult.error.errors });
-                return;
-            }
-
-            const validationResult = boardSchema.omit({ id: true }).partial().safeParse(req.body);
-
-            if (!validationResult.success) {
-                res.status(400).json({ errors: validationResult.error.errors });
-                return;
-            }
-
-            const { name, description } = validationResult.data;
+            const { name, description } = req.body;
             const updatedBoard: Board | null = await this.boardService.updateBoard(boardId, { name, description });
 
             if (!updatedBoard) {
@@ -100,13 +83,6 @@ export class BoardController {
     async deleteBoard(req: Request, res: Response): Promise<void> {
         try {
             const boardId = req.params.boardId;
-            const validationResult = boardSchema.pick({ id: true }).safeParse({ id: boardId });
-
-            if (!validationResult.success) {
-                res.status(400).json({ errors: validationResult.error.errors });
-                return;
-            }
-
             const deleted: boolean = await this.boardService.deleteBoard(boardId);
 
             if (!deleted) {
