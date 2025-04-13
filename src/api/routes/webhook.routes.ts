@@ -1,19 +1,21 @@
 // src/api/routes/webhook.routes.ts
-import express, { Request, Response } from 'express';
+import express from 'express';
 import { registerWebhook, removeWebhook, listWebhooks, simulateEvent } from '../controllers/webhook.controller';
+import { validateWebhookCreation } from '../middleware/validation.middleware';
+import { validateWebhookId } from '../middleware/validation.middleware';
 
 const router = express.Router();
 
-// Route to register a new webhook
-router.post('/register', registerWebhook);
+// POST /webhooks - Create a new webhook
+router.post('/webhooks', validateWebhookCreation, registerWebhook);
 
-// Route to delete a webhook by ID
-router.delete('/:id', removeWebhook);
+// DELETE /webhooks/:id - Delete a webhook
+router.delete('/webhooks/:id', validateWebhookId, removeWebhook);
 
-// Route to list all registered webhooks
-router.get('/', listWebhooks);
+// GET /webhooks - Retrieve all webhooks
+router.get('/webhooks', listWebhooks);
 
-// Route to simulate an event and trigger webhooks (example)
-router.post('/simulate', simulateEvent);
+// POST /webhooks/simulate - Simulate an event
+router.post('/webhooks/simulate', simulateEvent);
 
 export default router;
