@@ -33,7 +33,7 @@ router.get('/', epicController.listEpics.bind(epicController));
 router.post('/', validateEpic, async (req: Request, res: Response) => {
   try {
     await epicController.createEpic(req, res);
-  } catch (error: any) {
+  } catch (error: any) { 
     console.error("Error in POST /epics route:", error);
     res.status(500).json({ message: error.message || 'Internal server error' });
   }
