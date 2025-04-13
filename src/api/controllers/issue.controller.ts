@@ -8,6 +8,9 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { validationResult } from 'express-validator';
 import { addIssueValidator } from '../validators/issue.validator';
+import { linkIssueValidator } from '../validators/issue.validator';
+import { assignIssueValidator } from '../validators/issue.validator';
+import { transitionIssueValidator } from '../validators/issue.validator';
 
 // File size limit in bytes (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -181,6 +184,10 @@ export class IssueController {
         try {
             const { issueKey } = req.params;
 
+            if (!issueKey) {
+                return res.status(400).json({ error: 'Issue key is required' });
+            }
+
             // Multer middleware handles the file upload and validation
             upload.single('attachment')(req, res, async (err: any) => {
                 if (err) {
@@ -239,6 +246,17 @@ export class IssueController {
         try {
             const { fromIssueKey } = req.params;
             const { toIssueKey, type } = req.body;
+
+            if (!fromIssueKey || !toIssueKey || !type) {
+                return res.status(400).json({ error: 'From issue key, to issue key, and link type are required' });
+            }
+
+            await linkIssueValidator(req);
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
             const success = await this.issueService.linkIssue(fromIssueKey, toIssueKey, type);
             if (!success) {
                 res.status(400).json({ error: 'Failed to link issues' });
@@ -260,6 +278,17 @@ export class IssueController {
         try {
             const { issueKey } = req.params;
             const { assigneeKey } = req.body;
+
+            if (!issueKey || !assigneeKey) {
+                return res.status(400).json({ error: 'Issue key and assignee key are required' });
+            }
+
+            await assignIssueValidator(req);
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
             const updatedIssue = await this.issueService.assignIssue(issueKey, assigneeKey);
             if (!updatedIssue) {
                 res.status(404).json({ error: 'Issue not found' });
@@ -281,6 +310,17 @@ export class IssueController {
         try {
             const { issueKey } = req.params;
             const { transitionId } = req.body;
+
+            if (!issueKey || !transitionId) {
+                return res.status(400).json({ error: 'Issue key and transitionId are required' });
+            }
+
+            await transitionIssueValidator(req);
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
             const updatedIssue = await this.issueService.transitionIssue(issueKey, transitionId);
             if (!updatedIssue) {
                 res.status(404).json({ error: 'Issue not found' });
@@ -316,6 +356,11 @@ export class IssueController {
     async getTransitions(req: Request, res: Response): Promise<void> {
         try {
             const { issueKey } = req.params;
+
+            if (!issueKey) {
+                return res.status(400).json({ error: 'Issue key is required' });
+            }
+
             const transitions = await this.issueService.getTransitions(issueKey);
             res.status(200).json(transitions);
         } catch (error: any) {
