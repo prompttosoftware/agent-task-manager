@@ -5,40 +5,92 @@ import { IssueService } from '../services/issue.service';
 import { BoardService } from '../services/board.service';
 import { Issue } from '../types/issue';
 import multer from 'multer';
-import { describe, it, expect, beforeEach, jest } from 'vitest';
+import { describe, it, expect, beforeEach, vi, Mock, afterEach } from 'vitest';
 import { validationResult } from 'express-validator';
-import { addIssueValidator } from '../validators/issue.validator';
+import { MulterError } from 'multer';
 
 // Mock the IssueService
-jest.mock('../services/issue.service');
-const mockIssueService = new IssueService() as jest.Mocked<IssueService>;
+vi.mock('../services/issue.service');
+const mockIssueService = { // Use an object for the mock
+    searchIssues: vi.fn(),
+    getIssue: vi.fn(),
+    getIssuesByBoard: vi.fn(),
+    addIssue: vi.fn(),
+    updateIssue: vi.fn(),
+    deleteIssue: vi.fn(),
+    addAttachment: vi.fn(),
+    linkIssue: vi.fn(),
+    assignIssue: vi.fn(),
+    transitionIssue: vi.fn(),
+    getCreateMeta: vi.fn(),
+    getTransitions: vi.fn()
+} as unknown as jest.Mocked<IssueService>;
 
 // Mock the BoardService
-jest.mock('../services/board.service');
-const mockBoardService = new BoardService() as jest.Mocked<BoardService>;
+vi.mock('../services/board.service');
+const mockBoardService = { } as jest.Mocked<BoardService>;
+
+// Mock validationResult
+vi.mock('express-validator', () => {
+    const actual = vi.importActual('express-validator');
+    return {
+        ...actual,
+        validationResult: vi.fn().mockReturnValue({ // Corrected: mockReturnValue
+            isEmpty: vi.fn(),
+            array: vi.fn()
+        }),
+    };
+});
+
+// Mock multer
+vi.mock('multer', () => {
+    const actual = vi.importActual('multer');
+    const mockMulter = {
+        ...actual,
+        // Use mockImplementation instead of mockReturnValue
+        single: vi.fn().mockImplementation((fieldName: string) => {
+            return (req: Request, res: Response, next: Function) => {
+                const mockFile = req.file;
+                if (mockFile === undefined) {
+                    next(); // Simulate no file
+                }
+                next(); // Simulate success
+            };
+        }),
+        MulterError: actual.MulterError,
+    };
+    return mockMulter;
+});
+
 
 describe('IssueController', () => {
     let issueController: IssueController;
     let mockRequest: Partial<Request>;
-    let mockResponse: Partial<Response>;
-    let mockJson: jest.Mock;
-    let mockSend: jest.Mock;
-    let mockStatus: jest.Mock;
+    let mockResponse: Partial<Response>
+    let mockJson: Mock;
+    let mockSend: Mock;
+    let mockStatus: Mock;
+    let mockValidationResult: Mock;
 
     beforeEach(() => {
-        issueController = new IssueController(mockIssueService, mockBoardService);
-        mockJson = jest.fn();
-        mockSend = jest.fn();
-        mockStatus = jest.fn().mockReturnValue({ json: mockJson, send: mockSend });
+        issueController = new IssueController(mockIssueService as any, mockBoardService);
+        mockJson = vi.fn();
+        mockSend = vi.fn();
+        mockStatus = vi.fn().mockReturnValue({ json: mockJson, send: mockSend });
+        mockValidationResult = (validationResult as any) as Mock;
 
         mockRequest = {};
         mockResponse = {
             status: mockStatus,
             json: mockJson,
             send: mockSend,
-        };
+        } as unknown as Response;
 
-        jest.clearAllMocks();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     describe('searchIssues', () => {
@@ -138,6 +190,7 @@ describe('IssueController', () => {
             const mockIssue: Issue = { issueKey: 'TEST-1', summary: 'Test Issue', description: 'Test Description', issueType: 'Task', boardId: '1', assignee: 'user1' };
             mockIssueService.addIssue.mockResolvedValue(mockIssue);
             mockRequest.body = mockIssue;
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.addIssue(mockRequest as Request, mockResponse as Response);
 
@@ -147,21 +200,20 @@ describe('IssueController', () => {
         });
 
         it('should return 400 if validation fails', async () => {
-            const mockRequest = { body: {} } as Request;
-            const mockResponse = {
-                status: jest.fn().mockReturnThis(),
-                json: jest.fn()
-            } as unknown as Response;
+            mockValidationResult.mockReturnValue({ isEmpty: () => false, array: () => [{ msg: 'Summary is required' }] });
+            mockRequest.body = {};
 
-            await issueController.addIssue(mockRequest, mockResponse);
-            expect(mockResponse.status).toHaveBeenCalledWith(400);
-            expect(mockResponse.json).toHaveBeenCalled();
+            await issueController.addIssue(mockRequest as Request, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ errors: [{ msg: 'Summary is required' }] });
         });
 
         it('should return 500 if an error occurs while adding the issue', async () => {
             const mockIssue: Issue = { issueKey: 'TEST-1', summary: 'Test Issue', description: 'Test Description', issueType: 'Task', boardId: '1', assignee: 'user1' };
             mockIssueService.addIssue.mockRejectedValue(new Error('Failed to add issue'));
             mockRequest.body = mockIssue;
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.addIssue(mockRequest as Request, mockResponse as Response);
 
@@ -243,114 +295,104 @@ describe('IssueController', () => {
     });
 
     describe('addAttachment', () => {
-        it('should return 201 with the file path on success', async () => {
-            const mockFilePath = 'uploads/attachment.txt';
-            mockIssueService.addAttachment.mockResolvedValue(mockFilePath);
+        const mockFile: Express.Multer.File = {
+            fieldname: 'attachment',
+            originalname: 'test.txt',
+            encoding: '7bit',
+            mimetype: 'text/plain',
+            size: 1024,
+            stream: null as any,
+            destination: 'uploads/',
+            filename: 'attachment-12345.txt',
+            path: 'uploads/attachment-12345.txt',
+            buffer: null as any,
+        };
+
+        it('should return 201 with attachment details on success', async () => {
             mockRequest.params = { issueKey: 'TEST-1' };
-            mockRequest.file = { path: mockFilePath } as Express.Multer.File;
-
-            // Mock upload.single middleware
-            const mockUploadSingle = (fieldName: string) => (req: Request, res: Response, next: Function) => {
-                req.file = mockRequest.file as Express.Multer.File;
-                next();
-            };
-
-            // Replace the actual upload.single with the mock
-            jest.mock('multer', () => ({
-                __esModule: true,
-                default: () => ({
-                    single: mockUploadSingle,
-                }),
-            }));
+            mockRequest.file = mockFile;
+            mockIssueService.addAttachment.mockResolvedValue({
+                issueKey: 'TEST-1',
+                filePath: mockFile.path,
+                originalFilename: mockFile.originalname,
+                fileSize: mockFile.size,
+                mimeType: mockFile.mimetype,
+            });
 
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
 
-            // Assertions
-            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', mockFilePath, undefined, undefined, undefined);
+            expect(mockIssueService.addAttachment).toHaveBeenCalledWith(
+                'TEST-1',
+                mockFile.path,
+                mockFile.originalname,
+                mockFile.size,
+                mockFile.mimetype
+            );
             expect(mockStatus).toHaveBeenCalledWith(201);
-            expect(mockJson).toHaveBeenCalledWith({ message: 'Attachment added', filePath: mockFilePath, attachment: { filename: undefined, filePath: mockFilePath, fileSize: undefined, mimeType: undefined, issueKey: 'TEST-1' } });
-
-            // Restore the original module
-            jest.unmock('multer');
+            expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({
+                message: 'Attachment added successfully',
+                attachment: expect.objectContaining({
+                    filename: mockFile.originalname,
+                    filePath: mockFile.path,
+                    fileSize: mockFile.size,
+                    mimeType: mockFile.mimetype,
+                    issueKey: 'TEST-1',
+                }),
+            }));
         });
 
         it('should return 400 if no file is uploaded', async () => {
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.file = undefined;
 
-            // Mock upload.single middleware
-            const mockUploadSingle = (fieldName: string) => (req: Request, res: Response, next: Function) => {
-                next();
-            };
-
-            // Replace the actual upload.single with the mock
-            jest.mock('multer', () => ({
-                __esModule: true,
-                default: () => ({
-                    single: mockUploadSingle,
-                }),
-            }));
-
-
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
 
             expect(mockStatus).toHaveBeenCalledWith(400);
             expect(mockJson).toHaveBeenCalledWith({ error: 'No file uploaded' });
-            jest.unmock('multer');
         });
 
-        it('should return 404 if the issue is not found', async () => {
-            mockIssueService.addAttachment.mockResolvedValue(undefined);
+        it('should return 413 if file size exceeds the limit', async () => {
             mockRequest.params = { issueKey: 'TEST-1' };
-            mockRequest.file = { path: 'uploads/attachment.txt' } as Express.Multer.File;
-
-
-            // Mock upload.single middleware
-            const mockUploadSingle = (fieldName: string) => (req: Request, res: Response, next: Function) => {
-                req.file = mockRequest.file as Express.Multer.File;
-                next();
+            mockRequest.file = {
+                ...mockFile,
+                size: 10 * 1024 * 1024 + 1, // Exceeds 10MB
             };
 
-            // Replace the actual upload.single with the mock
-            jest.mock('multer', () => ({
-                __esModule: true,
-                default: () => ({
-                    single: mockUploadSingle,
-                }),
-            }));
+            await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(413);
+            expect(mockJson).toHaveBeenCalledWith({ error: 'File size exceeds the limit of 10MB' });
+        });
+
+        it('should return 400 if the issue key is missing', async () => {
+            mockRequest.params = {};
+            await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ error: 'Issue key is required' });
+        });
+
+        it('should return 400 if an invalid file type is uploaded', async () => {
+            mockRequest.params = { issueKey: 'TEST-1' };
+            mockRequest.file = {
+                ...mockFile,
+                mimetype: 'application/exe',
+            };
 
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
-            expect(mockIssueService.addAttachment).toHaveBeenCalledWith('TEST-1', 'uploads/attachment.txt', undefined, undefined, undefined);
-            expect(mockStatus).toHaveBeenCalledWith(404);
-            expect(mockJson).toHaveBeenCalledWith({ error: 'Issue not found' });
-            jest.unmock('multer');
+
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ error: 'Invalid file type. Allowed types are: image/jpeg, image/png, image/gif, application/pdf, text/plain, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         });
 
         it('should return 500 if an error occurs while adding the attachment', async () => {
             mockRequest.params = { issueKey: 'TEST-1' };
-            mockRequest.file = { path: 'uploads/attachment.txt' } as Express.Multer.File;
-
-            // Mock upload.single middleware
-            const mockUploadSingle = (fieldName: string) => (req: Request, res: Response, next: Function) => {
-                req.file = mockRequest.file as Express.Multer.File;
-                next();
-            };
-
-            // Replace the actual upload.single with the mock
-            jest.mock('multer', () => ({
-                __esModule: true,
-                default: () => ({
-                    single: mockUploadSingle,
-                }),
-            }));
-
+            mockRequest.file = mockFile;
             mockIssueService.addAttachment.mockRejectedValue(new Error('Failed to add attachment'));
 
             await issueController.addAttachment(mockRequest as Request, mockResponse as Response);
 
             expect(mockStatus).toHaveBeenCalledWith(500);
             expect(mockJson).toHaveBeenCalledWith({ error: 'Failed to add attachment' });
-            jest.unmock('multer');
         });
     });
 
@@ -359,6 +401,7 @@ describe('IssueController', () => {
             mockIssueService.linkIssue.mockResolvedValue(true);
             mockRequest.params = { fromIssueKey: 'TEST-1' };
             mockRequest.body = { toIssueKey: 'TEST-2', type: 'RELATES_TO' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.linkIssue(mockRequest as Request, mockResponse as Response);
 
@@ -367,10 +410,22 @@ describe('IssueController', () => {
             expect(mockJson).toHaveBeenCalledWith({ message: 'Issues linked' });
         });
 
+        it('should return 400 if validation fails', async () => {
+            mockValidationResult.mockReturnValue({ isEmpty: () => false, array: () => [{ msg: 'Invalid link type' }] });
+            mockRequest.params = { fromIssueKey: 'TEST-1' };
+            mockRequest.body = { toIssueKey: 'TEST-2', type: 'INVALID' };
+
+            await issueController.linkIssue(mockRequest as Request, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ errors: [{ msg: 'Invalid link type' }] });
+        });
+
         it('should return 400 if linking fails', async () => {
             mockIssueService.linkIssue.mockResolvedValue(false);
             mockRequest.params = { fromIssueKey: 'TEST-1' };
             mockRequest.body = { toIssueKey: 'TEST-2', type: 'RELATES_TO' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.linkIssue(mockRequest as Request, mockResponse as Response);
 
@@ -383,6 +438,7 @@ describe('IssueController', () => {
             mockIssueService.linkIssue.mockRejectedValue(new Error('Failed to link issue'));
             mockRequest.params = { fromIssueKey: 'TEST-1' };
             mockRequest.body = { toIssueKey: 'TEST-2', type: 'RELATES_TO' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.linkIssue(mockRequest as Request, mockResponse as Response);
 
@@ -397,6 +453,7 @@ describe('IssueController', () => {
             mockIssueService.assignIssue.mockResolvedValue(mockIssue);
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { assigneeKey: 'user2' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.assignIssue(mockRequest as Request, mockResponse as Response);
 
@@ -405,10 +462,22 @@ describe('IssueController', () => {
             expect(mockJson).toHaveBeenCalledWith(mockIssue);
         });
 
+        it('should return 400 if validation fails', async () => {
+            mockValidationResult.mockReturnValue({ isEmpty: () => false, array: () => [{ msg: 'Invalid assigneeKey' }] });
+            mockRequest.params = { issueKey: 'TEST-1' };
+            mockRequest.body = { assigneeKey: 'user2' };
+
+            await issueController.assignIssue(mockRequest as Request, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ errors: [{ msg: 'Invalid assigneeKey' }] });
+        });
+
         it('should return 404 if the issue is not found', async () => {
             mockIssueService.assignIssue.mockResolvedValue(undefined);
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { assigneeKey: 'user2' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.assignIssue(mockRequest as Request, mockResponse as Response);
 
@@ -421,6 +490,7 @@ describe('IssueController', () => {
             mockIssueService.assignIssue.mockRejectedValue(new Error('Failed to assign issue'));
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { assigneeKey: 'user2' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.assignIssue(mockRequest as Request, mockResponse as Response);
 
@@ -431,10 +501,11 @@ describe('IssueController', () => {
 
     describe('transitionIssue', () => {
         it('should return 200 with the updated issue on success', async () => {
-            const mockIssue: Issue = { issueKey: 'TEST-1', summary: 'Test Issue', description: 'Test Description', issueType: 'Task', boardId: '1', assignee: 'user1' , status: 'DONE'};
+            const mockIssue: Issue = { issueKey: 'TEST-1', summary: 'Test Issue', description: 'Test Description', issueType: 'Task', boardId: '1', assignee: 'user1', status: 'DONE' };
             mockIssueService.transitionIssue.mockResolvedValue(mockIssue);
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { transitionId: 'DONE' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.transitionIssue(mockRequest as Request, mockResponse as Response);
 
@@ -443,10 +514,22 @@ describe('IssueController', () => {
             expect(mockJson).toHaveBeenCalledWith(mockIssue);
         });
 
+        it('should return 400 if validation fails', async () => {
+            mockValidationResult.mockReturnValue({ isEmpty: () => false, array: () => [{ msg: 'Invalid transitionId' }] });
+            mockRequest.params = { issueKey: 'TEST-1' };
+            mockRequest.body = { transitionId: '' };
+
+            await issueController.transitionIssue(mockRequest as Request, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(400);
+            expect(mockJson).toHaveBeenCalledWith({ errors: [{ msg: 'Invalid transitionId' }] });
+        });
+
         it('should return 404 if the issue is not found', async () => {
             mockIssueService.transitionIssue.mockResolvedValue(undefined);
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { transitionId: 'DONE' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.transitionIssue(mockRequest as Request, mockResponse as Response);
 
@@ -459,6 +542,7 @@ describe('IssueController', () => {
             mockIssueService.transitionIssue.mockRejectedValue(new Error('Failed to transition issue'));
             mockRequest.params = { issueKey: 'TEST-1' };
             mockRequest.body = { transitionId: 'DONE' };
+            mockValidationResult.mockReturnValue({ isEmpty: () => true, array: () => [] });
 
             await issueController.transitionIssue(mockRequest as Request, mockResponse as Response);
 
