@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "better-sqlite3": "^11.9.1",
     "pg": "^8.14.1",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7"
@@ -10,5 +11,8 @@
     "test": "vitest",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13"
   }
 }
