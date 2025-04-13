@@ -3,7 +3,7 @@
 import { Issue } from '../types/issue';
 import { db } from '../../data/db';
 
-export const getIssuesForBoard = async (boardId: string): Promise<Issue[]> => {
+export const getIssuesForBoard = async (boardId: string): Promise<Issue[]> => {  
   try {
     const issues = await db.query<Issue[]>('SELECT * FROM issues WHERE boardId = $1', [boardId]);
     return issues.rows;
@@ -48,5 +48,21 @@ export const deleteIssue = async (issueKey: string): Promise<void> => {
   } catch (error) {
     console.error('Error deleting issue:', error);
     throw new Error('Failed to delete issue');
+  }
+};
+
+export const updateAssignee = async (issueKey: string, assignee: string): Promise<Issue | null> => {
+  try {
+    const result = await db.query<Issue>(
+      'UPDATE issues SET assignee = $1 WHERE issueKey = $2 RETURNING *',
+      [assignee, issueKey]
+    );
+    if (result.rowCount === 0) {
+      return null;
+    }
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error updating assignee:', error);
+    throw new Error('Failed to update assignee');
   }
 };
