@@ -1,37 +1,84 @@
-import config from './config';
+// src/config/config.test.ts
 
-describe('config', () => {
-  it('should get a string value with a default', () => {
-    process.env.TEST_STRING = 'testString';
-    expect(config.get<string>('TEST_STRING', 'defaultValue')).toBe('testString');
-    expect(config.get<string>('NON_EXISTENT_STRING', 'defaultValue')).toBe('defaultValue');
-    delete process.env.TEST_STRING;
+import Config from './config';
+
+describe('Config', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules(); // Important - clears any cached config
+    process.env = { ...originalEnv }; // Copy original env
   });
 
-  it('should get a number value with a default', () => {
-    process.env.TEST_NUMBER = '123';
-    expect(config.get<number>('TEST_NUMBER', 456)).toBe(123);
-    expect(config.get<number>('NON_EXISTENT_NUMBER', 456)).toBe(456);
-    delete process.env.TEST_NUMBER;
+  afterEach(() => {
+    process.env = originalEnv; // Restore original env
   });
 
-  it('should get a boolean value with a default', () => {
-    process.env.TEST_BOOLEAN = 'true';
-    expect(config.get<boolean>('TEST_BOOLEAN', false)).toBe(true);
-    expect(config.get<boolean>('NON_EXISTENT_BOOLEAN', false)).toBe(false);
-    delete process.env.TEST_BOOLEAN;
+  it('should load default values when environment variables are not provided', () => {
+    delete process.env.DATABASE_URL;
+    delete process.env.PORT;
+    delete process.env.NODE_ENV;
+
+    expect(Config.DATABASE_URL).toBe("mongodb://localhost:27017/defaultdb");
+    expect(Config.PORT).toBe(3000);
+    expect(Config.NODE_ENV).toBe("development");
+    expect(Config.isTestEnvironment).toBe(false);
+    expect(Config.isDevelopmentEnvironment).toBe(true);
+    expect(Config.isProductionEnvironment).toBe(false);
   });
 
-  it('should get a JSON object value with a default', () => {
-    process.env.TEST_JSON = '{"key": "value"}';
-    expect(config.get<any>('TEST_JSON', { defaultKey: 'defaultValue' })).toEqual({ key: 'value' });
-    expect(config.get<any>('NON_EXISTENT_JSON', { defaultKey: 'defaultValue' })).toEqual({ defaultKey: 'defaultValue' });
-    delete process.env.TEST_JSON;
+  it('should load environment variables correctly', () => {
+    process.env.DATABASE_URL = "mongodb://localhost:27017/testdb";
+    process.env.PORT = "4000";
+    process.env.NODE_ENV = "test";
+
+    expect(Config.DATABASE_URL).toBe("mongodb://localhost:27017/testdb");
+    expect(Config.PORT).toBe(4000);
+    expect(Config.NODE_ENV).toBe("test");
+    expect(Config.isTestEnvironment).toBe(true);
+    expect(Config.isDevelopmentEnvironment).toBe(false);
+    expect(Config.isProductionEnvironment).toBe(false);
   });
 
-  it('should handle missing environment variables gracefully', () => {
-    expect(config.get<string>('MISSING_VAR', 'default')).toBe('default');
-    expect(config.get<number>('MISSING_NUMBER', 123)).toBe(123);
-    expect(config.get<boolean>('MISSING_BOOLEAN', true)).toBe(true);
+  it('should use optional config method to load environment variables or default string value', () => {
+    process.env.OPTIONAL_STRING = "optional_value";
+    expect(Config.getOptionalConfig("OPTIONAL_STRING", "default_value")).toBe("optional_value");
+    expect(Config.getOptionalConfig("MISSING_STRING", "default_value")).toBe("default_value");
+    delete process.env.OPTIONAL_STRING;
+  });
+
+  it('should use optional config method to load environment variables or default number value', () => {
+    process.env.OPTIONAL_NUMBER = "5000";
+    expect(Config.getOptionalNumberConfig("OPTIONAL_NUMBER", 1000)).toBe(5000);
+    expect(Config.getOptionalNumberConfig("MISSING_NUMBER", 1000)).toBe(1000);
+    delete process.env.OPTIONAL_NUMBER;
+  });
+
+  it('should return default number value if optional number env var is NaN', () => {
+    process.env.OPTIONAL_NUMBER = "not_a_number";
+    expect(Config.getOptionalNumberConfig("OPTIONAL_NUMBER", 1000)).toBe(1000);
+    delete process.env.OPTIONAL_NUMBER;
+  });
+
+  it('should dynamically determine environment correctly', () => {
+     process.env.NODE_ENV = "test";
+     expect(Config.isTestEnvironment).toBe(true);
+     expect(Config.isDevelopmentEnvironment).toBe(false);
+     expect(Config.isProductionEnvironment).toBe(false);
+
+     process.env.NODE_ENV = "development";
+     expect(Config.isTestEnvironment).toBe(false);
+     expect(Config.isDevelopmentEnvironment).toBe(true);
+     expect(Config.isProductionEnvironment).toBe(false);
+
+     process.env.NODE_ENV = "production";
+     expect(Config.isTestEnvironment).toBe(false);
+     expect(Config.isDevelopmentEnvironment).toBe(false);
+     expect(Config.isProductionEnvironment).toBe(true);
+
+     delete process.env.NODE_ENV; // Ensure default behavior is still correct
+     expect(Config.isTestEnvironment).toBe(false);
+     expect(Config.isDevelopmentEnvironment).toBe(true);
+     expect(Config.isProductionEnvironment).toBe(false);
   });
 });
