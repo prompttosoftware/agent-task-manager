@@ -4,11 +4,19 @@ import { createWebhook, deleteWebhook, getAllWebhooks } from '../services/webhoo
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { Webhook } from '../../src/types/webhook';
+import { validationResult } from 'express-validator';
 
 // Endpoint to register a new webhook
 export const registerWebhook = async (req: Request, res: Response) => {
   try {
     const { url, eventType } = req.body;
+
+    // Validation (assuming validation middleware is used)
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const newWebhook = await createWebhook(url, eventType);
     res.status(201).json(newWebhook);
   } catch (error: any) {
@@ -21,6 +29,11 @@ export const registerWebhook = async (req: Request, res: Response) => {
 export const removeWebhook = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    // Validation (assuming validation middleware is used)
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
     await deleteWebhook(id);
     res.status(204).send();
   } catch (error: any) {
