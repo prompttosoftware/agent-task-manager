@@ -1,22 +1,40 @@
-import { body, ValidationChain } from 'express-validator';
+import { z } from 'zod';
 
-export const addIssueValidator: ValidationChain[] = [
-  body('summary')
-    .isString()
-    .withMessage('Summary must be a string')
-    .notEmpty()
-    .withMessage('Summary is required'),
+export const createIssueSchema = z.object({
+  body: z.object({
+    title: z.string({ required_error: 'Title is required' }),
+    description: z.string().optional(),
+    boardId: z.string({ required_error: 'Board ID is required' }),
+    status: z.enum(['open', 'in progress', 'done']).default('open'),
+  }),
+});
 
-  body('description')
-    .isString()
-    .withMessage('Description must be a string')
-    .optional(),
+export const getIssueSchema = z.object({
+  params: z.object({
+    id: z.string({ required_error: 'Issue ID is required' }),
+  }),
+});
 
-  body('issueType')
-    .isString()
-    .withMessage('Issue type must be a string')
-    .notEmpty()
-    .withMessage('Issue type is required')
-    .isIn(['Bug', 'Task', 'Story'])
-    .withMessage('Issue type must be one of: Bug, Task, Story'),
-];
+export const updateIssueSchema = z.object({
+  params: z.object({
+    id: z.string({ required_error: 'Issue ID is required' }),
+  }),
+  body: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    boardId: z.string().optional(),
+    status: z.enum(['open', 'in progress', 'done']).optional(),
+  }).refine(data => {
+        const hasUpdateFields = data.title !== undefined || data.description !== undefined || data.boardId !== undefined || data.status !== undefined;
+        return hasUpdateFields;
+    }, {
+        message: 'At least one field must be provided for update',
+        path: ['body'],
+    }),
+});
+
+export const deleteIssueSchema = z.object({
+  params: z.object({
+    id: z.string({ required_error: 'Issue ID is required' }),
+  }),
+});
