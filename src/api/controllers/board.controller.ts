@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { boardService } from '../../services/board.service';
 import { Board } from '../../types/board';
+import { validationResult } from 'express-validator';
+import { createBoardValidator, updateBoardValidator } from '../../validators/board.validator';
 
 // GET /boards/:boardId
 export const getBoard = async (req: Request, res: Response) => {
@@ -33,6 +35,11 @@ export const getAllBoards = async (req: Request, res: Response) => {
 // POST /boards
 export const createBoard = async (req: Request, res: Response) => {
   try {
+    await createBoardValidator(req);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const newBoard: Board = req.body;
     const createdBoard = await boardService.createBoard(newBoard);
     res.status(201).json(createdBoard);
@@ -46,6 +53,11 @@ export const createBoard = async (req: Request, res: Response) => {
 export const updateBoard = async (req: Request, res: Response) => {
   try {
     const boardId = req.params.boardId;
+    await updateBoardValidator(req);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
     const updatedBoard: Board = req.body;
     const board = await boardService.updateBoard(boardId, updatedBoard);
 
