@@ -1,10 +1,8 @@
-import { Router } from 'express';
+// src/api/routes/webhook.routes.ts
+import express from 'express';
 
-const router = Router();
+const router = express.Router();
 
-router.post('/', (req, res) => {
-  // TODO: Implement webhook handling
-  res.status(200).send('Webhook received');
-});
+// Define webhook routes here
 
 export default router;
