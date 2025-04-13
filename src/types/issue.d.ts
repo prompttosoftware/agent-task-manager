@@ -1,3 +1,4 @@
 // src/types/issue.d.ts
 
-// Placeholder for issue type definitions
+// This file will contain type definitions for the issue API.
+// For now, it's just a placeholder.
