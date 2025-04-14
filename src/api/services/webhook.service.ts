@@ -1,33 +1,47 @@
 // src/api/services/webhook.service.ts
-import { Webhook } from '../../src/types/webhook.d';
-import { v4 as uuidv4 } from 'uuid';
 
-// Mock database (replace with actual database interaction in production)
-const webhooks: Webhook[] = [];
+import { WebhookPayload } from '../types/webhook.d.ts';
 
-export const createWebhook = async (url: string, eventType: string): Promise<Webhook> => {
-  if (!url || !eventType) {
-    throw new Error('URL and eventType are required');
+interface WebhookQueue {
+  enqueue: (payload: WebhookPayload) => void;
+  dequeue: () => WebhookPayload | undefined;
+  size: () => number;
+  peek: () => WebhookPayload | undefined;
+}
+
+class InMemoryWebhookQueue implements WebhookQueue {
+  private queue: WebhookPayload[] = [];
+
+  enqueue(payload: WebhookPayload): void {
+    this.queue.push(payload);
   }
-  const newWebhook: Webhook = {
-    id: uuidv4(),
-    url,
-    eventType,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  webhooks.push(newWebhook);
-  return newWebhook;
-};
 
-export const deleteWebhook = async (id: string): Promise<void> => {
-  const index = webhooks.findIndex((webhook) => webhook.id === id);
-  if (index === -1) {
-    throw new Error(`Webhook with id ${id} not found`);
+  dequeue(): WebhookPayload | undefined {
+    return this.queue.shift();
   }
-  webhooks.splice(index, 1);
+
+  size(): number {
+    return this.queue.length;
+  }
+
+  peek(): WebhookPayload | undefined {
+    return this.queue[0];
+  }
+}
+
+const webhookQueue = new InMemoryWebhookQueue();
+
+export const enqueueWebhook = (payload: WebhookPayload) => {
+  webhookQueue.enqueue(payload);
 };
 
-export const getAllWebhooks = async (): Promise<Webhook[]> => {
-  return webhooks;
+export const processWebhook = () => {
+  const payload = webhookQueue.dequeue();
+  if (payload) {
+    // Simulate processing the webhook
+    console.log('Processing webhook:', payload);
+    // In a real implementation, this would involve sending the payload to an external service.
+  }
 };
+
+export const getWebhookQueueSize = () => webhookQueue.size();
