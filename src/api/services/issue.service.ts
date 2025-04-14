@@ -2,6 +2,7 @@
 
 import { Issue } from '../types/issue';
 import { db } from '../../data/db';
+import { triggerWebhook } from './webhook.service';
 
 export const getIssuesForBoard = async (boardId: string): Promise<Issue[]> => {
   console.log(`[IssueService] getIssuesForBoard called for boardId: ${boardId}`);
@@ -23,6 +24,8 @@ export const addIssue = async (issue: any): Promise<Issue> => {
       [issue.issueKey, issue.summary, issue.description, issue.boardId]
     );
     console.log('[IssueService] Issue added successfully:', result.rows[0]);
+    // Trigger webhook for issue created event
+    triggerWebhook('issue_created', result.rows[0]);
     return result.rows[0];
   } catch (error) {
     console.error('[IssueService] Error adding issue:', error);
@@ -42,6 +45,8 @@ export const updateIssue = async (issueKey: string, issue: any): Promise<Issue |
       return null;
     }
     console.log(`[IssueService] Issue updated successfully for issueKey: ${issueKey}`, result.rows[0]);
+      // Trigger webhook for issue updated event
+      triggerWebhook('issue_updated', result.rows[0]);
     return result.rows[0];
   } catch (error) {
     console.error('[IssueService] Error updating issue:', error);
@@ -52,8 +57,12 @@ export const updateIssue = async (issueKey: string, issue: any): Promise<Issue |
 export const deleteIssue = async (issueKey: string): Promise<void> => {
   console.log(`[IssueService] deleteIssue called for issueKey: ${issueKey}`);
   try {
+    //Get the issue before deleting
+    const issue = await db.query<Issue>('SELECT * FROM issues WHERE issueKey = $1', [issueKey]);
     await db.query('DELETE FROM issues WHERE issueKey = $1', [issueKey]);
     console.log(`[IssueService] Issue deleted successfully for issueKey: ${issueKey}`);
+        // Trigger webhook for issue deleted event
+        triggerWebhook('issue_deleted', issue.rows[0]);
   } catch (error) {
     console.error('[IssueService] Error deleting issue:', error);
     throw new Error('Failed to delete issue');
@@ -72,6 +81,7 @@ export const updateAssignee = async (issueKey: string, assignee: string): Promis
       return null;
     }
     console.log(`[IssueService] Assignee updated successfully for issueKey: ${issueKey}`, result.rows[0]);
+    //Consider triggering webhook for assignee updated event, if needed
     return result.rows[0];
   } catch (error) {
     console.error('[IssueService] Error updating assignee:', error);
