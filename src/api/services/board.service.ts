@@ -20,3 +20,13 @@ export const deleteBoard = async (boardId: string): Promise<void> => {
     throw new Error('Failed to delete board');
   }
 };
+
+export const getBoard = async (boardId: string): Promise<Board | null> => {
+  try {
+    const board = await boardRepository.getBoard(boardId);
+    return board;
+  } catch (error: any) {
+    console.error('Error getting board:', error);
+    throw new Error('Failed to get board');
+  }
+};
