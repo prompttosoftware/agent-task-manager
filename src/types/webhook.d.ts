@@ -1,6 +1,8 @@
 // src/types/webhook.d.ts
-// Define webhook-specific types and interfaces here
+// Define webhook types and interfaces here
 
-export interface WebhookData {
-  // Define the structure of the webhook data
+export interface WebhookEvent {
+  // Define event payload structure
+  type: string;
+  data: any;
 }
