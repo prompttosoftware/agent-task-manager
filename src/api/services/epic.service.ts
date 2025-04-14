@@ -1,4 +1,14 @@
 import { Epic } from '../types/epic.d.ts';
+import Joi from 'joi';
+
+const epicSchema = Joi.object({
+    key: Joi.string().required(),
+    name: Joi.string().required(),
+    description: Joi.string().required(),
+    status: Joi.string().required(),
+    startDate: Joi.string(),
+    endDate: Joi.string()
+});
 
 export class EpicService {
     private epics: Epic[] = [];
@@ -12,8 +22,14 @@ export class EpicService {
     }
 
     createEpic(epic: Epic): Epic {
-        this.epics.push(epic);
-        return epic;
+        const { error, value } = epicSchema.validate(epic);
+
+        if (error) {
+            throw new Error(`Invalid epic data: ${error.message}`);
+        }
+
+        this.epics.push(value);
+        return value;
     }
 
     updateEpic(epicKey: string, updatedEpic: Partial<Epic>): Epic | undefined {
