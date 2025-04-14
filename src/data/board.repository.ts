@@ -1,8 +1,13 @@
-// src/data/board.repository.ts
+import { Board } from '../types/board.d';
+import { db } from './db';
 
-import { Board } from '../types/board';
-
-export interface BoardRepository {
-    getBoardById(boardId: string): Promise<Board | undefined>;
-    // Define other methods for board operations (create, update, delete)
-}
+export const getBoards = async (): Promise<Board[]> => {
+  try {
+    // Assuming 'boards' is the table name and you have a Board model/interface
+    const boards: Board[] = await db.query('SELECT * FROM boards');
+    return boards;
+  } catch (error: any) {
+    console.error('Error fetching boards from repository:', error);
+    throw new Error('Failed to fetch boards from repository');
+  }
+};

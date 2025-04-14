@@ -1,50 +1,33 @@
 import request from 'supertest';
-import { app } from '../../src/app'; // Assuming your app is exported
-import { BoardService } from '../../src/api/services/board.service';
-import { mockBoard } from '../../src/data/mocks/mock.board.repository';
+import app from '../index';
+import { getAllBoards } from '../services/board.service';
+import { Board } from '../types/board.d';
 
-jest.mock('../../src/api/services/board.service');
+jest.mock('../services/board.service');
 
-describe('GET /boards/:boardId', () => {
-  it('should return a board if the boardId is valid', async () => {
-    const boardId = '1';
-    const mockBoardData = mockBoard();
-    (BoardService.prototype.getBoardById as jest.Mock).mockResolvedValue(mockBoardData);
+describe('GET /boards', () => {
+  it('should return a list of boards with status code 200', async () => {
+    const mockBoards: Board[] = [
+      { id: 1, name: 'Board 1', description: 'Description 1' },
+      { id: 2, name: 'Board 2', description: 'Description 2' },
+    ];
 
-    const response = await request(app).get(`/api/boards/${boardId}`);
+    (getAllBoards as jest.Mock).mockResolvedValue(mockBoards);
+
+    const response = await request(app).get('/api/boards');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(mockBoardData);
-    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
+    expect(response.body).toEqual(mockBoards);
+    expect(getAllBoards).toHaveBeenCalledTimes(1);
   });
 
-  it('should return 400 if boardId is not a number', async () => {
-    const boardId = 'abc';
-    const response = await request(app).get(`/api/boards/${boardId}`);
+  it('should return a 500 status code and an error message if getAllBoards service fails', async () => {
+    (getAllBoards as jest.Mock).mockRejectedValue(new Error('Failed to fetch boards'));
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual(expect.objectContaining({ errors: expect.any(Array) }));
-  });
-
-  it('should return 404 if board is not found', async () => {
-    const boardId = '999';
-    (BoardService.prototype.getBoardById as jest.Mock).mockResolvedValue(null);
-
-    const response = await request(app).get(`/api/boards/${boardId}`);
-
-    expect(response.status).toBe(404);
-    expect(response.body).toEqual({ message: 'Board not found' });
-    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
-  });
-
-  it('should return 500 if there is an internal server error', async () => {
-    const boardId = '1';
-    (BoardService.prototype.getBoardById as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-    const response = await request(app).get(`/api/boards/${boardId}`);
+    const response = await request(app).get('/api/boards');
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ message: 'Database error' });
-    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
+    expect(response.body).toEqual({ error: 'Failed to fetch boards' });
+    expect(getAllBoards).toHaveBeenCalledTimes(1);
   });
 });

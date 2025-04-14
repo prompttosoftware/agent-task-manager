@@ -1,22 +1,8 @@
-import { Router } from 'express';
-import { BoardController } from '../controllers/board.controller';
-import { boardIdValidator } from '../validators/board.validator';
+import express from 'express';
+import { getBoards } from '../controllers/board.controller';
 
-export class BoardRoutes {
-  private readonly router: Router;
-  private readonly boardController: BoardController;
+const router = express.Router();
 
-  constructor(boardController: BoardController) {
-    this.boardController = boardController;
-    this.router = Router();
-    this.setupRoutes();
-  }
+router.get('/boards', getBoards);
 
-  private setupRoutes() {
-    this.router.get('/:boardId', boardIdValidator, this.boardController.getBoardById.bind(this.boardController));
-  }
-
-  getRouter(): Router {
-    return this.router;
-  }
-}
+export default router;

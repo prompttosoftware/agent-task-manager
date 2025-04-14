@@ -1,7 +1,6 @@
 export interface Board {
-  id: string;
-  title: string;
+  id: number;
+  name: string;
   description: string;
-  createdAt: Date;
-  updatedAt: Date;
+  // Add other board properties as needed
 }
