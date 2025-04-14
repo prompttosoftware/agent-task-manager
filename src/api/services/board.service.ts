@@ -1,12 +1,13 @@
-import { Board } from '../types/board.d';
-import { getBoards as getBoardsFromRepo } from '../data/board.repository';
+import { CreateBoardData, Board } from '../types/board';
+import * as boardRepository from '../data/board.repository';
 
-export const getAllBoards = async (): Promise<Board[]> => {
+export const createBoard = async (boardData: CreateBoardData): Promise<Board> => {
   try {
-    const boards = await getBoardsFromRepo();
-    return boards;
+    // Use the actual repository to create the board
+    const newBoard: Board = await boardRepository.createBoard(boardData);
+    return newBoard;
   } catch (error: any) {
-    console.error('Error in getAllBoards service:', error);
-    throw new Error('Failed to fetch boards from service');
+    console.error('Error creating board:', error);
+    throw new Error('Failed to create board');
   }
 };

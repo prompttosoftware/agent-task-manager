@@ -1,6 +1,10 @@
 export interface Board {
-  id: number;
+  id: string;
   name: string;
   description: string;
-  // Add other board properties as needed
+}
+
+export interface CreateBoardData {
+  name: string;
+  description: string;
 }
