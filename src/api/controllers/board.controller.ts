@@ -21,3 +21,19 @@ export const createBoard = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Failed to create board' });
   }
 };
+
+export const deleteBoard = async (req: Request, res: Response) => {
+  const boardId = req.params.boardId;
+
+  if (!boardId) {
+    return res.status(400).json({ message: 'Board ID is required' });
+  }
+
+  try {
+    await boardService.deleteBoard(boardId);
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Error deleting board in controller:', error);
+    res.status(500).json({ message: 'Failed to delete board' });
+  }
+};

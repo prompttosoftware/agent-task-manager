@@ -11,3 +11,12 @@ export const createBoard = async (boardData: CreateBoardData): Promise<Board> =>
     throw new Error('Failed to create board');
   }
 };
+
+export const deleteBoard = async (boardId: string): Promise<void> => {
+  try {
+    await boardRepository.deleteBoard(boardId);
+  } catch (error: any) {
+    console.error('Error deleting board:', error);
+    throw new Error('Failed to delete board');
+  }
+};
