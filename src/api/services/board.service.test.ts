@@ -1,50 +1,55 @@
-// src/api/services/board.service.test.ts
-import { Test, TestingModule } from '@nestjs/testing';
 import { BoardService } from './board.service';
 import { BoardRepository } from '../data/board.repository';
-import { Board } from '../types/board.d';
-import { v4 as uuidv4 } from 'uuid';
+import { mockBoard } from '../data/mocks/mock.board.repository';
+
+jest.mock('../data/board.repository');
 
 describe('BoardService', () => {
-  let service: BoardService;
+  let boardService: BoardService;
   let boardRepository: BoardRepository;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BoardService,
-        { provide: BoardRepository, useValue: {
-          findById: jest.fn(),
-        } },
-      ],
-    }).compile();
-
-    service = module.get<BoardService>(BoardService);
-    boardRepository = module.get<BoardRepository>(BoardRepository);
+  beforeEach(() => {
+    boardRepository = new BoardRepository() as jest.Mocked<BoardRepository>;
+    boardService = new BoardService(boardRepository);
+    jest.resetAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  it('should return a board if it exists', async () => {
+    const boardId = '1';
+    const mockBoardData = mockBoard();
+    (boardRepository.getBoardById as jest.Mock).mockResolvedValue(mockBoardData);
+
+    const board = await boardService.getBoardById(boardId);
+
+    expect(board).toEqual(mockBoardData);
+    expect(boardRepository.getBoardById).toHaveBeenCalledWith(1);
   });
 
-  it('should return a board when found', async () => {
-    const boardId = uuidv4();
-    const expectedBoard: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
-    jest.spyOn(boardRepository, 'findById').mockResolvedValue(expectedBoard);
+  it('should return null if board does not exist', async () => {
+    const boardId = '999';
+    (boardRepository.getBoardById as jest.Mock).mockResolvedValue(null);
 
-    const result = await service.getBoard(boardId);
+    const board = await boardService.getBoardById(boardId);
 
-    expect(boardRepository.findById).toHaveBeenCalledWith(boardId);
-    expect(result).toEqual(expectedBoard);
+    expect(board).toBeNull();
+    expect(boardRepository.getBoardById).toHaveBeenCalledWith(999);
   });
 
-  it('should return undefined when not found', async () => {
-    const boardId = uuidv4();
-    jest.spyOn(boardRepository, 'findById').mockResolvedValue(undefined);
+  it('should return null if boardId is not a number', async () => {
+    const boardId = 'abc';
 
-    const result = await service.getBoard(boardId);
+    const board = await boardService.getBoardById(boardId);
 
-    expect(boardRepository.findById).toHaveBeenCalledWith(boardId);
-    expect(result).toBeUndefined();
+    expect(board).toBeNull();
+    expect(boardRepository.getBoardById).not.toHaveBeenCalled();
+  });
+
+  it('should throw an error if the repository throws an error', async () => {
+    const boardId = '1';
+    const errorMessage = 'Database error';
+    (boardRepository.getBoardById as jest.Mock).mockRejectedValue(new Error(errorMessage));
+
+    await expect(boardService.getBoardById(boardId)).rejects.toThrow(errorMessage);
+    expect(boardRepository.getBoardById).toHaveBeenCalledWith(1);
   });
 });

@@ -1,15 +1,22 @@
-// src/api/routes/board.routes.ts
 import { Router } from 'express';
-import { BoardController } from '../api/controllers/board.controller';
-import { BoardService } from '../api/services/board.service';
-import { BoardRepository } from '../data/board.repository';
+import { BoardController } from '../controllers/board.controller';
+import { boardIdValidator } from '../validators/board.validator';
 
-const router = Router();
+export class BoardRoutes {
+  private readonly router: Router;
+  private readonly boardController: BoardController;
 
-const boardRepository = new BoardRepository(); // Assuming a default constructor or dependency injection setup.
-const boardService = new BoardService(boardRepository);
-const boardController = new BoardController(boardService);
+  constructor(boardController: BoardController) {
+    this.boardController = boardController;
+    this.router = Router();
+    this.setupRoutes();
+  }
 
-router.get('/boards/:boardId', boardController.getBoard.bind(boardController));
+  private setupRoutes() {
+    this.router.get('/:boardId', boardIdValidator, this.boardController.getBoardById.bind(this.boardController));
+  }
 
-export default router;
+  getRouter(): Router {
+    return this.router;
+  }
+}
