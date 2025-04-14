@@ -1,189 +1,75 @@
-import request from 'supertest';
-import express from 'express';
+// src/api/controllers/board.controller.test.ts
+import { Test, TestingModule } from '@nestjs/testing';
 import { BoardController } from './board.controller';
 import { BoardService } from '../services/board.service';
-import { boardRoutes } from '../routes/board.routes';
-import { Board } from '../types/board.d.ts';
-
-jest.mock('../services/board.service');
-
-const app = express();
-app.use(express.json());
+import { Board } from '../types/board.d';
+import { v4 as uuidv4 } from 'uuid';
+import { validate } from 'class-validator';
 
 describe('BoardController', () => {
+  let controller: BoardController;
   let boardService: BoardService;
-  let boardController: BoardController;
-  const mockBoard: Board = {
-    id: '1',
-    name: 'Test Board',
-    description: 'Test Description',
-  };
 
-  beforeEach(() => {
-    boardService = new BoardService();
-    boardController = new BoardController(boardService);
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [BoardController],
+      providers: [
+        { provide: BoardService, useValue: {
+          getBoard: jest.fn().mockResolvedValue(undefined),
+        } },
+      ],
+    }).compile();
 
-    // Mock the board service methods
-    (boardService.getBoardById as jest.Mock).mockClear();
-    (boardService.listBoards as jest.Mock).mockClear();
-    (boardService.createBoard as jest.Mock).mockClear();
-    (boardService.updateBoard as jest.Mock).mockClear();
-    (boardService.deleteBoard as jest.Mock).mockClear();
-
-    // Setup routes with the mocked controller
-    const router = boardRoutes(boardController);
-    app.use('/boards', router);
+    controller = module.get<BoardController>(BoardController);
+    boardService = module.get<BoardService>(BoardService);
   });
 
-  describe('GET /boards/:boardId', () => {
-    it('should return a board if it exists', async () => {
-      (boardService.getBoardById as jest.Mock).mockResolvedValue(mockBoard);
-
-      const response = await request(app).get('/boards/1');
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockBoard);
-      expect(boardService.getBoardById).toHaveBeenCalledWith('1');
-    });
-
-    it('should return 404 if board does not exist', async () => {
-      (boardService.getBoardById as jest.Mock).mockResolvedValue(null);
-
-      const response = await request(app).get('/boards/1');
-
-      expect(response.status).toBe(404);
-      expect(boardService.getBoardById).toHaveBeenCalledWith('1');
-    });
-
-    it('should return 500 if there is an error', async () => {
-      (boardService.getBoardById as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-      const response = await request(app).get('/boards/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to retrieve board', error: 'Database error' });
-      expect(boardService.getBoardById).toHaveBeenCalledWith('1');
-    });
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
-  describe('GET /boards', () => {
-    it('should return a list of boards', async () => {
-      (boardService.listBoards as jest.Mock).mockResolvedValue([mockBoard]);
+  it('should return a board when boardId is valid', async () => {
+    const boardId = uuidv4();
+    const board: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
+    jest.spyOn(boardService, 'getBoard').mockResolvedValue(board);
 
-      const response = await request(app).get('/boards');
+    const result = await controller.getBoard({ params: { boardId } } as any, { json: jest.fn() } as any);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual([mockBoard]);
-      expect(boardService.listBoards).toHaveBeenCalled();
-    });
-
-    it('should return 500 if there is an error', async () => {
-      (boardService.listBoards as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-      const response = await request(app).get('/boards');
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to list boards', error: 'Database error' });
-      expect(boardService.listBoards).toHaveBeenCalled();
-    });
+    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
+    expect((result as any).json).toHaveBeenCalledWith(board);
   });
 
-  describe('POST /boards', () => {
-    it('should create a new board and return 201', async () => {
-      (boardService.createBoard as jest.Mock).mockResolvedValue(mockBoard);
+  it('should return 404 if board is not found', async () => {
+    const boardId = uuidv4();
+    jest.spyOn(boardService, 'getBoard').mockResolvedValue(undefined);
 
-      const response = await request(app).post('/boards').send({ name: 'New Board', description: 'New Description' });
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
+    await controller.getBoard({ params: { boardId } } as any, res);
 
-      expect(response.status).toBe(201);
-      expect(response.body).toEqual(mockBoard);
-      expect(boardService.createBoard).toHaveBeenCalledWith({ name: 'New Board', description: 'New Description' });
-    });
-
-    it('should return 400 if validation fails', async () => {
-        const response = await request(app).post('/boards').send({ description: 'New Description' });
-
-        expect(response.status).toBe(400);
-        expect(response.body.errors).toBeDefined();
-        // You might want to add more specific checks for error messages
-      });
-
-    it('should return 500 if there is an error', async () => {
-      (boardService.createBoard as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-      const response = await request(app).post('/boards').send({ name: 'New Board', description: 'New Description' });
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to create board', error: 'Database error' });
-      expect(boardService.createBoard).toHaveBeenCalledWith({ name: 'New Board', description: 'New Description' });
-    });
+    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Board not found' });
   });
 
-  describe('PUT /boards/:boardId', () => {
-    it('should update a board and return 200', async () => {
-      (boardService.updateBoard as jest.Mock).mockResolvedValue(mockBoard);
+  it('should return 400 if boardId is invalid', async () => {
+    const boardId = 'invalid-uuid';
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
+    await controller.getBoard({ params: { boardId } } as any, res);
 
-      const response = await request(app).put('/boards/1').send({ name: 'Updated Board', description: 'Updated Description' });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockBoard);
-      expect(boardService.updateBoard).toHaveBeenCalledWith('1', { name: 'Updated Board', description: 'Updated Description' });
-    });
-
-    it('should return 400 if validation fails', async () => {
-        const response = await request(app).put('/boards/1').send({ description: 'Updated Description' });
-
-        expect(response.status).toBe(400);
-        expect(response.body.errors).toBeDefined();
-        // You might want to add more specific checks for error messages
-      });
-
-    it('should return 404 if board does not exist', async () => {
-      (boardService.updateBoard as jest.Mock).mockResolvedValue(null);
-
-      const response = await request(app).put('/boards/1').send({ name: 'Updated Board', description: 'Updated Description' });
-
-      expect(response.status).toBe(404);
-      expect(boardService.updateBoard).toHaveBeenCalledWith('1', { name: 'Updated Board', description: 'Updated Description' });
-    });
-
-    it('should return 500 if there is an error', async () => {
-      (boardService.updateBoard as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-      const response = await request(app).put('/boards/1').send({ name: 'Updated Board', description: 'Updated Description' });
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to update board', error: 'Database error' });
-      expect(boardService.updateBoard).toHaveBeenCalledWith('1', { name: 'Updated Board', description: 'Updated Description' });
-    });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.any(Object));
   });
 
-  describe('DELETE /boards/:boardId', () => {
-    it('should delete a board and return 204', async () => {
-      (boardService.deleteBoard as jest.Mock).mockResolvedValue(true);
+  it('should handle errors and return 500', async () => {
+    const boardId = uuidv4();
+    const errorMessage = 'Internal server error';
+    jest.spyOn(boardService, 'getBoard').mockRejectedValue(new Error(errorMessage));
 
-      const response = await request(app).delete('/boards/1');
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
+    await controller.getBoard({ params: { boardId } } as any, res);
 
-      expect(response.status).toBe(204);
-      expect(boardService.deleteBoard).toHaveBeenCalledWith('1');
-    });
-
-    it('should return 404 if board does not exist', async () => {
-      (boardService.deleteBoard as jest.Mock).mockResolvedValue(false);
-
-      const response = await request(app).delete('/boards/1');
-
-      expect(response.status).toBe(404);
-      expect(boardService.deleteBoard).toHaveBeenCalledWith('1');
-    });
-
-    it('should return 500 if there is an error', async () => {
-      (boardService.deleteBoard as jest.Mock).mockRejectedValue(new Error('Database error'));
-
-      const response = await request(app).delete('/boards/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Failed to delete board', error: 'Database error' });
-      expect(boardService.deleteBoard).toHaveBeenCalledWith('1');
-    });
+    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
   });
 });

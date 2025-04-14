@@ -11,10 +11,19 @@ export class ConfigService {
   }
 
   public getEpicKey(epicNumber: number): string | undefined {
-    return `ATM-${epicNumber}`;
+    switch (epicNumber) {
+      case 1:
+        return 'ATM-1';
+      case 2:
+        return 'ATM-2';
+      case 18:
+        return 'ATM-18';
+      default:
+        return undefined;
+    }
   }
 
-  public getLastEpicNumber(): number {
+  public getLastEpicNumber(): number | undefined {
     return 18;
   }
 

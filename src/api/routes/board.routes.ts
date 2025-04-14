@@ -1,17 +1,15 @@
 // src/api/routes/board.routes.ts
-import express from 'express';
-import { BoardController } from '../controllers/board.controller';
-import validate from '../middleware/validation.middleware';
-import { boardSchema } from '../validators/board.validator';
+import { Router } from 'express';
+import { BoardController } from '../api/controllers/board.controller';
+import { BoardService } from '../api/services/board.service';
+import { BoardRepository } from '../data/board.repository';
 
-const router = express.Router();
+const router = Router();
 
-export function boardRoutes(boardController: BoardController) {
-  router.get('/:boardId', validate([{ field: 'params.boardId', schema: boardSchema.pick({ id: true }) }]), boardController.getBoard.bind(boardController));
-  router.get('/', boardController.listBoards.bind(boardController));
-  router.post('/', validate([{ field: 'body', schema: boardSchema.omit({ id: true }) }]), boardController.createBoard.bind(boardController));
-  router.put('/:boardId', validate([{ field: 'params.boardId', schema: boardSchema.pick({ id: true }) }, { field: 'body', schema: boardSchema.omit({ id: true }).partial() }]), boardController.updateBoard.bind(boardController));
-  router.delete('/:boardId', validate([{ field: 'params.boardId', schema: boardSchema.pick({ id: true }) }]), boardController.deleteBoard.bind(boardController));
+const boardRepository = new BoardRepository(); // Assuming a default constructor or dependency injection setup.
+const boardService = new BoardService(boardRepository);
+const boardController = new BoardController(boardService);
 
-  return router;
-}
+router.get('/boards/:boardId', boardController.getBoard.bind(boardController));
+
+export default router;

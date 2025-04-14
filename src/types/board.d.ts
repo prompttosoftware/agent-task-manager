@@ -1,1 +1,7 @@
-// This file will contain the type definitions for the board API endpoints.
+export interface Board {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
