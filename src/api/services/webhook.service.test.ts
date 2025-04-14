@@ -1,7 +1,7 @@
 // src/api/services/webhook.service.test.ts
 import { sendToExternalService, getDeadLetterQueue, enqueueWebhook, processWebhook, getWebhookQueueSize } from './webhook.service';
 import { WebhookPayload } from '../types/webhook';
-import fetch from 'node-fetch';
+import fetch, { FetchError } from 'node-fetch';
 import { logger } from '../utils/logger';
 
 jest.mock('node-fetch');
@@ -17,15 +17,20 @@ describe('Webhook Service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Clear the DLQ and queue before each test
-    while (getDeadLetterQueue().length) {
-      getDeadLetterQueue().pop();
-    }
-    while (getWebhookQueueSize() > 0) {
-      // Assuming you have a way to clear the queue, or that dequeueing handles it
-      // For example, if the queue is an in-memory array:
-      processWebhook(webhookUrl);
+    const dlq = getDeadLetterQueue();
+    while (dlq.length > 0) {
+      dlq.pop();
     }
 
+    // Clear the webhook queue by processing all items
+    while (getWebhookQueueSize() > 0) {
+      processWebhook(webhookUrl);
+    }
+    jest.useFakeTimers(); // Enable fake timers for rate limit testing
+  });
+
+  afterEach(() => {
+    jest.useRealTimers(); // Restore real timers after each test
   });
 
   it('should successfully send the webhook if the external service returns 200', async () => {
@@ -91,26 +96,12 @@ describe('Webhook Service', () => {
   });
 
   it('should add to DLQ after max retries on a 500 error', async () => {
-    mockedFetch.mockResolvedValueOnce({
+    mockedFetch.mockResolvedValue({
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
     } as any);
-    mockedFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-    } as any);
-    mockedFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-    } as any);
-    mockedFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      } as any);
+
 
     await sendToExternalService(payload, webhookUrl);
 
@@ -122,10 +113,8 @@ describe('Webhook Service', () => {
   });
 
   it('should handle fetch errors and add to DLQ after retries', async () => {
-    mockedFetch.mockRejectedValueOnce(new Error('Network error'));
-    mockedFetch.mockRejectedValueOnce(new Error('Network error'));
-    mockedFetch.mockRejectedValueOnce(new Error('Network error'));
-    mockedFetch.mockRejectedValueOnce(new Error('Network error'));
+    mockedFetch.mockRejectedValue(new FetchError('Network error', ''));
+
 
     await sendToExternalService(payload, webhookUrl);
 
@@ -182,23 +171,64 @@ describe('Webhook Service', () => {
 
   it('should rate limit requests', async () => {
     // Fast forward time to avoid rate limiting issues from the start
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date(2024, 0, 1, 0, 0, 0)); // January 1, 2024 00:00:00
+
     const webhookUrl = 'https://example.com/webhook';
     const payload: WebhookPayload = { data: { message: 'test' } };
     // Mock fetch to be successful
-    mockedFetch.mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK' } as any);
+
+    mockedFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as any);
+
     // First 10 requests should succeed instantly
     for (let i = 0; i < 10; i++) {
       await sendToExternalService(payload, webhookUrl);
     }
+    expect(mockedFetch).toHaveBeenCalledTimes(10);
 
-    // 11th request should be rate limited
-    mockedFetch.mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK' } as any);
+    // Advance time to allow tokens to refill.  Sufficient tokens should be available after 10 seconds.
+    jest.advanceTimersByTime(10000);
+    // 11th request should succeed after waiting.
     await sendToExternalService(payload, webhookUrl);
-
     expect(mockedFetch).toHaveBeenCalledTimes(11);
+
+    //Fast forward time to trigger rate limit
+    jest.advanceTimersByTime(10);
+    // 12th request should be rate limited.
+    mockedLogger.warn.mockClear()
+    await sendToExternalService(payload, webhookUrl);
     expect(mockedLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Rate limit exceeded for'));
-    jest.useRealTimers();
+    expect(mockedFetch).toHaveBeenCalledTimes(12);
   });
+
+  it('enqueueWebhook should add a webhook to the queue', () => {
+    enqueueWebhook(payload);
+    expect(getWebhookQueueSize()).toBe(1);
+  });
+
+  it('getWebhookQueueSize should return the correct queue size', () => {
+    enqueueWebhook(payload);
+    enqueueWebhook(payload);
+    expect(getWebhookQueueSize()).toBe(2);
+  });
+
+  it('should add to DLQ after exceeding rate limit', async () => {
+        mockedFetch.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as any);
+
+        // Send the maximum allowed requests to consume all tokens
+        for (let i = 0; i < 10; i++) {
+            await sendToExternalService(payload, webhookUrl);
+        }
+
+        // Attempt to send one more request, which should exceed the rate limit
+        await sendToExternalService(payload, webhookUrl);
+
+        // Assert that the rate limit was exceeded
+        expect(mockedLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Rate limit exceeded for'));
+
+        // Fast forward enough time for the retries with rate limit to complete and add to DLQ
+        jest.advanceTimersByTime(3000);
+
+        // Assert that the webhook was added to the dead letter queue due to rate limiting
+        expect(getDeadLetterQueue().length).toBe(1);
+        expect(getDeadLetterQueue()[0].reason).toBe('Rate limit exceeded');
+    });
 });
