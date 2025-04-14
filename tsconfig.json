@@ -1,17 +1,9 @@
 {
-  "compilerOptions": {
-    "target": "es2020",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["./src/*"],
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["src/**/*"]
+  "target": "es2020",
+  "module": "commonjs",
+  "outDir": "./dist",
+  "strict": true,
+  "esModuleInterop": true,
+  "skipLibCheck": true,
+  "forceConsistentCasingInFileNames": true
 }
