@@ -1,9 +1,7 @@
-import { z } from 'zod';
+import { param } from 'express-validator';
 
-export const boardSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1, { message: 'Name is required' }),
-  description: z.string().optional(),
-});
-
-export type Board = z.infer<typeof boardSchema>;
+export const boardIdValidator = [
+  param('boardId')
+    .isInt({ min: 1 })
+    .withMessage('Board ID must be a number greater than 0'),
+];

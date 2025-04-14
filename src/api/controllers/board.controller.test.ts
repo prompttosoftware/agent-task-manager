@@ -1,75 +1,50 @@
-// src/api/controllers/board.controller.test.ts
-import { Test, TestingModule } from '@nestjs/testing';
-import { BoardController } from './board.controller';
-import { BoardService } from '../services/board.service';
-import { Board } from '../types/board.d';
-import { v4 as uuidv4 } from 'uuid';
-import { validate } from 'class-validator';
+import request from 'supertest';
+import { app } from '../../src/app'; // Assuming your app is exported
+import { BoardService } from '../../src/api/services/board.service';
+import { mockBoard } from '../../src/data/mocks/mock.board.repository';
 
-describe('BoardController', () => {
-  let controller: BoardController;
-  let boardService: BoardService;
+jest.mock('../../src/api/services/board.service');
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [BoardController],
-      providers: [
-        { provide: BoardService, useValue: {
-          getBoard: jest.fn().mockResolvedValue(undefined),
-        } },
-      ],
-    }).compile();
+describe('GET /boards/:boardId', () => {
+  it('should return a board if the boardId is valid', async () => {
+    const boardId = '1';
+    const mockBoardData = mockBoard();
+    (BoardService.prototype.getBoardById as jest.Mock).mockResolvedValue(mockBoardData);
 
-    controller = module.get<BoardController>(BoardController);
-    boardService = module.get<BoardService>(BoardService);
+    const response = await request(app).get(`/api/boards/${boardId}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(mockBoardData);
+    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
   });
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
+  it('should return 400 if boardId is not a number', async () => {
+    const boardId = 'abc';
+    const response = await request(app).get(`/api/boards/${boardId}`);
 
-  it('should return a board when boardId is valid', async () => {
-    const boardId = uuidv4();
-    const board: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
-    jest.spyOn(boardService, 'getBoard').mockResolvedValue(board);
-
-    const result = await controller.getBoard({ params: { boardId } } as any, { json: jest.fn() } as any);
-
-    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
-    expect((result as any).json).toHaveBeenCalledWith(board);
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual(expect.objectContaining({ errors: expect.any(Array) }));
   });
 
   it('should return 404 if board is not found', async () => {
-    const boardId = uuidv4();
-    jest.spyOn(boardService, 'getBoard').mockResolvedValue(undefined);
+    const boardId = '999';
+    (BoardService.prototype.getBoardById as jest.Mock).mockResolvedValue(null);
 
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
-    await controller.getBoard({ params: { boardId } } as any, res);
+    const response = await request(app).get(`/api/boards/${boardId}`);
 
-    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Board not found' });
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ message: 'Board not found' });
+    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
   });
 
-  it('should return 400 if boardId is invalid', async () => {
-    const boardId = 'invalid-uuid';
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
-    await controller.getBoard({ params: { boardId } } as any, res);
+  it('should return 500 if there is an internal server error', async () => {
+    const boardId = '1';
+    (BoardService.prototype.getBoardById as jest.Mock).mockRejectedValue(new Error('Database error'));
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.any(Object));
-  });
+    const response = await request(app).get(`/api/boards/${boardId}`);
 
-  it('should handle errors and return 500', async () => {
-    const boardId = uuidv4();
-    const errorMessage = 'Internal server error';
-    jest.spyOn(boardService, 'getBoard').mockRejectedValue(new Error(errorMessage));
-
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as any;
-    await controller.getBoard({ params: { boardId } } as any, res);
-
-    expect(boardService.getBoard).toHaveBeenCalledWith(boardId);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: 'Database error' });
+    expect(BoardService.prototype.getBoardById).toHaveBeenCalledWith(boardId);
   });
 });

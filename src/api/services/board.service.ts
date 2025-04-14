@@ -1,16 +1,23 @@
-// src/api/services/board.service.ts
+import { Board } from '../types/board';
 import { BoardRepository } from '../data/board.repository';
-import { Board } from '../types/board.d';
 
 export class BoardService {
-    private boardRepository: BoardRepository;
+  private readonly boardRepository: BoardRepository;
 
-    constructor(boardRepository: BoardRepository) {
-        this.boardRepository = boardRepository;
-    }
+  constructor(boardRepository: BoardRepository) {
+    this.boardRepository = boardRepository;
+  }
 
-    async getBoard(boardId: string): Promise<Board | undefined> {
-        // In a real application, you would likely fetch the board from a database
-        return this.boardRepository.findById(boardId);
+  async getBoardById(boardId: string): Promise<Board | null> {
+    try {
+      const id = parseInt(boardId, 10);
+      if (isNaN(id)) {
+        return null;
+      }
+      return await this.boardRepository.getBoardById(id);
+    } catch (error: any) {
+      console.error('Error in BoardService.getBoardById:', error);
+      throw error;
     }
+  }
 }
