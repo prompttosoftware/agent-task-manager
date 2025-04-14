@@ -1,49 +1,79 @@
 import request from 'supertest';
-import app from '../../src/api/index'; // Assuming your app is exported from index.ts
-import { db } from '../../src/data/db'; // Import your database connection
-import { Board } from '../../src/types/board';
+import { app } from '../../app'; // Assuming you have an app instance
+import { boardService } from '../services/board.service';
+import { v4 as uuidv4 } from 'uuid';
+import { Board } from '../../types/board.d';
+import { db } from '../../data/db';
 
-describe('Board Controller - DELETE /boards/:boardId', () => {
-  // Helper function to create a board
-  const createTestBoard = async (name: string, description: string): Promise<Board> => {
-    const board = await db.Board.create({ name, description });
-    return board.toJSON() as Board;
-  };
+// jest.mock('../services/board.service');
 
+describe('PUT /boards/:boardId', () => {
   beforeEach(async () => {
     // Clear the database before each test
-    await db.Board.sync({ force: true }); // Use force: true for testing to clear data
+    // Assuming you have a function to reset your in-memory database
+    await db.reset();
   });
 
-  it('should delete a board by ID and return 204', async () => {
-    const board = await createTestBoard('Test Board', 'Test Description');
+  it('should update a board and return 200', async () => {
+    const boardId = uuidv4();
+    const updateData = { name: 'Updated Board Name', description: 'Updated Description' };
+    const initialBoard: Board = {
+      id: boardId,
+      name: 'Initial Name',
+      description: 'Initial Description'
+    }
+    await db.boards.create(initialBoard);
 
-    const response = await request(app).delete(`/api/boards/${board.id}`);
+    const response = await request(app)
+      .put(`/api/boards/${boardId}`)
+      .send(updateData)
+      .set('Accept', 'application/json');
 
-    expect(response.statusCode).toBe(204);
-
-    // Verify the board is deleted (optional, but recommended)
-    const deletedBoard = await db.Board.findByPk(board.id);
-    expect(deletedBoard).toBeNull();
+    expect(response.status).toBe(200);
+    expect(response.body.name).toEqual(updateData.name);
+    expect(response.body.description).toEqual(updateData.description);
   });
 
   it('should return 400 if boardId is invalid', async () => {
-    const response = await request(app).delete('/api/boards/invalid-id');
-    expect(response.statusCode).toBe(400);
-    // You might want to add more assertions to check the response body
+    const invalidBoardId = 'invalid-id';
+    const response = await request(app).put(`/api/boards/${invalidBoardId}`).send({ name: 'test' });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid boardId');
+  });
+
+  it('should return 400 if request body is invalid', async () => {
+    const boardId = uuidv4();
+    const response = await request(app).put(`/api/boards/${boardId}`).send({ name: 123 }); // Invalid name
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('"name" must be a string');
   });
 
   it('should return 404 if board is not found', async () => {
-    const response = await request(app).delete('/api/boards/999'); // Assuming 999 doesn't exist
-    expect(response.statusCode).toBe(204); // Assuming delete returns 204 even if not found.  Consider changing this in controller.
+    const boardId = uuidv4();
+    const updateData = { name: 'Updated Name' };
+
+    const response = await request(app)
+      .put(`/api/boards/${boardId}`)
+      .send(updateData)
+      .set('Accept', 'application/json');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ message: 'Board not found' });
   });
 
-  it('should handle database errors and return 500', async () => {
-    // Mock the deleteBoard function to simulate a database error
-    jest.spyOn(require('../../src/api/services/board.service'), 'deleteBoard').mockRejectedValue(new Error('Database error'));
+  it('should return 500 if an internal server error occurs', async () => {
+    const boardId = uuidv4();
+    const updateData = { name: 'Updated Name', description: 'Updated Description' };
+    // Mock the db.boards.update function to throw an error
+    jest.spyOn(db.boards, 'update').mockRejectedValue(new Error('Database error'));
+    
+    const response = await request(app)
+      .put(`/api/boards/${boardId}`)
+      .send(updateData)
+      .set('Accept', 'application/json');
 
-    const response = await request(app).delete('/api/boards/1');
-    expect(response.statusCode).toBe(500);
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('Database error');
     jest.restoreAllMocks();
   });
 });
