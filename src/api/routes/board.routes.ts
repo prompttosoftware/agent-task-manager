@@ -1,8 +1,10 @@
 import express from 'express';
-import { getBoards } from '../controllers/board.controller';
+import { createBoard, deleteBoard } from '../api/controllers/board.controller';
+import { validateCreateBoard } from '../api/validators/board.validator';
 
 const router = express.Router();
 
-router.get('/boards', getBoards);
+router.post('/boards', validateCreateBoard, createBoard);
+router.delete('/boards/:boardId', deleteBoard);
 
 export default router;
