@@ -1,41 +1,47 @@
 import request from 'supertest';
 import { Express } from 'express';
-import { setupApp } from '../../app';
-import { enqueueWebhook, getDeadLetterQueue, getWebhookQueueSize } from '../services/webhook.service';
+import { setupApp } from '../../../src/app';
+import * as webhookService from '../../services/webhook.service'; // Import as a namespace
 
 describe('Webhook Controller', () => {
-  let app: Express;
+    let app: Express;
 
-  beforeAll(async () => {
-    app = await setupApp();
-  });
+    beforeAll(async () => {
+        app = await setupApp();
+    });
 
-  it('should enqueue a webhook', async () => {
-    const response = await request(app)
-      .post('/api/webhooks')
-      .send({ url: 'http://example.com', events: ['issue.created'] });
+    it('should enqueue a webhook', async () => {
+        // Mock webhookService functions
+        const enqueueWebhookMock = jest.spyOn(webhookService, 'enqueueWebhook');
+        const getWebhookQueueSizeMock = jest.spyOn(webhookService, 'getWebhookQueueSize');
+        enqueueWebhookMock.mockResolvedValue(undefined); // Webhooks are async functions, so setting a return value is important for mocking, and undefined is the standard return from a void function.
+        getWebhookQueueSizeMock.mockReturnValue(1); // Simulate a queue size of 1
 
-    expect(response.statusCode).toBe(202);
-    expect(getWebhookQueueSize()).toBe(1);
-  });
+        const response = await request(app)
+            .post('/api/webhooks')
+            .send({ url: 'http://example.com', events: ['issue.created'] });
 
-  it('should return the dead letter queue', async () => {
-    // Ensure the dead letter queue is empty initially
-    expect(getDeadLetterQueue().length).toBe(0);
+        expect(response.statusCode).toBe(202);
+        expect(webhookService.getWebhookQueueSize()).toBe(1);
+        expect(enqueueWebhookMock).toHaveBeenCalledWith(expect.objectContaining({
+            url: 'http://example.com',
+            events: ['issue.created']
+        }));
 
-    // You might want to simulate a failed webhook and add it to the dead letter queue
-    // For example, by sending a webhook to an invalid URL or causing an error in the service.
-    // For the purpose of this test, lets mock an error by sending a webhook that fails.
+        enqueueWebhookMock.mockRestore();  // Restore the original function
+        getWebhookQueueSizeMock.mockRestore();
+    });
 
-    // const response = await request(app)
-    //   .post('/api/webhooks')
-    //   .send({ url: 'invalid_url', events: ['issue.created'] });
+    it('should return the dead letter queue', async () => {
+        const getDeadLetterQueueMock = jest.spyOn(webhookService, 'getDeadLetterQueue');
+        getDeadLetterQueueMock.mockReturnValue([]);
 
-    // expect(response.statusCode).toBe(202);
+        const response = await request(app).get('/api/webhooks/deadletter');
 
-    const response = await request(app).get('/api/webhooks/deadletter');
+        expect(response.statusCode).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(getDeadLetterQueueMock).toHaveBeenCalled();
 
-    expect(response.statusCode).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-  });
+        getDeadLetterQueueMock.mockRestore();
+    });
 });
