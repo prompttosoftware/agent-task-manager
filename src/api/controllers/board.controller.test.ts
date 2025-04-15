@@ -9,21 +9,19 @@ import { ConfigService } from '../../config/config.service';
 describe('BoardController', () => {
   let app: INestApplication;
   let boardService: BoardService;
-  let configService: ConfigService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BoardController],
       providers: [
         { provide: BoardService, useValue: { createBoard: jest.fn(), getAllBoards: jest.fn(), getBoardById: jest.fn(), updateBoard: jest.fn(), deleteBoard: jest.fn() } },
-        { provide: ConfigService, useValue: { get: jest.fn(key => key === 'port' ? 3000 : null) } },
+        { provide: ConfigService, useValue: { get: jest.fn(key => (key === 'port' ? 3000 : null)) } },
       ],
     }).compile();
 
     app = module.createNestApplication();
     await app.init();
     boardService = module.get<BoardService>(BoardService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(async () => {
@@ -33,12 +31,11 @@ describe('BoardController', () => {
   it('should be defined', () => {
     expect(app).toBeDefined();
     expect(boardService).toBeDefined();
-    expect(configService).toBeDefined();
   });
 
   it('should create a board', async () => {
     const createBoardDto: CreateBoardDto = { name: 'Test Board', description: 'Test Description' };
-    const createdBoard: Board = { id: 1, ...createBoardDto, createdAt: new Date(), updatedAt: new Date() };
+    const createdBoard: Board = { id: '1', ...createBoardDto, createdAt: new Date(), updatedAt: new Date() };
     jest.spyOn(boardService, 'createBoard').mockResolvedValue(createdBoard);
 
     const response = await request(app.getHttpServer())
@@ -52,8 +49,8 @@ describe('BoardController', () => {
 
   it('should get all boards', async () => {
     const boards: Board[] = [
-      { id: 1, name: 'Board 1', description: 'Desc 1', createdAt: new Date(), updatedAt: new Date() },
-      { id: 2, name: 'Board 2', description: 'Desc 2', createdAt: new Date(), updatedAt: new Date() },
+      { id: '1', name: 'Board 1', description: 'Desc 1', createdAt: new Date(), updatedAt: new Date() },
+      { id: '2', name: 'Board 2', description: 'Desc 2', createdAt: new Date(), updatedAt: new Date() },
     ];
     jest.spyOn(boardService, 'getAllBoards').mockResolvedValue(boards);
 
@@ -66,7 +63,7 @@ describe('BoardController', () => {
   });
 
   it('should get a board by id', async () => {
-    const boardId = 1;
+    const boardId = '1';
     const board: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
     jest.spyOn(boardService, 'getBoardById').mockResolvedValue(board);
 
@@ -75,12 +72,12 @@ describe('BoardController', () => {
       .expect(200);
 
     expect(response.body).toEqual(board);
-    expect(boardService.getBoardById).toHaveBeenCalledWith(boardId.toString());
+    expect(boardService.getBoardById).toHaveBeenCalledWith(boardId);
   });
 
   it('should update a board', async () => {
-    const boardId = 1;
-    const updateBoardDto: Partial<Board> = { name: 'Updated Name', description: 'Updated Description' };
+    const boardId = '1';
+    const updateBoardDto: CreateBoardDto = { name: 'Updated Name', description: 'Updated Description' };
     const updatedBoard: Board = { id: boardId, ...updateBoardDto, createdAt: new Date(), updatedAt: new Date() };
     jest.spyOn(boardService, 'updateBoard').mockResolvedValue(updatedBoard);
 
@@ -90,17 +87,17 @@ describe('BoardController', () => {
       .expect(200);
 
     expect(response.body).toEqual(updatedBoard);
-    expect(boardService.updateBoard).toHaveBeenCalledWith(boardId.toString(), updateBoardDto);
+    expect(boardService.updateBoard).toHaveBeenCalledWith(boardId, updateBoardDto);
   });
 
   it('should delete a board', async () => {
-    const boardId = 1;
+    const boardId = '1';
     jest.spyOn(boardService, 'deleteBoard').mockResolvedValue(undefined);
 
     await request(app.getHttpServer())
       .delete(`/boards/${boardId}`)
       .expect(204);
 
-    expect(boardService.deleteBoard).toHaveBeenCalledWith(boardId.toString());
+    expect(boardService.deleteBoard).toHaveBeenCalledWith(boardId);
   });
 });
