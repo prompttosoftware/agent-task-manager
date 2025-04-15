@@ -7,6 +7,9 @@ export interface Issue {
   status: IssueStatus;
   createdAt: Date;
   updatedAt: Date;
+  epicKey?: string;
+  boardId: string;
+  summary?: string;
 }
 
 export enum IssueStatus {

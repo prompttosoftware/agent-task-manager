@@ -1,66 +1,51 @@
-// src/data/board.repository.ts
 import { db } from '../data/db';
 import { Board } from '../types/board';
 
-export const createBoard = async (boardData: Omit<Board, 'id'>): Promise<Board> => {
-  try {
-    const newBoard = await db.Board.create(boardData);
-    return newBoard.toJSON() as Board;
-  } catch (error: any) {
-    console.error('Error creating board in repository:', error);
-    throw new Error('Failed to create board in repository');
-  }
-};
+export interface BoardRepository {
+  createBoard(boardData: Omit<Board, 'id'>): Promise<Board>;
+  getBoardById(id: number): Promise<Board | undefined>;
+  getAllBoards(): Promise<Board[]>;
+  updateBoard(id: number, boardData: Partial<Board>): Promise<Board | undefined>;
+  deleteBoard(id: number): Promise<void>;
+}
 
-export const getBoardById = async (id: number): Promise<Board | null> => {
-  try {
-    const board = await db.Board.findByPk(id);
-    if (board) {
-      return board.toJSON() as Board;
+export class BoardRepositoryImpl implements BoardRepository {
+  async createBoard(boardData: Omit<Board, 'id'>): Promise<Board> {
+    const id = db.boards.length + 1;
+    const newBoard: Board = {
+      id,
+      ...boardData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    db.boards.push(newBoard;
+    return newBoard;
+  }
+
+  async getBoardById(id: number): Promise<Board | undefined> {
+    return db.boards.find((board) => board.id === id);
+  }
+
+  async getAllBoards(): Promise<Board[]> {
+    return db.boards;
+  }
+
+  async updateBoard(id: number, boardData: Partial<Board>): Promise<Board | undefined> {
+    const boardIndex = db.boards.findIndex((board) => board.id === id);
+    if (boardIndex === -1) {
+      return undefined;
     }
-    return null;
-  } catch (error: any) {
-    console.error('Error fetching board by ID from repository:', error);
-    throw new Error('Failed to fetch board by ID from repository');
+    db.boards[boardIndex] = {
+      ...db.boards[boardIndex],
+      ...boardData,
+      updatedAt: new Date(),
+    };
+    return db.boards[boardIndex];
   }
-};
 
-export const getAllBoards = async (): Promise<Board[]> => {
-  try {
-    const boards = await db.Board.findAll();
-    return boards.map((board) => board.toJSON() as Board);
-  } catch (error: any) {
-    console.error('Error fetching all boards from repository:', error);
-    throw new Error('Failed to fetch all boards from repository');
+  async deleteBoard(id: number): Promise<void> {
+    db.boards = db.boards.filter((board) => board.id !== id);
   }
-};
+}
 
-export const updateBoard = async (id: number, boardData: Partial<Board>): Promise<Board | null> => {
-  try {
-    const board = await db.Board.findByPk(id);
-    if (!board) {
-      return null;
-    }
-
-    await board.update(boardData);
-    return board.toJSON() as Board;
-  } catch (error: any) {
-    console.error('Error updating board in repository:', error);
-    throw new Error('Failed to update board in repository');
-  }
-};
-
-export const deleteBoard = async (id: number): Promise<boolean> => {
-  try {
-    const board = await db.Board.findByPk(id);
-    if (!board) {
-      return false;
-    }
-
-    await board.destroy();
-    return true;
-  } catch (error: any) {
-    console.error('Error deleting board from repository:', error);
-    throw new Error('Failed to delete board from repository');
-  }
-};
+// export const BoardRepository = new BoardRepositoryImpl();
