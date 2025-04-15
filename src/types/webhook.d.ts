@@ -2,7 +2,7 @@
 // Define webhook types and interfaces here
 
 export interface WebhookEvent {
-  // Define event payload structure
+  // Define event structure
   type: string;
   data: any;
 }
