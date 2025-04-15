@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '../../src/config/config.service'; // Corrected import path
 import { SignoffService } from './signoff.service';
+import { jest } from '@jest/globals'; // Or just 'jest' depending on your setup
+
 
 describe('SignoffService', () => {
     let service: SignoffService;
@@ -17,7 +19,7 @@ describe('SignoffService', () => {
                         get: jest.fn((key: string) => {
                             if (key === 'someConfigKey') {
                                 return 'mockConfigValue';
-                            } 
+                            }
                             return undefined;
                         }),
                     },
