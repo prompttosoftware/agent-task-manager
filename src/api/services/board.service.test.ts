@@ -16,7 +16,7 @@ describe('BoardService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        boardService = new BoardService(mockBoardRepository as BoardRepository);
+        boardService = new BoardService(mockBoardRepository as any); // Changed to any to avoid type issues
     });
 
     it('should return a board if it exists', async () => {
@@ -24,7 +24,7 @@ describe('BoardService', () => {
         const mockBoardData: Board = { id: '1', name: 'Test Board', createdAt: new Date(), updatedAt: new Date() };
         mockBoardRepository.getBoardById.mockResolvedValue(mockBoardData);
 
-        const board = await boardService.getBoardById(boardId);
+        const board = await boardService.getBoardById(boardId); // boardId is passed as string, so no need for changes
 
         expect(board).toEqual(mockBoardData);
         expect(mockBoardRepository.getBoardById).toHaveBeenCalledWith(1); // Corrected assertion:  ID should be the number 1
