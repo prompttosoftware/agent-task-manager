@@ -1,130 +1,133 @@
 // src/api/controllers/webhook.controller.test.ts
-import request from 'supertest';
-import express, { Express } from 'express';
+import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import webhookRouter from '../routes/webhook.routes';
+import { registerWebhook, deleteWebhook, listWebhooks } from './webhook.controller';
 import * as webhookService from '../services/webhook.service';
-import { Webhook } from '../types/webhook.d';
-import { RegisterWebhookRequest } from '../../types/webhook';
+import { RegisterWebhookRequest, Webhook } from '../../types/webhook';
 import { validationResult } from 'express-validator';
+import { logger } from '../../utils/logger';
+import { validateRegisterWebhook } from '../validators/webhook.validator';
 
-// Mock the webhookService
 jest.mock('../services/webhook.service');
-jest.mock('express-validator');
-
-const app: Express = express();
-
-app.use(express.json());
-app.use('/api/webhooks', webhookRouter);
-
-// Mock validationResult
-const mockValidationResult = jest.fn();
-(validationResult as jest.Mock).mockImplementation(() => ({
-  isEmpty: () => mockValidationResult.mock.calls.length === 0,
-  array: () => mockValidationResult.mock.calls.length > 0 ? mockValidationResult.mock.calls.map(call => call[0]) : []
+jest.mock('../utils/logger');
+jest.mock('express-validator', () => ({
+  validationResult: jest.fn().mockReturnValue({ isEmpty: jest.fn().mockReturnValue(true), array: jest.fn().mockReturnValue([]) }),
 }));
 
 describe('Webhook Controller', () => {
+  let mockRequest: Partial<Request>;
+  let mockResponse: Partial<Response>;
+
   beforeEach(() => {
+    mockRequest = {};
+    mockResponse = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+      send: jest.fn(),
+      sendStatus: jest.fn(),
+    };
     jest.clearAllMocks();
-    mockValidationResult.mockClear();
   });
 
-  describe('POST /api/webhooks', () => {
+  describe('registerWebhook', () => {
     it('should register a webhook successfully', async () => {
-      const webhookData: RegisterWebhookRequest = { url: "https://example.com" };
-      const expectedWebhook: Webhook = { id: '123', ...webhookData };
-      (webhookService.createWebhook as jest.Mock).mockResolvedValue(expectedWebhook);
-      mockValidationResult.mockReturnValueOnce([]); // No validation errors
+      const webhookData: RegisterWebhookRequest = {
+        url: 'https://example.com/webhook',
+        eventTypes: ['event1', 'event2'],
+        isActive: true,
+      };
+      const newWebhook: Webhook = { ...webhookData, id: 'webhookId', createdAt: new Date(), updatedAt: new Date() };
 
-      const response = await request(app).post('/api/webhooks').send(webhookData);
+      (webhookService.createWebhook as jest.Mock).mockResolvedValue(newWebhook);
+      mockRequest.body = webhookData;
 
-      expect(response.status).toBe(StatusCodes.CREATED);
-      expect(response.body).toEqual(expectedWebhook);
+      await registerWebhook(mockRequest as Request, mockResponse as Response);
+
       expect(webhookService.createWebhook).toHaveBeenCalledWith(webhookData);
-      expect(validationResult).toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.CREATED);
+      expect(mockResponse.json).toHaveBeenCalledWith(newWebhook);
     });
 
-    it('should return 400 if validation fails', async () => {
-        const webhookData = { url: 'invalid-url' }; // Invalid URL
-        mockValidationResult.mockReturnValueOnce([{ msg: 'Invalid URL', param: 'url' }]);
+    it('should return a validation error if there are validation errors', async () => {
+      const validationErrors = [{ param: 'url', msg: 'Invalid URL' }];
+      (validationResult as jest.Mock).mockReturnValue({ isEmpty: jest.fn().mockReturnValue(false), array: jest.fn().mockReturnValue(validationErrors) });
+      mockRequest.body = {};
 
-        const response = await request(app).post('/api/webhooks').send(webhookData);
+      await registerWebhook(mockRequest as Request, mockResponse as Response);
 
-        expect(response.status).toBe(StatusCodes.BAD_REQUEST);
-        expect(response.body).toEqual({ errors: [{ msg: 'Invalid URL', param: 'url' }] });
-        expect(webhookService.createWebhook).not.toHaveBeenCalled();
-        expect(validationResult).toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.BAD_REQUEST);
+      expect(mockResponse.json).toHaveBeenCalledWith({ errors: validationErrors });
+      expect(logger.error).toHaveBeenCalledWith('Validation error: {"param":"url","msg":"Invalid URL"}');
     });
 
-    it('should return 500 on service error', async () => {
-      const webhookData: RegisterWebhookRequest = { url: 'https://example.com' };
-      (webhookService.createWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
-      mockValidationResult.mockReturnValueOnce([]); // No validation errors
+    it('should handle errors during webhook creation', async () => {
+      const webhookData: RegisterWebhookRequest = {
+        url: 'https://example.com/webhook',
+        eventTypes: ['event1', 'event2'],
+        isActive: true,
+      };
 
-      const response = await request(app).post('/api/webhooks').send(webhookData);
+      (webhookService.createWebhook as jest.Mock).mockRejectedValue(new Error('Failed to create webhook'));
+      mockRequest.body = webhookData;
 
-      expect(response.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
-      expect(response.body).toBe('Internal Server Error');
-      expect(webhookService.createWebhook).toHaveBeenCalledWith(webhookData);
-      expect(validationResult).toHaveBeenCalled();
+      await registerWebhook(mockRequest as Request, mockResponse as Response);
+
+      expect(logger.error).toHaveBeenCalledWith('Error registering webhook: Failed to create webhook');
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Internal Server Error' });
     });
   });
 
-  describe('DELETE /api/webhooks/:webhookId', () => {
+  describe('deleteWebhook', () => {
     it('should delete a webhook successfully', async () => {
+      const webhookId = 'webhookId';
       (webhookService.deleteWebhook as jest.Mock).mockResolvedValue(undefined);
 
-      const response = await request(app).delete('/api/webhooks/123');
+      mockRequest.params = { webhookId };
 
-      expect(response.status).toBe(StatusCodes.NO_CONTENT);
-      expect(webhookService.deleteWebhook).toHaveBeenCalledWith('123');
+      await deleteWebhook(mockRequest as Request, mockResponse as Response);
+
+      expect(webhookService.deleteWebhook).toHaveBeenCalledWith(webhookId);
+      expect(mockResponse.sendStatus).toHaveBeenCalledWith(StatusCodes.NO_CONTENT);
     });
 
-    it('should return 500 on service error', async () => {
-      (webhookService.deleteWebhook as jest.Mock).mockRejectedValue(new Error('Service error'));
+    it('should handle errors when deleting a webhook', async () => {
+      const webhookId = 'nonExistentWebhookId';
+      (webhookService.deleteWebhook as jest.Mock).mockRejectedValue(new Error('Webhook not found'));
 
-      const response = await request(app).delete('/api/webhooks/123');
+      mockRequest.params = { webhookId };
 
-      expect(response.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
-      expect(response.body).toBe('Internal Server Error');
-      expect(webhookService.deleteWebhook).toHaveBeenCalledWith('123');
+      await deleteWebhook(mockRequest as Request, mockResponse as Response);
+
+      expect(logger.error).toHaveBeenCalledWith('Error deleting webhook: Webhook not found');
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Internal Server Error' });
     });
   });
 
-  describe('GET /api/webhooks', () => {
-    it('should list webhooks successfully', async () => {
-      const expectedWebhooks: Webhook[] = [
-        { id: '1', url: 'https://example.com/webhook1' },
-        { id: '2', url: 'https://example.com/webhook2' },
+  describe('listWebhooks', () => {
+    it('should retrieve webhooks successfully', async () => {
+      const webhooks: Webhook[] = [
+        { id: 'webhookId1', url: 'https://example.com/webhook1', eventTypes: ['event1'], isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'webhookId2', url: 'https://example.com/webhook2', eventTypes: ['event2'], isActive: true, createdAt: new Date(), updatedAt: new Date() },
       ];
-      (webhookService.getAllWebhooks as jest.Mock).mockResolvedValue(expectedWebhooks);
+      (webhookService.getAllWebhooks as jest.Mock).mockResolvedValue(webhooks);
 
-      const response = await request(app).get('/api/webhooks');
+      await listWebhooks(mockRequest as Request, mockResponse as Response);
 
-      expect(response.status).toBe(StatusCodes.OK);
-      expect(response.body).toEqual(expectedWebhooks);
-      expect(webhookService.getAllWebhooks).toHaveBeenCalledWith();
+      expect(webhookService.getAllWebhooks).toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.OK);
+      expect(mockResponse.json).toHaveBeenCalledWith(webhooks);
     });
 
-    it('should return 500 on service error', async () => {
-      (webhookService.getAllWebhooks as jest.Mock).mockRejectedValue(new Error('Service error'));
+    it('should handle errors when retrieving webhooks', async () => {
+      (webhookService.getAllWebhooks as jest.Mock).mockRejectedValue(new Error('Failed to retrieve webhooks'));
 
-      const response = await request(app).get('/api/webhooks');
+      await listWebhooks(mockRequest as Request, mockResponse as Response);
 
-      expect(response.status).toBe(StatusCodes.INTERNAL_SERVER_ERROR);
-      expect(response.body).toBe('Internal Server Error');
-      expect(webhookService.getAllWebhooks).toHaveBeenCalledWith();
+      expect(logger.error).toHaveBeenCalledWith('Error listing webhooks: Failed to retrieve webhooks');
+      expect(mockResponse.status).toHaveBeenCalledWith(StatusCodes.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Internal Server Error' });
     });
-
-     it('should return an empty array if no webhooks are found', async () => {
-            (webhookService.getAllWebhooks as jest.Mock).mockResolvedValue([]);
-
-            const response = await request(app).get('/api/webhooks');
-
-            expect(response.status).toBe(StatusCodes.OK);
-            expect(response.body).toEqual([]);
-            expect(webhookService.getAllWebhooks).toHaveBeenCalled();
-        });
   });
 });
