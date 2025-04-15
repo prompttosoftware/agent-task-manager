@@ -1,6 +1,7 @@
 // src/types/epic.d.ts
 
 export interface Epic {
+  id?: string; // Add id property
   epicKey: string;
   name: string;
   description: string;

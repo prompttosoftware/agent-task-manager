@@ -1,20 +1,47 @@
-// src/api/controllers/issue.controller.ts
-import { Controller, Post, Get, Param, Body, HttpStatus, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, NotFoundException } from '@nestjs/common';
 import { IssueService } from '../services/issue.service';
-import { Issue } from '../types/issue';
+import { CreateIssueDto } from '../api/dto/create-issue.dto';
+import { UpdateIssueDto } from '../api/dto/update-issue.dto';
+import { Issue } from '../models/issue.model';
 
-@Controller('api/issues')
+@Controller('issues')
 export class IssueController {
   constructor(private readonly issueService: IssueService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  async createIssue(@Body() issue: Issue): Promise<Issue> {
-    return this.issueService.addIssue(issue);
+  async create(@Body() createIssueDto: CreateIssueDto): Promise<Issue> {
+    return this.issueService.create(createIssueDto);
   }
 
   @Get(':id')
-  async getIssue(@Param('id') id: string): Promise<Issue> {
-    return this.issueService.getIssueById(id);
+  async findOne(@Param('id') id: string): Promise<Issue> {
+    const issue = await this.issueService.findOne(id);
+    if (!issue) {
+      throw new NotFoundException(`Issue with ID ${id} not found`);
+    }
+    return issue;
+  }
+
+  @Get()
+  async findAll(): Promise<Issue[]> {
+    return this.issueService.findAll();
+  }
+
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() updateIssueDto: UpdateIssueDto): Promise<Issue> {
+    const issue = await this.issueService.update(id, updateIssueDto);
+    if (!issue) {
+      throw new NotFoundException(`Issue with ID ${id} not found`);
+    }
+    return issue;
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string): Promise<void> {
+    const issue = await this.issueService.remove(id);
+    if (!issue) {
+      throw new NotFoundException(`Issue with ID ${id} not found`);
+    }
+    return;
   }
 }

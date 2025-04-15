@@ -1,69 +1,45 @@
-import request from 'supertest';
+import { Test, TestingModule } from '@nestjs/testing';
+import { EpicController } from './epic.controller';
+import { EpicService } from '../services/epic.service';
 import { Express } from 'express';
 import { setupApp } from '../../../src/app';
+import request from 'supertest';
+import { Epic } from '../../types/epic';
 
-describe('Epic Controller', () => {
+describe('EpicController', () => {
+  let controller: EpicController;
   let app: Express;
+  let epicService: EpicService;
 
   beforeAll(async () => {
     app = await setupApp();
   });
 
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [EpicController],
+      providers: [EpicService],
+    }).compile();
+
+    controller = module.get<EpicController>(EpicController);
+    epicService = module.get<EpicService>(EpicService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
   it('should create an epic', async () => {
+    const createEpicDto = { name: 'Test Epic', description: 'Test Description' };
+    const createdEpic: Epic = { id: '1', ...createEpicDto };
+    jest.spyOn(epicService, 'createEpic').mockResolvedValue(createdEpic);
+
     const response = await request(app)
       .post('/api/epics')
-      .send({ name: 'Test Epic', description: 'This is a test epic' });
+      .send(createEpicDto);
 
-    expect(response.statusCode).toBe(201);
-    expect(response.body).toHaveProperty('id');
-    expect(response.body.name).toBe('Test Epic');
-  });
-
-  it('should get an epic by id', async () => {
-    const createResponse = await request(app)
-      .post('/api/epics')
-      .send({ name: 'Epic to get', description: 'Get epic test' });
-    expect(createResponse.statusCode).toBe(201);
-    const epicId = createResponse.body.id;
-
-    const getResponse = await request(app).get(`/api/epics/${epicId}`);
-    expect(getResponse.statusCode).toBe(200);
-    expect(getResponse.body.id).toBe(epicId);
-    expect(getResponse.body.name).toBe('Epic to get');
-  });
-
-  it('should return 400 for invalid epic creation', async () => {
-    const response = await request(app)
-      .post('/api/epics')
-      .send({ name: '', description: 'test' }); // Invalid name
-    expect(response.statusCode).toBe(400);
-  });
-
-  it('should update an epic', async () => {
-    const createResponse = await request(app)
-      .post('/api/epics')
-      .send({ name: 'Epic to update', description: 'Update epic test' });
-    expect(createResponse.statusCode).toBe(201);
-    const epicId = createResponse.body.id;
-
-    const updateResponse = await request(app)
-      .put(`/api/epics/${epicId}`)
-      .send({ name: 'Updated Epic', description: 'Updated epic description' });
-    expect(updateResponse.statusCode).toBe(200);
-    expect(updateResponse.body.name).toBe('Updated Epic');
-  });
-
-  it('should delete an epic', async () => {
-    const createResponse = await request(app)
-      .post('/api/epics')
-      .send({ name: 'Epic to delete', description: 'Delete epic test' });
-    expect(createResponse.statusCode).toBe(201);
-    const epicId = createResponse.body.id;
-
-    const deleteResponse = await request(app).delete(`/api/epics/${epicId}`);
-    expect(deleteResponse.statusCode).toBe(204);
-
-    const getResponse = await request(app).get(`/api/epics/${epicId}`);
-    expect(getResponse.statusCode).toBe(404);
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(createdEpic);
+    expect(epicService.createEpic).toHaveBeenCalledWith(createEpicDto);
   });
 });

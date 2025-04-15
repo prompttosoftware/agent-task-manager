@@ -1,5 +1,7 @@
-export interface Webhook {
-  url: string;
-  payload: any;
-  retryCount?: number;
+export interface WebhookPayload {
+    eventId: string;
+    eventType: string;
+    data: any;
 }
+
+export { WebhookPayload };

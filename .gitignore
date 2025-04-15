@@ -12,7 +12,7 @@ logs/*.log
 data/*.db
 
 # Test coverage
-coverage/
+cov coverage/
 
 # IDE files
 .idea/
@@ -36,10 +36,17 @@ coverage/
 # Environment files
 .env
 
-#  Add build artifacts
+# Add build artifacts
 /build
 
-#  Add npm artifacts
+# Add npm artifacts
 /npm-debug.log
 /yarn-error.log
 .cache
+
+# Add .env.local file
+.env.local
+
+# Ignore all files in the 'docs' directory
+docs/*
+!docs/README.md

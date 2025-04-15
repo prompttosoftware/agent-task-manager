@@ -1,32 +1,52 @@
-import { CreateBoardData, Board } from '../types/board';
 import * as boardRepository from '../data/board.repository';
+import { Board } from '../types/board';
+import { CreateBoardData } from '../types/board';
 
-export const createBoard = async (boardData: CreateBoardData): Promise<Board> => {
-  try {
-    // Use the actual repository to create the board
-    const newBoard: Board = await boardRepository.createBoard(boardData);
-    return newBoard;
-  } catch (error: any) {
-    console.error('Error creating board:', error);
-    throw new Error('Failed to create board');
-  }
-};
 
-export const deleteBoard = async (boardId: string): Promise<void> => {
-  try {
-    await boardRepository.deleteBoard(boardId);
-  } catch (error: any) {
-    console.error('Error deleting board:', error);
-    throw new Error('Failed to delete board');
-  }
-};
+export class BoardService {
+  private readonly boardRepository: typeof boardRepository; // Or BoardRepository if you have an interface
 
-export const getBoard = async (boardId: string): Promise<Board | null> => {
-  try {
-    const board = await boardRepository.getBoard(boardId);
-    return board;
-  } catch (error: any) {
-    console.error('Error getting board:', error);
-    throw new Error('Failed to get board');
+  constructor(boardRepository: typeof boardRepository) {
+    this.boardRepository = boardRepository;
   }
-};
+
+  async getBoardById(boardId: string): Promise<Board | null> {
+    // Validate boardId is a number
+    const id = Number(boardId);
+    if (isNaN(id)) {
+      return null;
+    }
+
+    try {
+      return await this.boardRepository.getBoardById(id);
+    } catch (error) {
+      console.error('Error in BoardService getting board by id:', error);
+      throw error; // Re-throw to allow the test to catch it
+    }
+  }
+
+  // You'll need to implement the other methods as well, using the repository:
+    async createBoard(boardData: CreateBoardData): Promise<Board> {
+        return await this.boardRepository.createBoard(boardData);
+    }
+
+    async getAllBoards(): Promise<Board[]> {
+        return await this.boardRepository.getAllBoards();
+    }
+
+    async updateBoard(id: string, boardData: Partial<Board>): Promise<Board | null> {
+        const boardId = Number(id);
+         if (isNaN(boardId)) {
+          return null;
+        }
+        return await this.boardRepository.updateBoard(boardId, boardData);
+    }
+
+    async deleteBoard(id: string): Promise<void> {
+        const boardId = Number(id);
+         if (isNaN(boardId)) {
+          return;
+        }
+        await this.boardRepository.deleteBoard(boardId);
+    }
+}
