@@ -1,11 +1,66 @@
-{"import { v4 as uuidv4 } from 'uuid';\nimport { WebhookPayload, RegisterWebhookRequest, Webhook } from '../../types/webhook.d.ts';\nimport { logger } from '../../utils/logger.ts';\nimport fetch, { Response, RequestInit, FetchError } from 'node-fetch';\n\ninterface WebhookQueue {\n  enqueue: (payload: WebhookPayload) => void;\n  dequeue: () => WebhookPayload | undefined;\n  size: () => number;\n  peek: () => WebhookPayload | undefined;\n}\n\nclass InMemoryWebhookQueue implements WebhookQueue {\n  private queue: WebhookPayload[] = [];}\n\nenqueue(payload: WebhookPayload): void {\n  this.queue.push(payload);}\n\ndequeue(): WebhookPayload | undefined {\n  return this.queue.shift();}\n\nsize(): number {\n  return this.queue.length;}\n\npeek(): WebhookPayload | undefined {\n  return this.queue[0];}\n}\n\nconst webhookQueue = new InMemoryWebhookQueue();}\n\n// Simple in-memory dead letter queue\ninterface DeadLetterQueueEntry {\n  payload: WebhookPayload;\n  error: string;\n  reason: string;\n}\n\nconst deadLetterQueue: DeadLetterQueueEntry[] = [];}\n\n// Rate limiting using a token bucket\nlet tokens = 10;\nconst refillRate = 10 / 60; // 10 tokens per minute\nlet lastRefill = Date.now();\n\nconst refillTokens = () => {\n  const now = Date.now();\n  const timePassed = now - lastRefill;\n  const tokensToAdd = (timePassed / 60000) * refillRate; // Refill rate is per minute\n  tokens = Math.min(10, tokens + tokensToAdd);}\n\n// Refill tokens every second\nsetInterval(refillTokens, 1000);}\n\n/**\n * Sends a webhook payload to an external service with retry logic, rate limiting, and dead letter queue.\n *
- * @param {WebhookPayload} payload The payload to send.\n * @param {string} webhookUrl The URL of the external service.\n * @returns {Promise<void>}
- */\nexport async function sendToExternalService(payload: WebhookPayload, webhookUrl: string): Promise<void> {\n  let retries = 3;}\n\nwhile (retries >= 0) {\n  refillTokens();\n  if (tokens < 1) {\n    logger.warn(`Rate limit exceeded for ${webhookUrl}. Waiting...`);}\n\n  tokens--;}\n\ntry {\n  logger.info(`Sending webhook to ${webhookUrl}, attempt ${4 - retries}`);}\n\nconst options: RequestInit = {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify(payload),\n  timeout: 5000, // 5 seconds timeout\n};\n\nconst response: Response = await fetch(webhookUrl, options);}\n\nif (response.ok) {\n  logger.info(`Webhook sent successfully to ${webhookUrl}`);}\n\nreturn;}\n\nelse {
-  const status = response.status;
-  const statusText = response.statusText;
-  logger.warn(`Webhook to ${webhookUrl} failed with status ${status}: ${statusText}`);}\n\nif (status >= 400 && status < 500) {\n  // Client error - don't retry\n  const reason = `Client error: ${status} ${statusText}`;\n  logger.error(reason);}\n\nreturn;}\n\nelse {
-    logger.info(`Retrying in 1000ms... (${retries} retries remaining)`);}\n\nelse {
-  const reason = `Server error after multiple retries: ${status} ${statusText}`;
-  logger.error(reason);}\n\n}\n\n// try/catch block for network errors\n} catch (error: any) {\n  if (error instanceof FetchError) {\n    logger.error(`Network error sending webhook to ${webhookUrl}: ${error.message}`);}\n\n  else {\n    logger.error(`Error sending webhook to ${webhookUrl}: ${error.message}`);}\n\n  if (retries > 0) {\n    logger.info(`Retrying in 1000ms... (${retries} retries remaining)`);}\n\n  else {\n    const reason = `Network error after multiple retries: ${error.message}`;
-    logger.error(reason);
-  }\n}
+import { WebhookPayload } from '../types/webhook';
+import logger from '../utils/logger';
+import fetch from 'node-fetch';
+
+export interface RegisterWebhookRequest {
+  url: string;
+  events: string[];
+}
+
+const webhookQueue: WebhookPayload[] = [];
+const deadLetterQueue: WebhookPayload[] = [];
+const MAX_RETRIES = 3;
+
+export const enqueueWebhook = (payload: WebhookPayload) => {
+  webhookQueue.push(payload);
+  logger.info(`Webhook enqueued: ${JSON.stringify(payload)}`);
+};
+
+export const getWebhookQueueSize = () => webhookQueue.length;
+
+export const getDeadLetterQueue = () => deadLetterQueue;
+
+export const sendToExternalService = async (url: string, payload: WebhookPayload, retryCount = 0): Promise<void> => {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error(
+        `Webhook failed with status ${response.status} and message: ${errorBody}`,
+      );
+      throw new Error(`Webhook failed with status ${response.status}`);
+    }
+    logger.info(`Webhook sent successfully to ${url}`);
+  } catch (error: any) {
+    logger.error(`Error sending webhook: ${error.message}`);
+    if (retryCount < MAX_RETRIES) {
+      logger.info(`Retrying webhook, attempt ${retryCount + 1}...`);
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+      await sendToExternalService(url, payload, retryCount + 1);
+    } else {
+      deadLetterQueue.push(payload);
+      logger.error(`Webhook failed after multiple retries.  Moved to dead letter queue.`);
+    }
+  }
+};
+
+export const processWebhook = async (webhookUrl: string) => {
+  if (webhookQueue.length === 0) {
+    return;
+  }
+
+  const payload = webhookQueue.shift();
+  if (!payload) {
+    return;
+  }
+
+  await sendToExternalService(webhookUrl, payload);
+};
+

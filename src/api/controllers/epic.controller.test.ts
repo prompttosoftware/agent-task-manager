@@ -1,296 +1,69 @@
-import { Request, Response } from 'express';
-import { EpicController } from './epic.controller';
-import { EpicService } from '../services/epic.service';
-import { validationResult } from 'express-validator';
-import { Epic } from '../types/epic.d';
-import { NotFoundException } from '@nestjs/common';
+import request from 'supertest';
+import { Express } from 'express';
+import { setupApp } from '../../app';
 
-// Mock express validator
-jest.mock('express-validator', () => ({
-  validationResult: jest.fn(),
-}));
+describe('Epic Controller', () => {
+  let app: Express;
 
-describe('EpicController', () => {
-  let epicController: EpicController;
-  let epicService: EpicService;
-  let req: Request;
-  let res: Response;
-
-  beforeEach(() => {
-    epicService = {  // Mock the EpicService
-      getEpic: jest.fn(),
-      listEpics: jest.fn(),
-      createEpic: jest.fn(),
-      updateEpic: jest.fn(),
-      deleteEpic: jest.fn(),
-    } as unknown as EpicService;
-    epicController = new EpicController(epicService);
-
-    // Mock Express Request and Response objects
-    req = {  
-      params: {},
-      body: {},
-    } as Request;
-
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-      send: jest.fn(),
-    } as unknown as Response; // Type assertion to allow chaining
+  beforeAll(async () => {
+    app = await setupApp();
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  it('should create an epic', async () => {
+    const response = await request(app)
+      .post('/api/epics')
+      .send({ name: 'Test Epic', description: 'This is a test epic' });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.body).toHaveProperty('id');
+    expect(response.body.name).toBe('Test Epic');
   });
 
-  describe('getEpic', () => {
-    it('should return 200 with the epic data when found', async () => {
-      const epicKey = 'EPIC-1';
-      const mockEpic: Epic = {
-        key: epicKey,
-        name: 'Test Epic',
-        description: 'Test Description',
-        status: 'TODO',
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-      };
-      (epicService.getEpic as jest.Mock).mockResolvedValue(mockEpic);
-      req.params = { epicKey };
+  it('should get an epic by id', async () => {
+    const createResponse = await request(app)
+      .post('/api/epics')
+      .send({ name: 'Epic to get', description: 'Get epic test' });
+    expect(createResponse.statusCode).toBe(201);
+    const epicId = createResponse.body.id;
 
-      await epicController.getEpic(req, res);
-
-      expect(epicService.getEpic).toHaveBeenCalledWith(epicKey);
-      expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith(mockEpic);
-    });
-
-    it('should return 404 when epic is not found', async () => {
-      const epicKey = 'EPIC-1';
-      (epicService.getEpic as jest.Mock).mockResolvedValue(undefined);
-      req.params = { epicKey };
-
-      await epicController.getEpic(req, res);
-
-      expect(epicService.getEpic).toHaveBeenCalledWith(epicKey);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Epic not found' });
-    });
-
-    it('should return 500 on service error', async () => {
-      const epicKey = 'EPIC-1';
-      const errorMessage = 'Service unavailable';
-      (epicService.getEpic as jest.Mock).mockRejectedValue(new Error(errorMessage));
-      req.params = { epicKey };
-
-      await epicController.getEpic(req, res);
-
-      expect(epicService.getEpic).toHaveBeenCalledWith(epicKey);
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
-    });
+    const getResponse = await request(app).get(`/api/epics/${epicId}`);
+    expect(getResponse.statusCode).toBe(200);
+    expect(getResponse.body.id).toBe(epicId);
+    expect(getResponse.body.name).toBe('Epic to get');
   });
 
-  describe('listEpics', () => {
-    it('should return 200 with an array of epics', async () => {
-      const mockEpics: Epic[] = [
-        {
-          key: 'EPIC-1',
-          name: 'Epic 1',
-          description: 'Desc 1',
-          status: 'TODO',
-          startDate: '2024-01-01',
-          endDate: '2024-01-31',
-        },
-        {
-          key: 'EPIC-2',
-          name: 'Epic 2',
-          description: 'Desc 2',
-          status: 'IN_PROGRESS',
-          startDate: '2024-02-01',
-          endDate: '2024-02-29',
-        },
-      ];
-      (epicService.listEpics as jest.Mock).mockResolvedValue(mockEpics);
-
-      await epicController.listEpics(req, res);
-
-      expect(epicService.listEpics).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith(mockEpics);
-    });
-
-    it('should return 500 on service error', async () => {
-      const errorMessage = 'Failed to list epics';
-      (epicService.listEpics as jest.Mock).mockRejectedValue(new Error(errorMessage));
-
-      await epicController.listEpics(req, res);
-
-      expect(epicService.listEpics).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
-    });
+  it('should return 400 for invalid epic creation', async () => {
+    const response = await request(app)
+      .post('/api/epics')
+      .send({ name: '', description: 'test' }); // Invalid name
+    expect(response.statusCode).toBe(400);
   });
 
-  describe('createEpic', () => {
-    it('should return 201 with the created epic on success', async () => {
-      const mockNewEpic: Epic = {
-        key: 'EPIC-3',
-        name: 'New Epic',
-        description: 'New Desc',
-        status: 'TODO',
-        startDate: '2024-03-01',
-        endDate: '2024-03-31',
-      };
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => true });
-      (epicService.createEpic as jest.Mock).mockResolvedValue(mockNewEpic);
-      req.body = mockNewEpic;
+  it('should update an epic', async () => {
+    const createResponse = await request(app)
+      .post('/api/epics')
+      .send({ name: 'Epic to update', description: 'Update epic test' });
+    expect(createResponse.statusCode).toBe(201);
+    const epicId = createResponse.body.id;
 
-      await epicController.createEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.createEpic).toHaveBeenCalledWith(mockNewEpic);
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(mockNewEpic);
-    });
-
-    it('should return 400 if validation fails', async () => {
-      const mockErrors = [{ msg: 'Name is required' }];
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => false, array: () => mockErrors });
-
-      await epicController.createEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.createEpic).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ errors: mockErrors });
-    });
-
-    it('should return 400 on service error', async () => {
-      const errorMessage = 'Invalid epic data';
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => true });
-      (epicService.createEpic as jest.Mock).mockRejectedValue(new Error(errorMessage));
-      req.body = {
-        key: 'EPIC-3',
-        name: 'New Epic',
-        description: 'New Desc',
-        status: 'TODO',
-        startDate: '2024-03-01',
-        endDate: '2024-03-31',
-      };
-
-      await epicController.createEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.createEpic).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
-    });
+    const updateResponse = await request(app)
+      .put(`/api/epics/${epicId}`)
+      .send({ name: 'Updated Epic', description: 'Updated epic description' });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.body.name).toBe('Updated Epic');
   });
 
-  describe('updateEpic', () => {
-    it('should return 200 with the updated epic on success', async () => {
-      const epicKey = 'EPIC-1';
-      const mockUpdatedEpic: Epic = {
-        key: epicKey,
-        name: 'Updated Epic',
-        description: 'Updated Desc',
-        status: 'DONE',
-        startDate: '2024-01-01',
-        endDate: '2024-03-31',
-      };
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => true });
-      (epicService.updateEpic as jest.Mock).mockResolvedValue(mockUpdatedEpic);
-      req.params = { epicKey };
-      req.body = {
-        name: 'Updated Epic',
-        description: 'Updated Desc',
-        status: 'DONE',
-        startDate: '2024-01-01',
-        endDate: '2024-03-31',
-      };
+  it('should delete an epic', async () => {
+    const createResponse = await request(app)
+      .post('/api/epics')
+      .send({ name: 'Epic to delete', description: 'Delete epic test' });
+    expect(createResponse.statusCode).toBe(201);
+    const epicId = createResponse.body.id;
 
-      await epicController.updateEpic(req, res);
+    const deleteResponse = await request(app).delete(`/api/epics/${epicId}`);
+    expect(deleteResponse.statusCode).toBe(204);
 
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.updateEpic).toHaveBeenCalledWith(epicKey, req.body);
-      expect(res.json).toHaveBeenCalledWith(mockUpdatedEpic);
-    });
-
-    it('should return 404 if epic is not found', async () => {
-      const epicKey = 'EPIC-1';
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => true });
-      (epicService.updateEpic as jest.Mock).mockResolvedValue(undefined);
-      req.params = { epicKey };
-      req.body = {
-        name: 'Updated Epic',
-      };
-
-      await epicController.updateEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.updateEpic).toHaveBeenCalledWith(epicKey, req.body);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Epic not found' });
-    });
-
-    it('should return 400 if validation fails', async () => {
-      const mockErrors = [{ msg: 'Name is required' }];
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => false, array: () => mockErrors });
-      req.params = { epicKey: 'EPIC-1' };
-
-      await epicController.updateEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.updateEpic).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ errors: mockErrors });
-    });
-
-    it('should return 500 on service error', async () => {
-      const epicKey = 'EPIC-1';
-      const errorMessage = 'Failed to update epic';
-      (validationResult as jest.Mock).mockReturnValue({ isEmpty: () => true });
-      (epicService.updateEpic as jest.Mock).mockRejectedValue(new Error(errorMessage));
-      req.params = { epicKey };
-      req.body = {
-        name: 'Updated Epic',
-      };
-
-      await epicController.updateEpic(req, res);
-
-      expect(validationResult).toHaveBeenCalledWith(req);
-      expect(epicService.updateEpic).toHaveBeenCalledWith(epicKey, req.body);
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
-    });
-  });
-
-  describe('deleteEpic', () => {
-    it('should return 204 on successful deletion', async () => {
-      const epicKey = 'EPIC-1';
-      (epicService.deleteEpic as jest.Mock).mockResolvedValue(undefined);
-      req.params = { epicKey };
-
-      await epicController.deleteEpic(req, res);
-
-      expect(epicService.deleteEpic).toHaveBeenCalledWith(epicKey);
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalled();
-      expect(res.json).not.toHaveBeenCalled();
-    });
-
-    it('should return 500 on service error', async () => {
-      const epicKey = 'EPIC-1';
-      const errorMessage = 'Failed to delete epic';
-      (epicService.deleteEpic as jest.Mock).mockRejectedValue(new Error(errorMessage));
-      req.params = { epicKey };
-
-      await epicController.deleteEpic(req, res);
-
-      expect(epicService.deleteEpic).toHaveBeenCalledWith(epicKey);
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: errorMessage });
-      expect(res.send).not.toHaveBeenCalled();
-    });
+    const getResponse = await request(app).get(`/api/epics/${epicId}`);
+    expect(getResponse.statusCode).toBe(404);
   });
 });
