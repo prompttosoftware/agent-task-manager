@@ -1,16 +1,15 @@
 import { BoardService } from './board.service';
-import { BoardRepository } from '../data/board.repository';
+import * as boardRepository from '../data/board.repository';  // Import the module
 import { mockBoard } from '../data/mocks/mock.board.repository';
 
-jest.mock('../data/board.repository');
+jest.mock('../data/board.repository');  // Mock the entire module
 
 describe('BoardService', () => {
   let boardService: BoardService;
-  let boardRepository: BoardRepository;
+  // No BoardRepository needed here
 
   beforeEach(() => {
-    boardRepository = new BoardRepository() as jest.Mocked<BoardRepository>;
-    boardService = new BoardService(boardRepository);
+    boardService = new BoardService(); //  You might need to adjust BoardService's constructor
     jest.resetAllMocks();
   });
 
