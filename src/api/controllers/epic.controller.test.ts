@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { Express } from 'express';
-import { setupApp } from '../../app';
+import { setupApp } from '../../../src/app';
 
 describe('Epic Controller', () => {
   let app: Express;

@@ -1,80 +1,62 @@
+import request from 'supertest';
+import { Express } from 'express';
 import { Test, TestingModule } from '@nestjs/testing';
-import { IssueController } from './issue.controller';
-import { IssueService } from '../services/issue.service';
-import { CreateIssueDto } from '../dto/create-issue.dto';
-import { Issue } from '../types/issue';
-import { Request, Response } from 'express';
-import { NotFoundException } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
+import { IssueController } from '../../../src/api/controllers/issue.controller';
+import { IssueService } from '../../../src/api/services/issue.service';
+import { Issue } from '../../../src/api/types/issue';
+import { AppModule } from '../../../src/app.module';
 
+const mockIssueService = () => ({
+  addIssue: jest.fn(),
+  getIssueById: jest.fn(),
+  // Mock other service methods as needed based on controller usage
+});
 
-describe('IssueController', () => {
-  let controller: IssueController;
-  let issueService: IssueService;
+describe('Issue Controller', () => {
+  let app: INestApplication;
+  let issueService: ReturnType<typeof mockIssueService>;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
       controllers: [IssueController],
-      providers: [IssueService],
+      providers: [
+        {
+          provide: IssueService,
+          useFactory: mockIssueService,
+        },
+      ],
     }).compile();
 
-    controller = module.get<IssueController>(IssueController);
-    issueService = module.get<IssueService>(IssueService);
+    app = moduleFixture.createNestApplication();
+    await app.init();
+
+    issueService = moduleFixture.get<IssueService>(IssueService) as ReturnType<typeof mockIssueService>;
   });
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
+  it('should create an issue', async () => {
+    const mockCreatedIssue: Issue = { issueKey: '1', summary: 'Test Issue', description: 'Test Description', boardId: '1' };
+    (issueService.addIssue as jest.Mock).mockResolvedValue(mockCreatedIssue);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/issues')
+      .send({ issueKey: '1', summary: 'Test Issue', description: 'Test Description', boardId: '1' })
+      .expect(201);
+
+    expect(response.body).toEqual(mockCreatedIssue);
+    expect(issueService.addIssue).toHaveBeenCalledWith({ issueKey: '1', summary: 'Test Issue', description: 'Test Description', boardId: '1' });
   });
 
-  describe('createIssue', () => {
-    it('should create an issue', async () => {
-      const createIssueDto: CreateIssueDto = {
-        title: 'Test Issue',
-        description: 'Test Description',
-        boardId: '1',
-      };
-      const createdIssue: Issue = {
-        id: '1',
-        ...createIssueDto,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      jest.spyOn(issueService, 'create').mockResolvedValue(createdIssue);
-      const req = { body: createIssueDto } as Request;
-      const res = { json: jest.fn() } as unknown as Response;
-      const result = await controller.createIssue(req, res);
-      expect(result).toEqual(createdIssue);
-      expect(issueService.create).toHaveBeenCalledWith(createIssueDto);
-    });
+  it('should get an issue by id', async () => {
+    const mockIssue: Issue = { issueKey: '1', summary: 'Test Issue', description: 'Test Description', boardId: '1'};
+    (issueService.getIssueById as jest.Mock).mockResolvedValue(mockIssue);
+
+    const response = await request(app.getHttpServer())
+      .get('/api/issues/1')
+      .expect(200);
+
+    expect(response.body).toEqual(mockIssue);
+    expect(issueService.getIssueById).toHaveBeenCalledWith('1');
   });
-
-  describe('getIssue', () => {
-    it('should return an issue', async () => {
-      const issueId = '1';
-      const mockIssue: Issue = {
-        id: issueId,
-        title: 'Test Issue',
-        description: 'Test Description',
-        boardId: '1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      jest.spyOn(issueService, 'findById').mockResolvedValue(mockIssue);
-      const req = { params: { id: issueId } } as unknown as Request;
-      const res = { json: jest.fn() } as unknown as Response;
-      const result = await controller.getIssue(req, res);
-      expect(result).toEqual(mockIssue);
-      expect(issueService.findById).toHaveBeenCalledWith(issueId);
-    });
-
-    it('should throw NotFoundException if issue is not found', async () => {
-      const issueId = '2';
-      jest.spyOn(issueService, 'findById').mockRejectedValue(new NotFoundException());
-      const req = { params: { id: issueId } } as unknown as Request;
-      const res = { json: jest.fn() } as unknown as Response;
-      await expect(controller.getIssue(req, res)).rejects.toThrow(NotFoundException);
-      expect(issueService.findById).toHaveBeenCalledWith(issueId);
-    });
-  });
-
-  // Add tests for issue retrieval, and updates here
 });

@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { Express } from 'express';
-import { setupApp } from '../../app';
+import { setupApp } from '../../../src/app'; // Corrected import path
 
 describe('Board Controller', () => {
   let app: Express;
