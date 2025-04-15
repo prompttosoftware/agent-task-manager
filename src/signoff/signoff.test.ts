@@ -1,43 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '../../src/config/config.service'; // Corrected import path
-import { SignoffService } from './signoff.service';
-import { jest } from '@jest/globals'; // Or just 'jest' depending on your setup
-
+import { SignoffService } from './signoff';
+import { ConfigService } from '../config/config.service';
 
 describe('SignoffService', () => {
-    let service: SignoffService;
-    let configService: ConfigService;
+  let service: SignoffService;
+  let configService: ConfigService;
 
-    beforeEach(async () => {
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                SignoffService,
-                {
-                    provide: ConfigService,
-                    useValue: {
-                        // Provide mock implementations for the methods used by SignoffService
-                        get: jest.fn((key: string) => {
-                            if (key === 'someConfigKey') {
-                                return 'mockConfigValue';
-                            }
-                            return undefined;
-                        }),
-                    },
-                },
-            ],
-        }).compile();
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SignoffService,
+        {
+          provide: ConfigService,
+          useValue: {
+            isFinalTestingPassed: jest.fn().mockReturnValue(true),
+            isCodeReviewApproved: jest.fn().mockReturnValue(true),
+            isDocumentationFinalized: jest.fn().mockReturnValue(true),
+            isProjectCleaned: jest.fn().mockReturnValue(true),
+            get: jest.fn().mockReturnValue('http://example.com/webhook'),
+          },
+        },
+      ],
+    }).compile();
 
-        service = module.get<SignoffService>(SignoffService);
-        configService = module.get<ConfigService>(ConfigService); // Get the mock ConfigService
-    });
+    service = module.get<SignoffService>(SignoffService);
+    // @ts-ignore
+    configService = module.get<ConfigService>(ConfigService);
+  });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
-    });
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
 
-    it('should use config', () => {
-        // Example test to check if ConfigService is used correctly
-        const configValue = configService.get('someConfigKey');
-        expect(configValue).toBe('mockConfigValue');
-    });
+  it('should return true if all checks pass', async () => {
+    const result = await service.performSignoff();
+    expect(result).toBe(true);
+  });
 });

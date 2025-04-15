@@ -1,13 +1,23 @@
 export class ConfigService {
   private static instance: ConfigService;
+  private config: { [key: string]: any } = {};
 
-  private constructor() {}
+  private constructor() {
+    // Initialize config here or load from a file
+    this.config = {
+      webhookUrl: 'http://example.com/webhook'
+    };
+  }
 
   public static getInstance(): ConfigService {
     if (!ConfigService.instance) {
       ConfigService.instance = new ConfigService();
     }
     return ConfigService.instance;
+  }
+
+  public get(key: string): any {
+    return this.config[key];
   }
 
   public getEpicKey(epicNumber: number): string | undefined {

@@ -56,3 +56,29 @@ export const processNextWebhookEvent = async (): Promise<boolean> => {
 export const getWebhookQueueLength = (): number => {
   return webhookQueue.length;
 };
+
+// The following are dummy functions.  They MUST be implemented.
+export const sendToExternalService = async (webhookUrl: string, payload: any): Promise<any> => {
+    console.log(`Sending to external service: ${webhookUrl} with payload ${payload}`);
+    return;
+}
+
+export const enqueueWebhook = (payload: any): void => {
+    console.log(`Enqueuing webhook with payload: ${payload}`);
+    return;
+}
+
+export const processWebhook = async (webhookUrl: string): Promise<any> => {
+    console.log(`Processing webhook for URL: ${webhookUrl}`);
+    return;
+}
+
+export const getDeadLetterQueue = (): any[] => {
+    console.log(`Getting dead letter queue`);
+    return [];
+}
+
+export const getWebhookQueueSize = (): number => {
+    console.log(`Getting webhook queue size`);
+    return 0;
+}

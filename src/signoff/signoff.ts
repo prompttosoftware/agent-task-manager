@@ -1,17 +1,18 @@
-// src/signoff/signoff.ts
-
-import { IssueService } from '../services/issue.service';
-import { EpicService } from '../services/epic.service';
-import ConfigService from '../config/config.service';
+import { ConfigService } from '../config/config.service';
 
 export class SignoffService {
-  constructor(private issueService: IssueService, private epicService: EpicService, private configService: ConfigService) {}
+  private configService: ConfigService;
 
-  async checkSignoff(issueId: string): Promise<boolean> {
-    // Implement signoff logic here
-    return true;
+  constructor() {
+    this.configService = ConfigService.getInstance();
   }
-  async performSignoff() {
-    return true;
+
+  public async performSignoff(): Promise<boolean> {
+    const isFinalTestingPassed = this.configService.isFinalTestingPassed();
+    const isCodeReviewApproved = this.configService.isCodeReviewApproved();
+    const isDocumentationFinalized = this.configService.isDocumentationFinalized();
+    const isProjectCleaned = this.configService.isProjectCleaned();
+
+    return isFinalTestingPassed && isCodeReviewApproved && isDocumentationFinalized && isProjectCleaned;
   }
 }
