@@ -3,50 +3,34 @@ import { BoardService } from '../services/board.service';
 import { BoardRepository } from '../../data/board.repository';
 import { ConfigService } from '../../config/config.service';
 import { Board } from '../../types/board.d';
-import { CreateBoardDto } from '../dto/create-board.dto';
+import { CreateBoardDto } from '../../api/dto/create-board.dto';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { ConfigModule } from '../../config/config.module';
 
-// Define interfaces for mocking
-interface MockBoardRepository {
-  createBoard: jest.Mock;
-  getBoardById: jest.Mock;
-  getAllBoards: jest.Mock;
-  updateBoard: jest.Mock;
-  deleteBoard: jest.Mock;
-}
 
-interface MockConfigService {
-  get: jest.Mock;
-}
-
-describe('BoardService', () => {  let service: BoardService;  let boardRepository: MockBoardRepository;  let configService: MockConfigService;
+describe('BoardService', () => {
+  let service: BoardService;
+  let boardRepository: Repository<Board>;
+  let configService: ConfigService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [ConfigModule],
       providers: [
         BoardService,
         {
-          provide: BoardRepository,
-          useValue: {
-            createBoard: jest.fn(),
-            getBoardById: jest.fn(),
-            getAllBoards: jest.fn(),
-            updateBoard: jest.fn(),
-            deleteBoard: jest.fn(),
-          },
+          provide: getRepositoryToken(Board),
+          useClass: Repository,
         },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn(),
-          },
-        },
+        ConfigService,
       ],
     }).compile();
 
     service = module.get<BoardService>(BoardService);
-    boardRepository = module.get(BoardRepository) as any; // Type assertion
-    configService = module.get(ConfigService) as any;
+    boardRepository = module.get<Repository<Board>>(getRepositoryToken(Board));
+    configService = module.get<ConfigService>(ConfigService);
   });
 
   it('should be defined', () => {
@@ -57,73 +41,78 @@ describe('BoardService', () => {  let service: BoardService;  let boardRepositor
 
   it('should create a board', async () => {
     const createBoardData: CreateBoardDto = { name: 'Test Board', description: 'Test Description' };
-    const createdBoard: Board = { id: 1, ...createBoardData, createdAt: new Date(), updatedAt: new Date() };
-    (boardRepository.createBoard as jest.Mock).mockResolvedValue(createdBoard);
+    const createdBoard: Board = { id: '1', ...createBoardData, createdAt: new Date(), updatedAt: new Date() };
+    jest.spyOn(boardRepository, 'save').mockResolvedValue(createdBoard);
 
     const result = await service.createBoard(createBoardData);
 
     expect(result).toEqual(createdBoard);
-    expect(boardRepository.createBoard).toHaveBeenCalledWith(createBoardData);
+    expect(boardRepository.save).toHaveBeenCalledWith(expect.objectContaining(createBoardData));
   });
 
   it('should get a board by id', async () => {
-    const boardId = 1;
+    const boardId = '1';
     const board: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
-    (boardRepository.getBoardById as jest.Mock).mockResolvedValue(board);
+    jest.spyOn(boardRepository, 'findOne').mockResolvedValue(board);
 
-    const result = await service.getBoardById(boardId.toString());
+    const result = await service.getBoardById(boardId);
 
     expect(result).toEqual(board);
-    expect(boardRepository.getBoardById).toHaveBeenCalledWith(boardId.toString());
+    expect(boardRepository.findOne).toHaveBeenCalledWith({ where: { id: boardId } });
   });
 
   it('should get all boards', async () => {
     const boards: Board[] = [
-      { id: 1, name: 'Board 1', description: 'Desc 1', createdAt: new Date(), updatedAt: new Date() },
-      { id: 2, name: 'Board 2', description: 'Desc 2', createdAt: new Date(), updatedAt: new Date() },
+      { id: '1', name: 'Board 1', description: 'Desc 1', createdAt: new Date(), updatedAt: new Date() },
+      { id: '2', name: 'Board 2', description: 'Desc 2', createdAt: new Date(), updatedAt: new Date() },
     ];
-    (boardRepository.getAllBoards as jest.Mock).mockResolvedValue(boards);
+    jest.spyOn(boardRepository, 'find').mockResolvedValue(boards);
 
     const result = await service.getAllBoards();
 
     expect(result).toEqual(boards);
-    expect(boardRepository.getAllBoards).toHaveBeenCalled();
+    expect(boardRepository.find).toHaveBeenCalled();
   });
 
   it('should update a board', async () => {
-    const boardId = 1;
+    const boardId = '1';
     const updateBoardData: Partial<Board> = { name: 'Updated Name', description: 'Updated Description' };
-    const updatedBoard: Board = { id: boardId, ...updateBoardData, createdAt: new Date(), updatedAt: new Date() };
-    (boardRepository.updateBoard as jest.Mock).mockResolvedValue(updatedBoard);
+    const existingBoard: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
+    const updatedBoard: Board = { ...existingBoard, ...updateBoardData, updatedAt: new Date() };
+    jest.spyOn(boardRepository, 'findOne').mockResolvedValue(existingBoard);
+    jest.spyOn(boardRepository, 'save').mockResolvedValue(updatedBoard);
 
-    const result = await service.updateBoard(boardId.toString(), updateBoardData);
+    const result = await service.updateBoard(boardId, updateBoardData);
 
     expect(result).toEqual(updatedBoard);
-    expect(boardRepository.updateBoard).toHaveBeenCalledWith(boardId.toString(), updateBoardData);
+    expect(boardRepository.findOne).toHaveBeenCalledWith({ where: { id: boardId } });
+    expect(boardRepository.save).toHaveBeenCalledWith(expect.objectContaining(updatedBoard));
   });
 
   it('should delete a board', async () => {
-    const boardId = 1;
-    (boardRepository.deleteBoard as jest.Mock).mockResolvedValue(undefined);
+    const boardId = '1';
+    const existingBoard: Board = { id: boardId, name: 'Test Board', description: 'Test Description', createdAt: new Date(), updatedAt: new Date() };
+    jest.spyOn(boardRepository, 'findOne').mockResolvedValue(existingBoard);
+    jest.spyOn(boardRepository, 'remove').mockResolvedValue(existingBoard);
 
-    await service.deleteBoard(boardId.toString());
+    await service.deleteBoard(boardId);
 
-    expect(boardRepository.deleteBoard).toHaveBeenCalledWith(boardId.toString());
+    expect(boardRepository.findOne).toHaveBeenCalledWith({ where: { id: boardId } });
+    expect(boardRepository.remove).toHaveBeenCalledWith(existingBoard);
   });
 
   it('should throw NotFoundException if board is not found', async () => {
-    const boardId = 999;
-    const errorMessage = `Board with ID ${boardId} not found`;
-    (boardRepository.getBoardById as jest.Mock).mockResolvedValue(undefined);
+    const boardId = '999';
+    jest.spyOn(boardRepository, 'findOne').mockResolvedValue(undefined);
 
-    await expect(service.getBoardById(boardId.toString())).rejects.toThrowError(Error);
-    await expect(service.getBoardById(boardId.toString())).rejects.toThrowError(errorMessage);
+    await expect(service.getBoardById(boardId)).rejects.toThrowError(NotFoundException);
+    expect(boardRepository.findOne).toHaveBeenCalledWith({ where: { id: boardId } });
   });
 
   it('should throw BadRequestException for invalid ID format', async () => {
     const invalidId = 'abc';
-    await expect(service.getBoardById(invalidId)).rejects.toThrowError('Invalid ID format');
-    await expect(service.updateBoard(invalidId, {name: 'test', description: 'test'})).rejects.toThrowError('Invalid ID format');
-    await expect(service.deleteBoard(invalidId)).rejects.toThrowError('Invalid ID format');
+    await expect(service.getBoardById(invalidId)).rejects.toThrowError(BadRequestException);
+    await expect(service.updateBoard(invalidId, {name: 'test', description: 'test'})).rejects.toThrowError(BadRequestException);
+    await expect(service.deleteBoard(invalidId)).rejects.toThrowError(BadRequestException);
   });
 });
