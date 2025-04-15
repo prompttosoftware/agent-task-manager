@@ -1,52 +1,53 @@
-import * as boardRepository from '../data/board.repository';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BoardRepository } from '../data/board.repository';
+import { CreateBoardDto } from '../dto/create-board.dto';
+import { ConfigService } from '../../config/config.service';
 import { Board } from '../types/board';
-import { CreateBoardData } from '../types/board';
 
-
+@Injectable()
 export class BoardService {
-  private readonly boardRepository: typeof boardRepository; // Or BoardRepository if you have an interface
+  constructor(
+    private readonly boardRepository: BoardRepository,
+    private readonly configService: ConfigService,
+  ) {}
 
-  constructor(boardRepository: typeof boardRepository) {
-    this.boardRepository = boardRepository;
+  async createBoard(createBoardDto: CreateBoardDto): Promise<Board> {
+    return this.boardRepository.createBoard(createBoardDto);
   }
 
-  async getBoardById(boardId: string): Promise<Board | null> {
-    // Validate boardId is a number
-    const id = Number(boardId);
-    if (isNaN(id)) {
-      return null;
+  async getBoardById(id: string): Promise<Board> {
+    const boardId = Number(id);
+    if (isNaN(boardId)) {
+      throw new BadRequestException('Invalid ID format');
     }
-
-    try {
-      return await this.boardRepository.getBoardById(id);
-    } catch (error) {
-      console.error('Error in BoardService getting board by id:', error);
-      throw error; // Re-throw to allow the test to catch it
+    const board = await this.boardRepository.getBoardById(boardId);
+    if (!board) {
+      throw new NotFoundException(`Board with ID ${id} not found`);
     }
+    return board;
   }
 
-  // You'll need to implement the other methods as well, using the repository:
-    async createBoard(boardData: CreateBoardData): Promise<Board> {
-        return await this.boardRepository.createBoard(boardData);
-    }
+  async getAllBoards(): Promise<Board[]> {
+    return this.boardRepository.getAllBoards();
+  }
 
-    async getAllBoards(): Promise<Board[]> {
-        return await this.boardRepository.getAllBoards();
+  async updateBoard(id: string, updateBoardDto: Partial<Board>): Promise<Board> {
+     const boardId = Number(id);
+    if (isNaN(boardId)) {
+      throw new BadRequestException('Invalid ID format');
     }
+    const updatedBoard = await this.boardRepository.updateBoard(boardId, updateBoardDto);
+    if (!updatedBoard) {
+      throw new NotFoundException(`Board with ID ${id} not found`);
+    }
+    return updatedBoard;
+  }
 
-    async updateBoard(id: string, boardData: Partial<Board>): Promise<Board | null> {
-        const boardId = Number(id);
-         if (isNaN(boardId)) {
-          return null;
-        }
-        return await this.boardRepository.updateBoard(boardId, boardData);
+  async deleteBoard(id: string): Promise<void> {
+     const boardId = Number(id);
+    if (isNaN(boardId)) {
+      throw new BadRequestException('Invalid ID format');
     }
-
-    async deleteBoard(id: string): Promise<void> {
-        const boardId = Number(id);
-         if (isNaN(boardId)) {
-          return;
-        }
-        await this.boardRepository.deleteBoard(boardId);
-    }
+    await this.boardRepository.deleteBoard(boardId);
+  }
 }

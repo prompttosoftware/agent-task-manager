@@ -1,45 +1,119 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule, INestApplication } from '@nestjs/testing';
 import { EpicController } from './epic.controller';
 import { EpicService } from '../services/epic.service';
-import { Express } from 'express';
-import { setupApp } from '../../../src/app';
-import request from 'supertest';
-import { Epic } from '../../types/epic';
-
+import { Epic } from '../../types/epic.d';
+import * as request from 'supertest';
 describe('EpicController', () => {
-  let controller: EpicController;
-  let app: Express;
-  let epicService: EpicService;
+ let controller: EpicController;
+ let epicService: EpicService;
+ let app: INestApplication;
 
-  beforeAll(async () => {
-    app = await setupApp();
-  });
+ const mockEpic: Epic = {
+ key: 'TEST-1',
+ name: 'Test Epic',
+ description: 'Test Description',
+ status: 'Open',
+ startDate: '2024-01-01',
+ endDate: '2024-01-07',
+ };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [EpicController],
-      providers: [EpicService],
-    }).compile();
+ const mockEpicArray: Epic[] = [mockEpic];
 
-    controller = module.get<EpicController>(EpicController);
-    epicService = module.get<EpicService>(EpicService);
-  });
+ const epicServiceMock = {
+ getEpic: jest.fn().mockResolvedValue(mockEpic),
+ listEpics: jest.fn().mockResolvedValue(mockEpicArray),
+ createEpic: jest.fn().mockResolvedValue(mockEpic),
+ updateEpic: jest.fn().mockResolvedValue(mockEpic),
+ deleteEpic: jest.fn(),
+ };
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
+ beforeEach(async () => {
+ const module: TestingModule = await Test.createTestingModule({
+ controllers: [EpicController],
+ providers: [
+ {
+ provide: EpicService,
+ useValue: epicServiceMock,
+ },
+ ],
+ }).compile();
 
-  it('should create an epic', async () => {
-    const createEpicDto = { name: 'Test Epic', description: 'Test Description' };
-    const createdEpic: Epic = { id: '1', ...createEpicDto };
-    jest.spyOn(epicService, 'createEpic').mockResolvedValue(createdEpic);
+ controller = module.get<EpicController>(EpicController);
+ epicService = module.get<EpicService>(EpicService);
 
-    const response = await request(app)
-      .post('/api/epics')
-      .send(createEpicDto);
+ app = module.createNestApplication();
+ await app.init();
+ });
 
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual(createdEpic);
-    expect(epicService.createEpic).toHaveBeenCalledWith(createEpicDto);
-  });
-});
+ it('should be defined', () => {
+ expect(controller).toBeDefined();
+ expect(epicService).toBeDefined();
+ });
+
+ describe('GET /epics/:key', () => {
+ it('should get an epic by key', async () => {
+ const response = await request(app.getHttpServer())
+ .get('/epics/TEST-1')
+ .expect(200);
+
+ expect(response.body).toEqual(mockEpic);
+ expect(epicServiceMock.getEpic).toHaveBeenCalledWith('TEST-1');
+ });
+ });
+
+ describe('GET /epics', () => {
+ it('should get all epics', async () => {
+ const response = await request(app.getHttpServer())
+ .get('/epics')
+ .expect(200);
+
+ expect(response.body).toEqual(mockEpicArray);
+ expect(epicServiceMock.listEpics).toHaveBeenCalled();
+ });
+ });
+
+ describe('POST /epics', () => {
+ it('should create an epic', async () => {
+ const createEpicDto = {
+ key: 'TEST-2',
+ name: 'Test Epic',
+ description: 'Test Description',
+ status: 'Open',
+ startDate: '2024-01-01',
+ endDate: '2024-01-07',
+ };
+ const response = await request(app.getHttpServer())
+ .post('/epics')
+ .send(createEpicDto)
+ .expect(201);
+
+ expect(response.body).toEqual(mockEpic);
+ expect(epicServiceMock.createEpic).toHaveBeenCalledWith(createEpicDto);
+ });
+ });
+
+ describe('PUT /epics/:key', () => {
+ it('should update an epic', async () => {
+ const updateEpicDto = {
+ name: 'Updated Name',
+ };
+ const response = await request(app.getHttpServer())
+ .put('/epics/TEST-1')
+ .send(updateEpicDto)
+ .expect(200);
+
+ expect(response.body).toEqual(mockEpic);
+ expect(epicServiceMock.updateEpic).toHaveBeenCalledWith('TEST-1', updateEpicDto);
+ });
+ });
+
+ describe('DELETE /epics/:key', () => {
+ it('should delete an epic', async () => {
+ await request(app.getHttpServer()).delete('/epics/TEST-1').expect(204);
+ expect(epicServiceMock.deleteEpic).toHaveBeenCalledWith('TEST-1');
+ });
+ });
+
+ afterEach(async () => {
+ await app.close();
+ });

@@ -1,25 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Put, Delete, UsePipes, ValidationPipe, Inject } from '@nestjs/common';
+import { CreateBoardDto } from '../dto/create-board.dto';
 import { BoardService } from '../services/board.service';
-import { CreateBoardDto } from '../api/dto/create-board.dto';
-import { UpdateBoardDto } from '../api/dto/update-board.dto';
-import { Board } from '../models/board.model';
+import { Board } from '../types/board';
 
 @Controller('boards')
 export class BoardController {
-  constructor(private readonly boardService: BoardService) {}
+  constructor(@Inject(BoardService) private readonly boardService: BoardService) {}
 
   @Post()
+  @UsePipes(new ValidationPipe())
   async create(@Body() createBoardDto: CreateBoardDto): Promise<Board> {
     return this.boardService.createBoard(createBoardDto);
-  }
-
-  @Get(':id')
-  async findOne(@Param('id') id: string): Promise<Board> {
-    const board = await this.boardService.getBoardById(id);
-    if (!board) {
-      throw new NotFoundException(`Board with ID ${id} not found`);
-    }
-    return board;
   }
 
   @Get()
@@ -27,21 +18,34 @@ export class BoardController {
     return this.boardService.getAllBoards();
   }
 
-  @Put(':id')
-  async update(@Param('id') id: string, @Body() updateBoardDto: UpdateBoardDto): Promise<Board> {
-    const board = await this.boardService.updateBoard(id, updateBoardDto);
-    if (!board) {
-      throw new NotFoundException(`Board with ID ${id} not found`);
+  @Get(':id')
+  async findOne(@Param('id') id: string): Promise<Board> {
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      // Handle invalid ID format
+      throw new Error('Invalid ID format');
     }
-    return board;
+    return this.boardService.getBoardById(parsedId);
+  }
+
+  @Put(':id')
+  @UsePipes(new ValidationPipe())
+  async update(@Param('id') id: string, @Body() updateBoardDto: CreateBoardDto): Promise<Board> {
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      // Handle invalid ID format
+      throw new Error('Invalid ID format');
+    }
+    return this.boardService.updateBoard(parsedId, updateBoardDto);
   }
 
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<void> {
-    const board = await this.boardService.deleteBoard(id);
-    if (!board) {
-      throw new NotFoundException(`Board with ID ${id} not found`);
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      // Handle invalid ID format
+      throw new Error('Invalid ID format');
     }
-    return;
+    await this.boardService.deleteBoard(parsedId);
   }
 }

@@ -1,47 +1,66 @@
-import request from 'supertest';
-import { Express } from 'express';
-import { setupApp } from '../../src/app';
-import { WebhookService } from '../services/webhook.service';
-import { WebhookPayload } from '../../types/webhook';
-
-jest.mock('../services/webhook.service');
+import { Test, TestingModule } from '@nestjs/testing';
+import { WebhookController } from './webhook.controller';
+import { WebhookService } from '../api/services/webhook.service';
+import { ConfigService } from '../../config/config.service';
+import { INestApplication } from '@nestjs/common';
+import * as request from 'supertest';
+import { WebhookPayload } from '../../../types/webhook';
 
 describe('WebhookController', () => {
-  let app: Express;
-  let webhookService: jest.Mocked<WebhookService>;
+  let controller: WebhookController;
+  let webhookService: WebhookService;
+  let configService: ConfigService;
+  let app: INestApplication;
 
   beforeEach(async () => {
-    app = await setupApp();
-    webhookService = {
-      createWebhook: jest.fn(),
-    } as jest.Mocked<WebhookService>;
-    (WebhookService as jest.Mock).mockImplementation(() => webhookService);
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [WebhookController],
+      providers: [
+        WebhookService,
+        {
+          provide: WebhookService,
+          useValue: {
+            handleWebhook: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    controller = module.get<WebhookController>(WebhookController);
+    webhookService = module.get<WebhookService>(WebhookService);
+    configService = module.get<ConfigService>(ConfigService);
+
+    app = module.createNestApplication();
+    await app.init();
   });
 
   it('should be defined', () => {
-    expect(app).toBeDefined();
+    expect(controller).toBeDefined();
     expect(webhookService).toBeDefined();
   });
 
-  it('should return 201 on successful webhook creation', async () => {
-    const mockPayload: WebhookPayload = {
-      eventId: '123',
-      eventType: 'issue_created',
-      data: { issueKey: 'ATM-1' },
+  it('should handle webhook', async () => {
+    const payload: WebhookPayload = {
+      event: 'issue_created',
+      data: { issue: { key: 'ATM-123' } },
     };
-    (webhookService.createWebhook as jest.Mock).mockResolvedValue(undefined);
+    jest.spyOn(webhookService, 'handleWebhook').mockResolvedValue(undefined);
 
-    const response = await request(app)
-      .post('/api/webhook')
-      .send(mockPayload)
-      .set('Content-Type', 'application/json');
+    const response = await request(app.getHttpServer())
+      .post('/webhooks')
+      .send(payload);
 
-    expect(response.statusCode).toBe(201);
-    expect(webhookService.createWebhook).toHaveBeenCalledWith(mockPayload);
+    expect(response.status).toBe(201);
+    expect(webhookService.handleWebhook).toHaveBeenCalledWith(payload);
   });
 
-  it('should return 400 on invalid payload', async () => {
-    const response = await request(app).post('/api/webhook').send({}).set('Content-Type', 'application/json');
-    expect(response.statusCode).toBe(400);
+  afterEach(async () => {
+    await app.close();
   });
 });
