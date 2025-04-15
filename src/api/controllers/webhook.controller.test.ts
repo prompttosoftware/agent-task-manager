@@ -2,6 +2,7 @@ import request from 'supertest';
 import { Express } from 'express';
 import { setupApp } from '../../../src/app';
 import * as webhookService from '../../services/webhook.service'; // Import as a namespace
+import { jest, expect } from '@jest/globals';
 
 describe('Webhook Controller', () => {
     let app: Express;
