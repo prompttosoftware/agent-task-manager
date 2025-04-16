@@ -12,7 +12,7 @@ logs/*.log
 data/*.db
 
 # Test coverage
-cov coverage/
+coverage/
 
 # IDE files
 .idea/
@@ -50,3 +50,12 @@ cov coverage/
 # Ignore all files in the 'docs' directory
 docs/*
 !docs/README.md
+
+# SQLite database migration files
+data/migrations/*.sql
+
+# SQLite database seed files
+data/seeds/*.sql
+
+# Plan files
+plan.txt
