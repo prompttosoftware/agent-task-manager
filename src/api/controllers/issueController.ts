@@ -70,4 +70,27 @@ export const issueController = {
       next(error);
     }
   },
+
+  async updateAssignee(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { issueIdOrKey } = req.params;
+      const assignee_key = req.body.name === null || req.body.name === undefined || req.body.name === '' ? null : req.body.name;
+
+      const issueId = await IssueKeyService.getIssueId(issueIdOrKey);
+
+      if (!issueId) {
+        return res.status(404).json({ error: 'Issue not found' });
+      }
+
+      await db.run(
+        'UPDATE Issues SET assignee_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [assignee_key, issueId]
+      );
+
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error updating assignee:', error);
+      next(error);
+    }
+  },
 };
