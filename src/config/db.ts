@@ -74,8 +74,16 @@ async function createTables(): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS Issues (
       id INTEGER PRIMARY KEY,
-      -- Add other issue fields here as needed
-      title TEXT
+      title TEXT,
+      type TEXT,
+      epic_name TEXT,
+      epic_id INTEGER,
+      parent_id INTEGER,
+      key TEXT,
+      created_at DATETIME,
+      updated_at DATETIME,
+      FOREIGN KEY (epic_id) REFERENCES Issues(id),
+      FOREIGN KEY (parent_id) REFERENCES Issues(id)
     );
   `);
 
