@@ -1,45 +1,51 @@
-// src/services/issueKeyService.ts
 import { DatabaseService } from './databaseService';
 
 export class IssueKeyService {
-  private readonly databaseService: DatabaseService;
+  private static readonly METADATA_TABLE = 'Metadata';
+  private static readonly LAST_ISSUE_INDEX_KEY = 'last_issue_index';
+  private dbService: DatabaseService;
 
-  constructor(databaseService: DatabaseService) {
-    this.databaseService = databaseService;
+  constructor(dbService: DatabaseService) {
+    this.dbService = dbService;
   }
 
   async getNextIssueKey(): Promise<string> {
     try {
-      await this.databaseService.connect();
+      await this.dbService.ensureTableExists(IssueKeyService.METADATA_TABLE, [
+        { column: IssueKeyService.LAST_ISSUE_INDEX_KEY, type: 'INTEGER' },
+      ]);
 
-      // Create Metadata table if it doesn't exist
-      await this.databaseService.run(
-        `CREATE TABLE IF NOT EXISTS Metadata (key TEXT PRIMARY KEY, last_issue_index INTEGER)`
-      );
+      // Begin a transaction to ensure atomicity
+      await this.dbService.beginTransaction();
 
-      // Get the current last_issue_index or initialize to 0
-      let result = await this.databaseService.get<{ last_issue_index: number }>(
-        'SELECT last_issue_index FROM Metadata WHERE key = ?', ['last_issue_index']
-      );
-      let lastIssueIndex = result?.last_issue_index ?? 0;
+      // Retrieve the current index
+      let lastIndex = (await this.dbService.getSingleValue(
+        IssueKeyService.METADATA_TABLE,
+        IssueKeyService.LAST_ISSUE_INDEX_KEY
+      )) as number | undefined;
+
+      lastIndex = lastIndex === undefined ? 0 : lastIndex;
 
       // Increment the index
-      const newIssueIndex = lastIssueIndex + 1;
+      const newIndex = lastIndex + 1;
 
-      // Update the last_issue_index in the Metadata table
-      await this.databaseService.run(
-        'INSERT OR REPLACE INTO Metadata (key, last_issue_index) VALUES (?, ?)',
-        ['last_issue_index', newIssueIndex]
+      // Update the index in the database
+      await this.dbService.setSingleValue(
+        IssueKeyService.METADATA_TABLE,
+        IssueKeyService.LAST_ISSUE_INDEX_KEY,
+        newIndex
       );
 
-      // Format the new key
-      const newKey = `TASK-${newIssueIndex}`;
-      return newKey;
+      // Commit the transaction
+      await this.dbService.commitTransaction();
+
+      // Format and return the new key
+      return `TASK-${newIndex}`;
     } catch (error) {
-      console.error('Error getting next issue key:', error);
-      throw new Error(`Failed to generate issue key: ${error}`);
-    } finally {
-      await this.databaseService.disconnect();
+      // Rollback the transaction on error
+      await this.dbService.rollbackTransaction();
+      console.error('Error generating issue key:', error);
+      throw error;
     }
   }
 }
