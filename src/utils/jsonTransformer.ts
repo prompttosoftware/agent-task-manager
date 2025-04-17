@@ -1,68 +1,54 @@
-// src/utils/jsonTransformer.ts
+import { Issue } from '../api/models/issue';
+import { Attachment } from '../api/models/attachment';
+import { db } from '../config/db';
 
-import { DatabaseService } from '../services/databaseService';
-import { Status } from '../models/status';
+interface IssueResponse {
+    id: number;
+    key: string;
+    self: string;
+    fields: {
+        summary: string;
+        [key: string]: any;
+    };
+}
 
-export class JsonTransformer {
-    private databaseService: DatabaseService;
+export async function formatIssueResponse(issue: Issue): Promise<IssueResponse> {
+    const issueResponse: IssueResponse = {
+        id: issue.id,
+        key: issue.key,
+        self: `/rest/api/3/issue/${issue.key}`,
+        fields: {
+            summary: issue.summary,
+        },
+    };
 
-    constructor(databaseService: DatabaseService) {
-        this.databaseService = databaseService;
-    }
-
-    async transform(data: any, endpoint?: string): Promise<any> {
-        if (endpoint === 'GET /issue/{issueIdOrKey}') {
-            return await this.transformIssueDetails(data);
-        }
-        return data;
-    }
-
-    private async transformIssueDetails(issue: any): Promise<any> {
-        if (!issue) {
-            return issue;
-        }
-
-        let transformedIssue: any = { ...issue };
-
-        if (issue.status_id) {
-            try {
-                const status: Status | undefined = await this.databaseService.getStatusById(issue.status_id);
-
-                if (status) {
-                    transformedIssue.status = {
-                        id: status.id,
-                        name: status.name,
-                        category: {
-                            id: status.id, // Assuming status.id can be used as category id
-                            key: status.code, // Assuming status.code can be used as category key
-                            name: status.name,
-                            colorName: this.mapStatusToColor(status.code) // You'll need to implement this
-                        }
-                    };
-                    delete transformedIssue.status_id; // Remove the original status_id
+    // Fetch attachments
+    const attachments: Attachment[] = await new Promise((resolve, reject) => {
+        db.all<Attachment[]>(
+            'SELECT id, filename, mime_type, size, created_at FROM Attachments WHERE issue_id = ?', 
+            [issue.id],
+            (err, rows) => {
+                if (err) {
+                    reject(err);
+                    return;
                 }
-            } catch (error) {
-                console.error("Error fetching status details:", error);
-                // Handle the error appropriately, e.g., log it and return a default status or null
-                transformedIssue.status = null; // or a default status object
+                resolve(rows);
             }
-        }
+        );
+    });
 
-        return transformedIssue;
+    if (attachments && attachments.length > 0) {
+        issueResponse.fields.attachment = attachments.map(attachment => ({
+            id: attachment.id,
+            self: `/rest/api/3/attachments/${attachment.id}`,
+            filename: attachment.filename,
+            mimeType: attachment.mime_type,
+            size: attachment.size,
+            created: attachment.created_at,
+        }));
+    } else {
+        issueResponse.fields.attachment = [];
     }
 
-    private mapStatusToColor(statusCode: string): string {
-        // Implement your logic to map status code to color name
-        // This is just a placeholder, replace with your actual mapping
-        switch (statusCode) {
-            case 'TODO':
-                return 'blue';
-            case 'IN_PROGRESS':
-                return 'yellow';
-            case 'DONE':
-                return 'green';
-            default:
-                return 'gray';
-        }
-    }
+    return issueResponse;
 }
