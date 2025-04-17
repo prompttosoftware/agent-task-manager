@@ -4,6 +4,7 @@ import { requestLogger } from './api/middleware/requestLogger';
 import issueRoutes from './api/routes/issueRoutes';
 import issueLinkRoutes from './api/routes/issueLinkRoutes';
 import epicRoutes from './api/routes/epicRoutes';
+import metadataRoutes from './api/routes/metadataRoutes';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use('/rest/api/3/issue', issueRoutes);
 app.use('/rest/api/3/issue-link', issueLinkRoutes);
 app.use('/rest/api/3/epic', epicRoutes);
 app.use('/rest/api/3/search', issueRoutes);
+app.use('/rest/api/3/issue', metadataRoutes);
 
 // Error handling middleware.  Must be the last middleware.
 app.use(errorHandler);
