@@ -1,95 +1,118 @@
 import { Request, Response, NextFunction } from 'express';
-import { Issue } from '../models/issue';
-import { Attachment } from '../models/attachment';
-import { formatIssueResponse } from '../../utils/jsonTransformer';
 import { db } from '../../config/db';
-import { IssueKeyService } from '../services/issueKeyService';
 
 export const issueController = {
-  async addAttachment(
-    req: Request, 
-    res: Response, 
-    next: NextFunction
-  ) {
+  async linkIssues(req: Request, res: Response, next: NextFunction) {
     try {
-      const { issueIdOrKey } = req.params;
+      const { type, inwardIssue, outwardIssue } = req.body;
 
-      if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+      // Validate request body
+      if (!type?.name || !inwardIssue?.key || !outwardIssue?.key) {
+        return res.status(400).json({ error: 'Invalid request body' });
       }
 
-      const issueId = await IssueKeyService.getIssueId(issueIdOrKey);
-
-      if (!issueId) {
-        return res.status(404).json({ error: 'Issue not found' });
+      // Check link type
+      if (type.name !== 'Relates') {
+        return res.status(400).json({ error: 'Invalid link type. Only "Relates" is supported.' });
       }
 
-      const { originalname, mimetype, buffer, size } = req.file;
+      const inwardIssueKey = inwardIssue.key;
+      const outwardIssueKey = outwardIssue.key;
 
-      // Start a transaction
-      await db.transaction(async (tx) => {
-        const attachment = await tx.run(
-          'INSERT INTO Attachments (issue_id, filename, mime_type, content, size) VALUES (?, ?, ?, ?, ?)',
-          [issueId, originalname, mimetype, buffer, size]
-        );
+      let inwardId: number | undefined;
+      let outwardId: number | undefined;
 
-        const attachmentId = attachment.lastID;
-
-        await tx.run(
-          'UPDATE Issues SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [issueId]
-        );
-
-        const createdAttachment = await new Promise<Attachment>((resolve, reject) => {
-            tx.get(
-                'SELECT id, issue_id, filename, mime_type, size, created_at FROM Attachments WHERE id = ?',
-                [attachmentId],
-                (err: any, row: any) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(row);
-                    }
-                }
-            );
+      // Find issue IDs
+      try {
+        inwardId = await new Promise<number | undefined>((resolve, reject) => {
+          db.get(
+            'SELECT id FROM Issues WHERE title = ?', // Assuming 'title' stores the issue key
+            [inwardIssueKey],
+            (err, row: any) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(row?.id);
+              }
+            }
+          );
         });
 
-        const attachmentResponse = {
-          id: createdAttachment.id,
-          self: `/rest/api/3/attachments/${createdAttachment.id}`,
-          filename: createdAttachment.filename,
-          mimeType: createdAttachment.mime_type,
-          size: createdAttachment.size,
-          created: createdAttachment.created_at,
-        };
-
-        res.status(200).json(attachmentResponse);
-      });
-    } catch (error: any) {
-      console.error('Error adding attachment:', error);
-      next(error);
-    }
-  },
-
-  async updateAssignee(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { issueIdOrKey } = req.params;
-      const assignee_key = req.body.name === null || req.body.name === undefined || req.body.name === '' ? null : req.body.name;
-
-      const issueId = await IssueKeyService.getIssueId(issueIdOrKey);
-
-      if (!issueId) {
-        return res.status(404).json({ error: 'Issue not found' });
+        outwardId = await new Promise<number | undefined>((resolve, reject) => {
+          db.get(
+            'SELECT id FROM Issues WHERE title = ?', // Assuming 'title' stores the issue key
+            [outwardIssueKey],
+            (err, row: any) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(row?.id);
+              }
+            }
+          );
+        });
+      } catch (dbError: any) {
+        console.error('Database error fetching issue IDs:', dbError);
+        return res.status(500).json({ error: 'Database error fetching issue IDs' });
       }
 
-      await db.run(
-        'UPDATE Issues SET assignee_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [assignee_key, issueId]
-      );
+      if (!inwardId || !outwardId) {
+        return res.status(404).json({ error: 'One or both issues not found' });
+      }
 
-      res.status(204).send();
+      // Check if link already exists
+      try {
+        const existingLink: any = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT id FROM IssueLinks WHERE source_issue_id = ? AND target_issue_id = ?',
+            [inwardId, outwardId],
+            (err, row: any) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(row);
+              }
+            }
+          );
+        });
+
+        if (existingLink) {
+          return res.status(400).json({ error: 'Issue link already exists' });
+        }
+      } catch (dbError: any) {
+        console.error('Database error checking existing link:', dbError);
+        return res.status(500).json({ error: 'Database error checking existing link' });
+      }
+
+      // Insert the new link
+      try {
+        await db.run(
+          'INSERT INTO IssueLinks (source_issue_id, target_issue_id, link_type) VALUES (?, ?, ?)',
+          [inwardId, outwardId, 'Relates']
+        );
+      } catch (dbError: any) {
+        console.error('Database error creating issue link:', dbError);
+        return res.status(500).json({ error: 'Database error creating issue link' });
+      }
+
+      // Update updated_at timestamps
+      try {
+        await db.run(
+          'UPDATE Issues SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [inwardId]
+        );
+        await db.run(
+          'UPDATE Issues SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [outwardId]
+        );
+      } catch (dbError: any) {
+        console.error('Database error updating issue timestamps:', dbError);
+        return res.status(500).json({ error: 'Database error updating issue timestamps' });
+      }
+
+      res.status(201).send();
     } catch (error: any) {
-      console.error('Error updating assignee:', error);
+      console.error('Error linking issues:', error);
       next(error);
     }
   },
