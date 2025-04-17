@@ -5,3 +5,4 @@ import { upload } from '../../app';
 export const issueRoutes = express.Router();
 
 issueRoutes.post('/:issueIdOrKey/attachments', upload.single('file'), issueController.addAttachment);
+issueRoutes.put('/:issueIdOrKey/assignee', issueController.updateAssignee);

@@ -8,6 +8,7 @@ interface IssueResponse {
     self: string;
     fields: {
         summary: string;
+        assignee?: any;
         [key: string]: any;
     };
 }
@@ -21,6 +22,16 @@ export async function formatIssueResponse(issue: Issue): Promise<IssueResponse> 
             summary: issue.summary,
         },
     };
+
+    if (issue.assignee_key !== null) {
+        issueResponse.fields.assignee = {
+            key: issue.assignee_key,
+            name: issue.assignee_key,
+            displayName: issue.assignee_key,
+        };
+    } else {
+        issueResponse.fields.assignee = null;
+    }
 
     // Fetch attachments
     const attachments: Attachment[] = await new Promise((resolve, reject) => {
