@@ -1,14 +1,11 @@
-// src/api/controllers/issueController.ts
-import { Request, Response } from 'express';
-import { DatabaseService } from '../../src/services/databaseService';
-import { JsonTransformer } from '../../src/utils/jsonTransformer';
-
 export class IssueController {
     private databaseService: DatabaseService;
+    private issueStatusTransitionService: IssueStatusTransitionService;
     private jsonTransformer: JsonTransformer;
 
-    constructor(databaseService: DatabaseService, jsonTransformer: JsonTransformer) {
+    constructor(databaseService: DatabaseService, issueStatusTransitionService: IssueStatusTransitionService, jsonTransformer: JsonTransformer) {
         this.databaseService = databaseService;
+        this.issueStatusTransitionService = issueStatusTransitionService;
         this.jsonTransformer = jsonTransformer;
     }
 
@@ -46,6 +43,86 @@ export class IssueController {
         } catch (error: any) {
             console.error("Error deleting issue:", error);
             res.status(500).json({ message: error.message || 'Failed to delete issue' });
+        }
+    }
+
+    async getTransitions(req: Request, res: Response): Promise<void> {
+        try {
+            const issueKey = req.params.issueKey;
+            const issue = await this.databaseService.getIssue(issueKey);
+            if (!issue) {
+                res.status(404).json({ message: 'Issue not found' });
+                return;
+            }
+            const currentStatusId = issue.status_id;
+            const allowedTargetStatusIds: number[] = [];
+            if (currentStatusId) {
+                if (currentStatusId === 1) {
+                   allowedTargetStatusIds.push(2);
+                } else if (currentStatusId === 2) {
+                  allowedTargetStatusIds.push(1, 3);
+                } else if (currentStatusId === 3) {
+                  allowedTargetStatusIds.push(1, 2);
+                }
+            }
+            const statuses = await this.databaseService.getStatusesByIds(allowedTargetStatusIds);
+            const transitions = statuses.map(status => ({
+                id: status.id,
+                name: status.name,
+                to: {
+                    id: status.id,
+                    name: status.name,
+                    statusCategory: {
+                        id: status.code,
+                        key: status.code,
+                        name: status.name
+                    }
+                },
+                fields: {}
+            }));
+            const response = {
+                transitions: transitions
+            };
+            res.status(200).json(response);
+        } catch (error: any) {
+            console.error("Error getting transitions:", error);
+            res.status(500).json({ message: error.message || 'Failed to get transitions' });
+        }
+    }
+
+    async transitionIssue(req: Request, res: Response): Promise<void> {
+        try {
+            const issueKey = req.params.issueKey;
+            const targetStatusId = req.body.transition?.id;
+
+            if (!targetStatusId) {
+                res.status(400).json({ message: 'Transition ID is required' });
+                return;
+            }
+
+            const issue = await this.databaseService.getIssue(issueKey);
+
+            if (!issue) {
+                res.status(404).json({ message: 'Issue not found' });
+                return;
+            }
+
+            const currentStatusId = issue.status_id;
+
+            const isValidTransition = this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId);
+
+            if (!isValidTransition) {
+                res.status(400).json({ message: 'Invalid transition' });
+                return;
+            }
+
+            await this.databaseService.updateIssueStatus(issueKey, targetStatusId);
+
+            res.status(204).send(); // No Content
+
+        } catch (error: any) {
+            console.error("Error transitioning issue:", error);
+            res.status(500).json({ message: error.message || 'Failed to transition issue' });
         }
     }
 }
