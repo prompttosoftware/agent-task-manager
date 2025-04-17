@@ -1,8 +1,10 @@
 import express from 'express';
 import { issueController } from '../controllers/issueController';
-import { upload } from '../../app';
 
-export const issueRoutes = express.Router();
+const router = express.Router();
 
-issueRoutes.post('/:issueIdOrKey/attachments', upload.single('file'), issueController.addAttachment);
-issueRoutes.put('/:issueIdOrKey/assignee', issueController.updateAssignee);
+router.post('/link', issueController.linkIssues);
+router.post('/', issueController.createIssue);
+router.get('/search', issueController.searchIssues);
+
+export default router;

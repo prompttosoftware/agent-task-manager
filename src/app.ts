@@ -15,6 +15,7 @@ app.use(requestLogger);
 app.use('/rest/api/3/issue', issueRoutes);
 app.use('/rest/api/3/issue-link', issueLinkRoutes);
 app.use('/rest/api/3/epic', epicRoutes);
+app.use('/rest/api/3/search', issueRoutes);
 
 // Error handling middleware.  Must be the last middleware.
 app.use(errorHandler);
