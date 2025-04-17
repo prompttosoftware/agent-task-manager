@@ -21,7 +21,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "test": "jest"
+    "test": "jest",
+    "test:issueController": "jest --testMatch issueController.spec.ts"
   },
   "jest": {
     "preset": "ts-jest",
