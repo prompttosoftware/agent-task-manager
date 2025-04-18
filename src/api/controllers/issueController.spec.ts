@@ -8,6 +8,7 @@ import { ObjectId } from 'mongodb';
 import { MockRequest, MockResponse } from '@jest-mock/express';
 //import sqlite3 from 'sqlite3';
 import { createMock } from '@golevelup/ts-jest';
+import { Mocked } from 'jest-mock';
 
 
 
@@ -24,7 +25,7 @@ describe('IssueController', () => {
     let mockResponse: MockResponse;
 
     const mockDatabaseService = createMock<DatabaseService>();
-    const mockIssueKeyService = createMock<IssueKeyService>();
+    const mockIssueKeyService: Mocked<IssueKeyService> = createMock<IssueKeyService>();
 
     beforeEach(() => {
         mockDatabaseService.get.mockReset();
@@ -64,6 +65,7 @@ describe('IssueController', () => {
         };
 
         const issueId = new ObjectId().toHexString();
+        const issueKey = 'TASK-1';
 
         const createdIssue: Issue = {
             _id: issueId,
@@ -74,14 +76,23 @@ describe('IssueController', () => {
 
         mockDatabaseService.get.mockResolvedValue(createdIssue);
         mockDatabaseService.run.mockResolvedValue(undefined);
-        mockIssueKeyService.getNextIssueKey.mockResolvedValue('TASK-1');
+        mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
+        mockDatabaseService.run.mockImplementation((sql: string, params: any[]) => {
+            return Promise.resolve({ changes: 1 });
+        });
+
 
         mockRequest.body = issueData;
         await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
-        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), expect.anything());
-        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['TASK-1']);
+        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), [
+            issueData.issuetype,
+            issueData.summary,
+            issueData.description,
+            issueKey
+        ]);
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
         expect(mockResponse.statusCode).toBe(201);
         expect(mockResponse._getJSON()).toEqual(createdIssue);
         expect(mockWebhookService.triggerWebhooks).toHaveBeenCalledWith('jira:issue_created', createdIssue);
@@ -123,7 +134,12 @@ describe('IssueController', () => {
         mockRequest.body = { ...issueData };
         await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
 
-        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues SET'), expect.anything());
+        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues SET'), [
+            issueData.issuetype,
+            issueData.summary,
+            issueData.description,
+            'PROJECT-123'
+        ]);
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         expect(mockResponse.statusCode).toBe(204);
         expect(mockResponse._isEndCalled()).toBe(true);
