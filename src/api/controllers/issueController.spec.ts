@@ -25,7 +25,9 @@ describe('IssueController', () => {
     let mockResponse: MockResponse;
 
     const mockDatabaseService = createMock<DatabaseService>();
-    const mockIssueKeyService: Mocked<IssueKeyService> = createMock<IssueKeyService>();
+    const mockIssueKeyService: Mocked<IssueKeyService> = {
+        getNextIssueKey: jest.fn()
+    } as any;
 
     beforeEach(() => {
         mockDatabaseService.get.mockReset();
@@ -83,7 +85,7 @@ describe('IssueController', () => {
 
 
         mockRequest.body = issueData;
-        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response, () => {});
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), [
