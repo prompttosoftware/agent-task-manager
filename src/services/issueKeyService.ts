@@ -44,7 +44,6 @@ export class IssueKeyService {
     } catch (error) {
       // Rollback the transaction on error
       await this.dbService.rollbackTransaction();
-      console.error('Error generating issue key:', error);
       throw error;
     }
   }
