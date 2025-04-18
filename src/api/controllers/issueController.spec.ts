@@ -7,19 +7,17 @@ import { Issue } from '../../models/issue';
 import { jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 import { createMock } from '@golevelup/ts-jest';
-import { HttpArgumentsHost } from '@nestjs/common';
 import { Response as MockResponse, Request as MockRequest } from 'jest-express';
 
 // Mock the webhook service
-const mockWebhookService = {
+const mockWebhookService = { 
     triggerWebhooks: jest.fn(),
 } as jest.Mocked<typeof WebhookService>;
 
 // Mock the IssueKeyService
-const mockIssueKeyService: jest.Mocked<IssueKeyService> = createMock<IssueKeyService>();
-mockIssueKeyService.getNextIssueKey.mockResolvedValue('TASK-1');
-
-
+const mockIssueKeyService = {
+    getNextIssueKey: jest.fn(),
+} as jest.Mocked<IssueKeyService>;
 // Mock the DatabaseService
 const mockIssueService: jest.Mocked<DatabaseService> = createMock<DatabaseService>();
 
@@ -48,7 +46,8 @@ describe('IssueController', () => {
     const issueData = {
       issuetype: 'task',
       summary: 'Test issue',
-      description: 'Test description'
+      description: 'Test description',
+      _id: new ObjectId().toHexString()
     };
 
     const createdIssue: Issue = {
@@ -66,7 +65,7 @@ describe('IssueController', () => {
     await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
 
     expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
-    expect(mockIssueService.run).toHaveBeenCalled();
+    expect(mockIssueService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), expect.anything());
     expect(mockIssueService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['TASK-1']);
     expect(mockResponse.statusCode).toBe(201);
     expect(mockResponse._getJSON()).toEqual(createdIssue);
@@ -105,7 +104,7 @@ describe('IssueController', () => {
     mockRequest.body = { ...issueData };
     await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
 
-    expect(mockIssueService.run).toHaveBeenCalled();
+    expect(mockIssueService.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues SET'), expect.anything());
     expect(mockIssueService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
     expect(mockResponse.statusCode).toBe(204);
     expect(mockResponse._isEndCalled()).toBe(true);
