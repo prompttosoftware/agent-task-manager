@@ -1,200 +1,202 @@
-import { createIssue, getIssue, updateIssue, deleteIssue, getAllIssues, createWebhookEndpoint, deleteWebhookEndpoint, linkIssues } from './issueController';
+import { issueController } from './issueController';
 import { Request, Response, NextFunction } from 'express';
-import { formatIssueResponse } from '../../utils/jsonTransformer';
-import { issueKeyService } from '../../services/issueKeyService';
-import { databaseService } from '../../services/databaseService';
-import { webhookService } from '../../services/webhookService';
-
-// Mock the db module
-jest.mock('../../config/db', () => ({
-    getDBConnection: jest.fn()
-}));
+import { IssueKeyService } from '../../services/issueKeyService';
+import { DatabaseService } from '../../services/databaseService';
+import * as webhookService from '../../services/webhookService';
+import { getDBConnection } from '../../config/db';
 
 jest.mock('../../services/issueKeyService');
 jest.mock('../../services/databaseService');
 jest.mock('../../services/webhookService');
 
+const mockRequest = {
+    body: {},
+    params: {},
+    query: {}
+} as unknown as Request;
+const mockResponse = {
+    status: jest.fn().mockReturnThis(),
+    json: jest.fn().mockReturnThis(),
+    send: jest.fn().mockReturnThis()
+} as unknown as Response;
+const mockNext = jest.fn() as NextFunction;
+
+const mockDB = {
+    all: jest.fn(),
+    run: jest.fn(),
+    get: jest.fn()
+};
+
+jest.mock('../../config/db', () => ({
+    getDBConnection: jest.fn(() => mockDB)
+}));
+
 describe('IssueController', () => {
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
 
-  it('should create an issue with valid data', async () => {
-    const mockRequest = {
-      body: { summary: 'Test Summary', description: 'Test Description' },
-    } as Request;
-    const mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
-
-    (issueKeyService.generateIssueKey as jest.Mock).mockResolvedValue('ATM-123');
-    (databaseService.createIssue as jest.Mock).mockResolvedValue({ key: 'ATM-123', summary: 'Test Summary', description: 'Test Description', statusId: 11 });
-    (webhookService.triggerIssueCreated as jest.Mock).mockResolvedValue(undefined);
-
-    await createIssue(mockRequest, mockResponse, mockNext);
-
-    expect(issueKeyService.generateIssueKey).toHaveBeenCalled();
-    expect(databaseService.createIssue).toHaveBeenCalledWith({
-      key: 'ATM-123',
-      summary: 'Test Summary',
-      description: 'Test Description',
-      statusId: 11,
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockDB.all.mockClear();
+        mockDB.run.mockClear();
+        mockDB.get.mockClear();
     });
-    expect(webhookService.triggerIssueCreated).toHaveBeenCalledWith({ key: 'ATM-123', summary: 'Test Summary', description: 'Test Description', statusId: 11 });
-    expect(mockResponse.status).toHaveBeenCalledWith(201);
-    expect(mockResponse.json).toHaveBeenCalledWith({ key: 'ATM-123', summary: 'Test Summary', description: 'Test Description', statusId: 11 });
-  });
 
-  it('should return 400 for invalid request body', async () => {
-    const mockRequest = {
-      body: {},
-    } as Request;
-    const mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+    it('should create an issue with valid data', async () => {
+        (IssueKeyService.prototype.getNextIssueKey as jest.Mock).mockResolvedValue('PROJECT-123');
+        (mockDB.run as jest.Mock).mockImplementation((sql, params, callback) => {
+          if (sql.includes('INSERT INTO Issues')) {
+            callback(null, { lastID: 1 });
+          } else {
+            callback(null, undefined);
+          }
+        });
 
-    await createIssue(mockRequest, mockResponse, mockNext);
+        mockRequest.body = { fields: { issuetype: { name: 'Task' }, summary: 'Test Issue' } };
 
-    expect(mockResponse.status).toHaveBeenCalledWith(400);
-    expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Invalid request body.  Must include a summary.' });
-  });
+        await issueController.createIssue(mockRequest, mockResponse, mockNext);
 
-  it('should handle database errors', async () => {
-    const mockRequest = {
-      body: { summary: 'Test Summary' },
-    } as Request;
-    const mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(IssueKeyService.prototype.getNextIssueKey).toHaveBeenCalled();
+        expect(mockDB.run).toHaveBeenCalled();
+        expect(mockResponse.status).toHaveBeenCalledWith(201);
+        expect(mockResponse.json).toHaveBeenCalledWith({ id: 1 });
+    });
 
-    (issueKeyService.generateIssueKey as jest.Mock).mockRejectedValue(new Error('Database error'));
+    it('should return 400 if required fields are missing', async () => {
+        mockRequest.body = { fields: { summary: '', issuetype: { name: '' } } };
+        await issueController.createIssue(mockRequest, mockResponse, mockNext);
 
-    await createIssue(mockRequest, mockResponse, mockNext);
+        expect(mockResponse.status).toHaveBeenCalledWith(400);
+        expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Title and Issue Type are required' });
+    });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(500);
-    expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Failed to create issue' });
-  });
+    it('should handle database errors during issue creation', async () => {
+        mockRequest.body = { fields: { issuetype: { name: 'Task' }, summary: 'Test Issue' } };
+        (IssueKeyService.prototype.getNextIssueKey as jest.Mock).mockRejectedValue(new Error('Database error'));
 
-  it('should handle database constraint violation', async () => {
-    const mockRequest = {
-      body: { summary: 'Test Summary' },
-    } as Request;
-    const mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        await issueController.createIssue(mockRequest, mockResponse, mockNext);
 
-    const constraintError = new Error('SQLITE_CONSTRAINT');
-    (issueKeyService.generateIssueKey as jest.Mock).mockRejectedValue(constraintError);
+        expect(mockResponse.status).toHaveBeenCalledWith(500);
+        expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Database error creating issue' });
+    });
 
-    await createIssue(mockRequest, mockResponse, mockNext);
+    it('should get an issue by key', async () => {
+        mockRequest.params = { key: 'PROJECT-123' };
+        (mockDB.get as jest.Mock).mockImplementation((sql, params, callback) => {
+            if (sql.includes('SELECT * FROM Issues WHERE key = ?')) {
+                callback(null, { id: 1, key: 'PROJECT-123', title: 'Test Issue', type: 'Task' });
+            } else {
+                callback(null, undefined);
+            }
+        });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(500);
-    expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Failed to create issue' });
-  });
+        await issueController.searchIssues(mockRequest, mockResponse, mockNext);
 
-  it('should get an issue', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(mockDB.get).toHaveBeenCalled();
+        expect(mockResponse.status).toHaveBeenCalledWith(200);
+        expect(mockResponse.json).toHaveBeenCalledWith(expect.objectContaining({ issues: expect.arrayContaining([{ id: 1, key: 'PROJECT-123', title: 'Test Issue', type: 'Task' }]) }));
+    });
 
-    await getIssue(mockRequest, mockResponse, mockNext);
+    it('should update an issue', async () => {
+        mockRequest.params = { key: 'PROJECT-123' };
+        mockRequest.body = { fields: { summary: 'Updated Summary' } };
+        (mockDB.run as jest.Mock).mockImplementation((sql, params, callback) => {
+            callback(null, { changes: 1 });
+        });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('getIssue endpoint');
-  });
+        await issueController.updateIssue(mockRequest, mockResponse, mockNext);
 
-  it('should update an issue', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(mockDB.run).toHaveBeenCalled();
+        expect(mockResponse.status).toHaveBeenCalledWith(200);
+        expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Issue updated' });
+    });
 
-    await updateIssue(mockRequest, mockResponse, mockNext);
+    it('should delete an issue', async () => {
+        mockRequest.params = { key: 'PROJECT-123' };
+        (mockDB.run as jest.Mock).mockResolvedValue(undefined);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('updateIssue endpoint');
-  });
+        await issueController.deleteIssue(mockRequest, mockResponse, mockNext);
 
-  it('should delete an issue', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(mockDB.run).toHaveBeenCalled();
+        expect(mockResponse.status).toHaveBeenCalledWith(204);
+    });
 
-    await deleteIssue(mockRequest, mockResponse, mockNext);
+    it('should get all issues', async () => {
+        (mockDB.all as jest.Mock).mockImplementation((sql, params, callback) => {
+          if (sql.includes('SELECT * FROM Issues')) {
+            callback(null, [{ id: 1, key: 'PROJECT-123', title: 'Test', type: 'Task' }]);
+          } else {
+            callback(null, []);
+          }
+        });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('deleteIssue endpoint');
-  });
+        await issueController.getAllIssues(mockRequest, mockResponse, mockNext);
 
-  it('should get all issues', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(mockResponse.status).toHaveBeenCalledWith(200);
+        expect(mockResponse.json).toHaveBeenCalledWith([{ id: 1, key: 'PROJECT-123', title: 'Test', type: 'Task' }]);
+    });
 
-    await getAllIssues(mockRequest, mockResponse, mockNext);
+    it('should create a webhook', async () => {
+        mockRequest.body = { url: 'http://example.com', events: ['issue_created'] };
+        (webhookService.createWebhook as jest.Mock).mockResolvedValue({ id: '123', url: 'http://example.com', events: ['issue_created'] });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('getAllIssues endpoint');
-  });
+        await issueController.createWebhook(mockRequest, mockResponse, mockNext);
 
-  it('should create a webhook endpoint', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(webhookService.createWebhook).toHaveBeenCalledWith({ url: 'http://example.com', events: ['issue_created'] });
+        expect(mockResponse.status).toHaveBeenCalledWith(201);
+        expect(mockResponse.json).toHaveBeenCalledWith({ id: '123', url: 'http://example.com', events: ['issue_created'] });
+    });
 
-    await createWebhookEndpoint(mockRequest, mockResponse, mockNext);
+    it('should delete a webhook', async () => {
+        mockRequest.params = { webhookId: '123' };
+        (webhookService.deleteWebhook as jest.Mock).mockResolvedValue(undefined);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('createWebhookEndpoint endpoint');
-  });
+        await issueController.deleteWebhook(mockRequest, mockResponse, mockNext);
 
-  it('should delete a webhook endpoint', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(webhookService.deleteWebhook).toHaveBeenCalledWith('123');
+        expect(mockResponse.status).toHaveBeenCalledWith(204);
+    });
 
-    await deleteWebhookEndpoint(mockRequest, mockResponse, mockNext);
+    it('should link issues', async () => {
+        mockRequest.body = { type: { name: 'Relates' }, inwardIssue: { key: 'PROJECT-123' }, outwardIssue: { key: 'PROJECT-456' } };
+        (mockDB.run as jest.Mock).mockResolvedValue(undefined);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('deleteWebhookEndpoint endpoint');
-  });
+        await issueController.linkIssues(mockRequest, mockResponse, mockNext);
 
-  it('should link issues', async () => {
-    const mockRequest = {} as Request;
-    const mockResponse = { 
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn()
-    } as unknown as Response;
-    const mockNext = jest.fn() as NextFunction;
+        expect(mockDB.run).toHaveBeenCalled();
+        expect(mockResponse.status).toHaveBeenCalledWith(201);
+    });
 
-    await linkIssues(mockRequest, mockResponse, mockNext);
+    it('should get webhooks', async () => {
+        (mockDB.all as jest.Mock).mockImplementation((sql, params, callback) => {
+          if (sql.includes('SELECT id, url, events FROM Webhooks')) {
+            callback(null, [{ id: '1', url: 'http://example.com', events: ['issue_created'] }]);
+          } else {
+            callback(null, []);
+          }
+        });
 
-    expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.send).toHaveBeenCalledWith('linkIssues endpoint');
-  });
+        await issueController.getWebhooks(mockRequest, mockResponse, mockNext);
+
+        expect(mockResponse.status).toHaveBeenCalledWith(200);
+        expect(mockResponse.json).toHaveBeenCalledWith(expect.arrayContaining([{ id: '1', url: 'http://example.com', events: ['issue_created'] }]));
+    });
+
+    it('should search issues using JQL (parameterized query)', async () => {
+            mockRequest.query = { jql: 'status = "Open"' };
+            const expectedSql = 'SELECT Issues.* FROM Issues INNER JOIN Statuses ON Issues.status_id = Statuses.id WHERE Issues.status_id = ?'; //Example
+            const expectedParams = ['OpenStatusId']; //Example - how you would get the status id
+
+            (mockDB.all as jest.Mock).mockImplementation((sql, params, callback) => {
+                if (sql === expectedSql && JSON.stringify(params) === JSON.stringify(expectedParams)) {
+                  callback(null, [{ id: 1, key: 'PROJECT-123', title: 'Test Issue', type: 'Task' }]);
+                } else {
+                  callback(null, []);
+                }
+            });
+
+            await issueController.searchIssues(mockRequest, mockResponse, mockNext);
+
+            expect(mockDB.all).toHaveBeenCalledWith(expectedSql, expectedParams); // Verify correct params were passed.
+            expect(mockResponse.status).toHaveBeenCalledWith(200);
+            expect(mockResponse.json).toHaveBeenCalledWith(expect.objectContaining({issues: expect.arrayContaining([{ id: 1, key: 'PROJECT-123', title: 'Test Issue', type: 'Task' }])}));
+        });
 });
