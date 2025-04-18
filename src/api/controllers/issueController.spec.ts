@@ -4,36 +4,49 @@ import { IssueKeyService } from '../../services/issueKeyService';
 import * as WebhookService from '../../services/webhookService';
 import { Request, Response } from 'express';
 import { Issue } from '../../models/issue';
-import { jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
+import { MockRequest, MockResponse } from '@jest-mock/express';
+//import sqlite3 from 'sqlite3';
 import { createMock } from '@golevelup/ts-jest';
-import { Response as MockResponse, Request as MockRequest } from 'jest-express';
 
-// Mock the webhook service
-const mockWebhookService = {
+
+
+// Mock the WebhookService
+const mockWebhookService: jest.Mocked<typeof WebhookService> = {
     triggerWebhooks: jest.fn(),
-} as jest.Mocked<typeof WebhookService>;
-
-// Mock the IssueKeyService
-const mockIssueKeyService: jest.Mocked<IssueKeyService> = {
-    getNextIssueKey: jest.fn(),
-} as jest.Mocked<IssueKeyService>;
-
-// Mock the DatabaseService
-const mockIssueService: jest.Mocked<DatabaseService> = createMock<DatabaseService>();
+    createWebhook: jest.fn(),
+    deleteWebhook: jest.fn()
+}
 
 describe('IssueController', () => {
     let controller: IssueController;
     let mockRequest: MockRequest;
     let mockResponse: MockResponse;
 
+    const mockDatabaseService = createMock<DatabaseService>();
+    const mockIssueKeyService = createMock<IssueKeyService>();
+
     beforeEach(() => {
-        mockIssueService.get.mockReset();
-        mockIssueService.run.mockReset();
+        mockDatabaseService.get.mockReset();
+        mockDatabaseService.run.mockReset();
         mockIssueKeyService.getNextIssueKey.mockReset();
         mockWebhookService.triggerWebhooks.mockReset();
+        mockDatabaseService.ensureTableExists.mockReset();
+        mockDatabaseService.getSingleValue.mockReset();
+        mockDatabaseService.setSingleValue.mockReset();
+        mockDatabaseService.beginTransaction.mockReset();
+        mockDatabaseService.commitTransaction.mockReset();
+        mockDatabaseService.rollbackTransaction.mockReset();
+        mockDatabaseService.connect.mockReset();
+        mockDatabaseService.disconnect.mockReset();
+        mockDatabaseService.all.mockReset();
 
-        controller = new IssueController(mockIssueService, mockIssueKeyService, mockWebhookService);
+
+        controller = new IssueController(
+            mockDatabaseService,
+            mockIssueKeyService,
+            mockWebhookService
+        );
 
         mockRequest = new MockRequest();
         mockResponse = new MockResponse();
@@ -59,16 +72,16 @@ describe('IssueController', () => {
             description: issueData.description,
         };
 
-        mockIssueService.get.mockResolvedValue(createdIssue);
-        mockIssueService.run.mockResolvedValue(undefined);
+        mockDatabaseService.get.mockResolvedValue(createdIssue);
+        mockDatabaseService.run.mockResolvedValue(undefined);
         mockIssueKeyService.getNextIssueKey.mockResolvedValue('TASK-1');
 
         mockRequest.body = issueData;
         await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
-        expect(mockIssueService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), expect.anything());
-        expect(mockIssueService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['TASK-1']);
+        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), expect.anything());
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['TASK-1']);
         expect(mockResponse.statusCode).toBe(201);
         expect(mockResponse._getJSON()).toEqual(createdIssue);
         expect(mockWebhookService.triggerWebhooks).toHaveBeenCalledWith('jira:issue_created', createdIssue);
@@ -82,12 +95,14 @@ describe('IssueController', () => {
             description: 'Test description',
         };
 
-        mockIssueService.get.mockResolvedValue(issueData);
+        mockDatabaseService.get.mockResolvedValue(issueData);
 
-        mockRequest.params = { issueIdOrKey: 'PROJECT-123' };
+        mockRequest.params = {
+            issueIdOrKey: 'PROJECT-123'
+        };
         await controller.getIssue(mockRequest as any as Request, mockResponse as any as Response);
 
-        expect(mockIssueService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         expect(mockResponse._getJSON()).toEqual(issueData);
     });
 
@@ -99,15 +114,17 @@ describe('IssueController', () => {
             description: 'Updated description',
         };
 
-        mockIssueService.get.mockResolvedValue(issueData);
-        mockIssueService.run.mockResolvedValue(undefined);
+        mockDatabaseService.get.mockResolvedValue(issueData);
+        mockDatabaseService.run.mockResolvedValue(undefined);
 
-        mockRequest.params = { issueIdOrKey: 'PROJECT-123' };
+        mockRequest.params = {
+            issueIdOrKey: 'PROJECT-123'
+        };
         mockRequest.body = { ...issueData };
         await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
 
-        expect(mockIssueService.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues SET'), expect.anything());
-        expect(mockIssueService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
+        expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE issues SET'), expect.anything());
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         expect(mockResponse.statusCode).toBe(204);
         expect(mockResponse._isEndCalled()).toBe(true);
         expect(mockWebhookService.triggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', issueData);
@@ -121,13 +138,15 @@ describe('IssueController', () => {
             description: 'Test description',
         };
 
-        mockIssueService.get.mockResolvedValue(issueData);
-        mockIssueService.run.mockResolvedValue(undefined);
+        mockDatabaseService.get.mockResolvedValue(issueData);
+        mockDatabaseService.run.mockResolvedValue(undefined);
 
-        mockRequest.params = { issueIdOrKey: 'PROJECT-123' };
+        mockRequest.params = {
+            issueIdOrKey: 'PROJECT-123'
+        };
         await controller.deleteIssue(mockRequest as any as Request, mockResponse as any as Response);
 
-        expect(mockIssueService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', ['PROJECT-123']);
+        expect(mockDatabaseService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', ['PROJECT-123']);
         expect(mockResponse.statusCode).toBe(204);
         expect(mockResponse._isEndCalled()).toBe(true);
         expect(mockWebhookService.triggerWebhooks).toHaveBeenCalledWith('jira:issue_deleted', issueData);
