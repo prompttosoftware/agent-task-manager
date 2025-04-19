@@ -23,11 +23,11 @@ describe('IssueController', () => {
     let controller: IssueController;
     let mockRequest: MockRequest;
     let mockResponse: MockResponse;
+    const mockNext = jest.fn();
 
     const mockDatabaseService = createMock<DatabaseService>();
-    const mockIssueKeyService: Mocked<IssueKeyService> = {
-        getNextIssueKey: jest.fn()
-    } as any;
+    const mockIssueKeyService = createMock<IssueKeyService>();
+
 
     beforeEach(() => {
         mockDatabaseService.get.mockReset();
@@ -43,7 +43,7 @@ describe('IssueController', () => {
         mockDatabaseService.connect.mockReset();
         mockDatabaseService.disconnect.mockReset();
         mockDatabaseService.all.mockReset();
-
+        mockNext.mockReset();
 
         controller = new IssueController(
             mockDatabaseService,
@@ -64,6 +64,7 @@ describe('IssueController', () => {
             issuetype: 'task',
             summary: 'Test issue',
             description: 'Test description',
+            _id: new ObjectId().toHexString() // Added _id
         };
 
         const issueId = new ObjectId().toHexString();
@@ -85,7 +86,7 @@ describe('IssueController', () => {
 
 
         mockRequest.body = issueData;
-        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response, () => {});
+        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response, mockNext); // Added mockNext
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO issues'), [
