@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@jest-mock/express": "^3.0.0",
     "axios": "^1.8.4",
     "express": "^5.1.0"
   },
