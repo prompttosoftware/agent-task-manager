@@ -120,7 +120,7 @@ export class IssueController implements IssueControllerInterface {
                 res.status(500).json({ message: 'Failed to retrieve newly created issue' });
             }
         } catch (error) {
-            console.error('Error creating issue:', error);
+            //console.error('Error creating issue:', error);
             res.status(500).json({ message: 'Failed to create issue' });
         }
     }
