@@ -3,9 +3,9 @@ import { DatabaseService } from '../../services/databaseService';
 import { formatIssueResponse } from '../../utils/jsonTransformer';
 import { Issue } from '../../models/issue';
 import { IssueKeyService } from '../../services/issueKeyService';
-import { WebhookService } from '../../services/webhookService'; // Import WebhookService
+import { triggerWebhooks } from '../../services/webhookService';
 
-interface IssueController {
+interface IssueControllerInterface {
     getIssue(req: Request, res: Response): Promise<void>;
     createIssue(req: Request, res: Response): Promise<void>;
     deleteIssue(req: Request, res: Response): Promise<void>;
@@ -16,31 +16,29 @@ interface IssueController {
     linkIssues(req: Request, res: Response): Promise<void>;
 }
 
-export class IssueController implements IssueController {
+export class IssueController implements IssueControllerInterface {
     private databaseService: DatabaseService;
     private issueKeyService: IssueKeyService;
-    private webhookService: WebhookService;
 
-    constructor(databaseService: DatabaseService, issueKeyService: IssueKeyService, webhookService: WebhookService) {
+    constructor(databaseService: DatabaseService, issueKeyService: IssueKeyService) {
         this.databaseService = databaseService;
         this.issueKeyService = issueKeyService;
-        this.webhookService = webhookService;
     }
     async getIssue(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
 
         try {
-            let issue: Issue | undefined;
+            type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            let issue: DbIssue | undefined;
 
-            // Attempt to retrieve the issue by ID (assuming it's a number)
+
             if (!isNaN(Number(issueIdOrKey))) {
-                issue = await this.databaseService.get<Issue>(
+                issue = await this.databaseService.get<DbIssue>(
                     'SELECT * FROM issues WHERE id = ?',
                     [issueIdOrKey]
                 );
             } else {
-                // If it's not a number, assume it's the issue key
-                issue = await this.databaseService.get<Issue>(
+                issue = await this.databaseService.get<DbIssue>(
                     'SELECT * FROM issues WHERE key = ?',
                     [issueIdOrKey]
                 );
@@ -60,42 +58,45 @@ export class IssueController implements IssueController {
 
     async createIssue(req: Request, res: Response): Promise<void> {
         try {
-            const issueData: Issue = req.body;
+            const issueData = req.body as Pick<Issue, 'issuetype' | 'summary' | 'description' | 'parentKey' | 'key'>;
 
-            // Basic validation
-            if (!issueData.issuetype || !issueData.summary || !issueData.description) {
+            if (!issueData.issuetype || !issueData.summary || !issueData.description || !issueData.key) {
                 res.status(400).json({ message: 'Missing required fields' });
                 return;
             }
 
             const issueKey = await this.issueKeyService.getNextIssueKey();
 
-            // SQL INSERT statement
             const sql = `
-                INSERT INTO issues (issuetype, summary, description, parentKey, key)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO issues (issuetype, summary, description, parentKey, key, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `;
+            const now = new Date().toISOString();
+            const defaultStatus = 'To Do';
 
             const params = [
                 issueData.issuetype,
                 issueData.summary,
                 issueData.description,
-                issueData.parentKey,
-                issueKey
+                issueData.parentKey ?? null,
+                issueKey,
+                defaultStatus,
+                now,
+                now
             ];
 
             await this.databaseService.run(sql, params);
 
-            // Retrieve the newly created issue
-            const newIssue = await this.databaseService.get<Issue>(
+             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const newIssue = await this.databaseService.get<DbIssue>(
                 'SELECT * FROM issues WHERE key = ?',
                 [issueKey]
             );
 
             if (newIssue) {
                 const formattedIssue = formatIssueResponse(newIssue);
-                await this.webhookService.triggerWebhooks('jira:issue_created', formattedIssue);
-                res.status(201).json(formattedIssue); // 201 Created
+                await triggerWebhooks('jira:issue_created', formattedIssue);
+                res.status(201).json(formattedIssue);
             } else {
                 res.status(500).json({ message: 'Failed to retrieve newly created issue' });
             }
@@ -107,62 +108,70 @@ export class IssueController implements IssueController {
 
     async updateIssue(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
-        const updatedIssueData: Issue = req.body;
+         type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+        const updatedIssueData: Partial<DbIssue> = req.body;
 
         try {
             let issueIdColumn = 'id';
-            if (isNaN(Number(issueIdOrKey))) {
+             if (isNaN(Number(issueIdOrKey))) {
                 issueIdColumn = 'key';
             }
 
-            // Validate that at least one field to update is present
-            if (!updatedIssueData.issuetype && !updatedIssueData.summary && !updatedIssueData.description && !updatedIssueData.parentKey) {
-                res.status(400).json({ message: 'No fields to update provided' });
-                return;
-            }
-
-            // Construct the SQL UPDATE statement
-            let sql = `UPDATE issues SET `;
-            const updates: string[] = [];
-            const params: any[] = [];
-
-            if (updatedIssueData.issuetype) {
-                updates.push('issuetype = ?');
-                params.push(updatedIssueData.issuetype);
-            }
-            if (updatedIssueData.summary) {
-                updates.push('summary = ?');
-                params.push(updatedIssueData.summary);
-            }
-            if (updatedIssueData.description) {
-                updates.push('description = ?');
-                params.push(updatedIssueData.description);
-            }
-            if (updatedIssueData.parentKey) {
-                updates.push('parentKey = ?');
-                params.push(updatedIssueData.parentKey);
-            }
-
-            sql += updates.join(', ');
-            sql += ` WHERE ${issueIdColumn} = ?`;
-            params.push(issueIdOrKey);
-
-            await this.databaseService.run(sql, params);
-
-            // Retrieve the updated issue
-            const updatedIssue = await this.databaseService.get<Issue>(
+             const preUpdateIssue = await this.databaseService.get<DbIssue>(
                 `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
-            if (updatedIssue) {
-                const formattedIssue = formatIssueResponse(updatedIssue);
-                await this.webhookService.triggerWebhooks('jira:issue_updated', formattedIssue);
-            } else {
-                console.warn('Issue updated in DB but not found for webhook trigger.');
+            if (!preUpdateIssue) {
+                res.status(404).json({ message: 'Issue not found' });
+                return;
             }
 
-            res.status(204).send(); // 204 No Content
+
+            const allowedUpdateFields: (keyof DbIssue)[] = ['issuetype', 'summary', 'description', 'parentKey', 'status', 'assignee_key'];
+            const fieldsToUpdate = Object.keys(updatedIssueData).filter(
+                key => allowedUpdateFields.includes(key as keyof DbIssue)
+            );
+
+
+            if (fieldsToUpdate.length === 0) {
+                res.status(400).json({ message: 'No valid fields to update provided' });
+                return;
+            }
+
+
+            const updates: string[] = [];
+            const params: any[] = [];
+
+            fieldsToUpdate.forEach(key => {
+                updates.push(`${key} = ?`);
+                params.push(updatedIssueData[key as keyof DbIssue]);
+            });
+
+            updates.push('updated_at = ?');
+            params.push(new Date().toISOString());
+
+
+            let sql = `UPDATE issues SET ${updates.join(', ')} WHERE ${issueIdColumn} = ?`;
+            params.push(issueIdOrKey);
+
+            await this.databaseService.run(sql, params);
+
+            const updatedIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
+                [issueIdOrKey]
+            );
+
+
+            if (updatedIssue) {
+                const formattedIssue = formatIssueResponse(updatedIssue);
+                 await triggerWebhooks('jira:issue_updated', formattedIssue);
+                res.status(204).send();
+            } else {
+                 console.error('Issue updated but could not be retrieved afterwards.');
+                 res.status(500).json({ message: 'Failed to retrieve updated issue' });
+            }
+
         } catch (error) {
             console.error('Error updating issue:', error);
             res.status(500).json({ message: 'Failed to update issue' });
@@ -173,31 +182,33 @@ export class IssueController implements IssueController {
         const { issueIdOrKey } = req.params;
 
         try {
-            let sql: string;
-            let params: any[];
-
-            // Determine if issueIdOrKey is an ID (number) or a key (string)
-            if (!isNaN(Number(issueIdOrKey))) {
-                sql = 'DELETE FROM issues WHERE id = ?';
-                params = [issueIdOrKey];
-            } else {
-                sql = 'DELETE FROM issues WHERE key = ?';
-                params = [issueIdOrKey];
+            let issueIdColumn = 'id';
+             if (isNaN(Number(issueIdOrKey))) {
+                issueIdColumn = 'key';
             }
 
-            const preDeleteIssue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
+            type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const preDeleteIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
-            await this.databaseService.run(sql, params);
 
-            if (preDeleteIssue) {
-              const preDeleteFormattedIssue = formatIssueResponse(preDeleteIssue);
-              await this.webhookService.triggerWebhooks('jira:issue_deleted', preDeleteFormattedIssue);
+            if (!preDeleteIssue) {
+                res.status(404).json({ message: 'Issue not found' });
+                return;
             }
 
-            res.status(204).send(); // 204 No Content - successful deletion
+            const sql = `DELETE FROM issues WHERE ${issueIdColumn} = ?`;
+            const params = [issueIdOrKey];
+
+            await this.databaseService.run(sql, params);
+
+            const preDeleteFormattedIssue = formatIssueResponse(preDeleteIssue);
+             await triggerWebhooks('jira:issue_deleted', preDeleteFormattedIssue);
+
+
+            res.status(204).send();
         } catch (error) {
             console.error('Error deleting issue:', error);
             res.status(500).json({ message: 'Failed to delete issue' });
@@ -206,40 +217,24 @@ export class IssueController implements IssueController {
 
     async transitionIssue(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
-        const { transition } = req.body; // Expecting a 'transition' field in the body
+        const { transition } = req.body;
+
+        if (!transition || !transition.name) {
+             res.status(400).json({ message: 'Missing transition name in request body' });
+             return;
+        }
+
+        const newStatus = transition.name;
 
         try {
-            // Update the issue's status in the database.
-            const sql = `UPDATE issues SET status = ? WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`;
-            const params = [transition, issueIdOrKey];
-            await this.databaseService.run(sql, params);
-
-            // Retrieve the updated issue
-            const updatedIssue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
-                [issueIdOrKey]
-            );
-
-            if (updatedIssue) {
-                const formattedIssue = formatIssueResponse(updatedIssue);
-                await this.webhookService.triggerWebhooks('jira:issue_updated', formattedIssue);
+             let issueIdColumn = 'id';
+             if (isNaN(Number(issueIdOrKey))) {
+                issueIdColumn = 'key';
             }
 
-            res.status(204).send(); // 204 No Content
-        } catch (error) {
-            console.error('Error transitioning issue:', error);
-            res.status(500).json({ message: 'Failed to transition issue' });
-        }
-    }
-
-    async updateAssignee(req: Request, res: Response): Promise<void> {
-        const { issueIdOrKey } = req.params;
-        const { assignee } = req.body; // Expecting an 'assignee' field in the body
-
-        try {
-            // Retrieve the issue before the update
-            const preUpdateIssue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
+             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const preUpdateIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
@@ -248,22 +243,76 @@ export class IssueController implements IssueController {
                 return;
             }
 
-            // Update the assignee in the database
-            const sql = `UPDATE issues SET assignee_key = ? WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`;
-            await this.databaseService.run(sql, [assignee, issueIdOrKey]);
 
-            // Retrieve the updated issue
-            const updatedIssue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
+            const sql = `UPDATE issues SET status = ?, updated_at = ? WHERE ${issueIdColumn} = ?`;
+            const params = [newStatus, new Date().toISOString(), issueIdOrKey];
+            await this.databaseService.run(sql, params);
+
+            const updatedIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
+                [issueIdOrKey]
+            );
+
+            if (updatedIssue) {
+                 const formattedIssue = formatIssueResponse(updatedIssue);
+                await triggerWebhooks('jira:issue_updated', formattedIssue);
+                res.status(204).send();
+            } else {
+                 console.error('Issue transitioned but could not be retrieved afterwards.');
+                 res.status(500).json({ message: 'Failed to retrieve updated issue after transition' });
+            }
+
+        } catch (error) {
+            console.error('Error transitioning issue:', error);
+            res.status(500).json({ message: 'Failed to transition issue' });
+        }
+    }
+
+    async updateAssignee(req: Request, res: Response): Promise<void> {
+        const { issueIdOrKey } = req.params;
+         const { assignee } = req.body;
+
+        if (typeof assignee === 'undefined') {
+             res.status(400).json({ message: 'Missing assignee key in request body (use null to unassign)' });
+             return;
+        }
+        const newAssigneeKey = assignee;
+
+        try {
+            let issueIdColumn = 'id';
+             if (isNaN(Number(issueIdOrKey))) {
+                issueIdColumn = 'key';
+            }
+             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const preUpdateIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
+                [issueIdOrKey]
+            );
+
+            if (!preUpdateIssue) {
+                res.status(404).json({ message: 'Issue not found' });
+                return;
+            }
+
+
+            const sql = `UPDATE issues SET assignee_key = ?, updated_at = ? WHERE ${issueIdColumn} = ?`;
+            await this.databaseService.run(sql, [newAssigneeKey, new Date().toISOString(), issueIdOrKey]);
+
+
+            const updatedIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
             if (updatedIssue) {
                 const formattedIssue = formatIssueResponse(updatedIssue);
-                await this.webhookService.triggerWebhooks('jira:issue_updated', formattedIssue);
+                await triggerWebhooks('jira:issue_updated', formattedIssue);
+                 res.status(204).send();
+            } else {
+                 console.error('Assignee updated but could not retrieve issue afterwards.');
+                 res.status(500).json({ message: 'Failed to retrieve updated issue after assignee change' });
             }
 
-            res.status(204).send(); // 204 No Content
         } catch (error) {
             console.error('Error updating assignee:', error);
             res.status(500).json({ message: 'Failed to update assignee' });
@@ -272,12 +321,23 @@ export class IssueController implements IssueController {
 
     async addAttachment(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
-        const { attachment } = req.body; // Expecting an 'attachment' field in the body
+         const attachmentMetadata = req.body;
+
+
+        if (!attachmentMetadata || !attachmentMetadata.filename || !attachmentMetadata.url) {
+            res.status(400).json({ message: 'Missing attachment filename or url in request body' });
+            return;
+        }
 
         try {
-            // Fetch the issue to get the issue key
-            const issue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
+            let issueIdColumn = 'id';
+             if (isNaN(Number(issueIdOrKey))) {
+                issueIdColumn = 'key';
+            }
+
+             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const issue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
@@ -288,35 +348,40 @@ export class IssueController implements IssueController {
 
             const issueKey = issue.key;
 
-            // Implement logic to store attachment metadata (e.g., in a separate `attachments` table linked to the issue)
-            const attachmentData = {
-                issueIdOrKey,
-                filename: attachment.filename, // Assuming 'attachment' has a filename property.
-                url: attachment.url, // Assuming 'attachment' has a url property.
-                // Add other attachment metadata as needed
-            };
 
-            // Example: Insert attachment metadata into an 'attachments' table
-            const attachmentSql = `INSERT INTO attachments (issue_key, filename, url) VALUES (?, ?, ?)`;
-            const attachmentParams = [issueKey, attachmentData.filename, attachmentData.url];
-            await this.databaseService.run(attachmentSql, attachmentParams);
+            const attachmentSql = `INSERT INTO attachments (issue_key, filename, url, created_at) VALUES (?, ?, ?, ?)`;
+            const attachmentParams = [issueKey, attachmentMetadata.filename, attachmentMetadata.url, new Date().toISOString()];
+            const result = await this.databaseService.run(attachmentSql, attachmentParams);
+            const newAttachmentId = (result as any)?.lastID;
 
-            // Optionally, update the issue record (e.g., update timestamp).
-            const updateIssueSql = `UPDATE issues SET updated_at = ? WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`;
-            const updateIssueParams = [new Date().toISOString(), issueIdOrKey];
+            const updateIssueSql = `UPDATE issues SET updated_at = ? WHERE key = ?`;
+            const updateIssueParams = [new Date().toISOString(), issueKey];
             await this.databaseService.run(updateIssueSql, updateIssueParams);
 
-             const updatedIssue = await this.databaseService.get<Issue>(
-                `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
-                [issueIdOrKey]
+            const updatedIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE key = ?`,
+                [issueKey]
             );
 
             if (updatedIssue) {
-                const formattedIssue = formatIssueResponse(updatedIssue);
-                await this.webhookService.triggerWebhooks('jira:issue_updated', formattedIssue);
+                 const formattedIssue = formatIssueResponse(updatedIssue);
+                 await triggerWebhooks('jira:issue_updated', {
+                    ...formattedIssue,
+
+                 });
+
+                 res.status(200).json({
+                      id: newAttachmentId,
+                      filename: attachmentMetadata.filename,
+                      content: attachmentMetadata.url,
+                      created: new Date().toISOString(),
+
+                  });
+            } else {
+                 console.error('Attachment added but could not retrieve updated issue afterwards.');
+                 res.status(500).json({ message: 'Failed to retrieve updated issue after adding attachment' });
             }
 
-            res.status(201).json({ message: 'Attachment added successfully' });
         } catch (error) {
             console.error('Error adding attachment:', error);
             res.status(500).json({ message: 'Failed to add attachment' });
@@ -324,60 +389,98 @@ export class IssueController implements IssueController {
     }
 
     async linkIssues(req: Request, res: Response): Promise<void> {
-      const { issueIdOrKey } = req.params;
-      const { linkedIssueKey, linkType } = req.body;
+        const { issueIdOrKey } = req.params;
+        const { linkedIssueKey, linkType } = req.body;
 
-      try {
-          // Retrieve the source issue
-          const sourceIssue = await this.databaseService.get<Issue>(
-              `SELECT * FROM issues WHERE ${isNaN(Number(issueIdOrKey)) ? 'key' : 'id'} = ?`,
-              [issueIdOrKey]
-          );
+        if (!linkedIssueKey || !linkType) {
+            res.status(400).json({ message: 'Missing linkedIssueKey or linkType in request body' });
+            return;
+        }
 
-          if (!sourceIssue) {
-              res.status(404).json({ message: 'Source issue not found' });
-              return;
-          }
+        try {
+             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            let sourceIssueIdColumn = 'id';
+             if (isNaN(Number(issueIdOrKey))) {
+                sourceIssueIdColumn = 'key';
+            }
 
-          // Retrieve the linked issue
-          const linkedIssue = await this.databaseService.get<Issue>(
-              `SELECT * FROM issues WHERE key = ?`,
-              [linkedIssueKey]
-          );
+            const sourceIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE ${sourceIssueIdColumn} = ?`,
+                [issueIdOrKey]
+            );
 
-          if (!linkedIssue) {
-              res.status(404).json({ message: 'Linked issue not found' });
-              return;
-          }
+            if (!sourceIssue) {
+                res.status(404).json({ message: 'Source issue not found' });
+                return;
+            }
 
-          // Implement logic to store the link relationship (e.g., in a separate `issue_links` table).
-          const linkSql = `INSERT INTO issue_links (source_issue_key, linked_issue_key, link_type) VALUES (?, ?, ?)`;
-          const linkParams = [sourceIssue.key, linkedIssueKey, linkType];
-          await this.databaseService.run(linkSql, linkParams);
+            const linkedIssue = await this.databaseService.get<DbIssue>(
+                `SELECT * FROM issues WHERE key = ?`,
+                [linkedIssueKey]
+            );
 
-          const formattedSourceIssue = formatIssueResponse(sourceIssue);
-          const formattedLinkedIssue = formatIssueResponse(linkedIssue);
+            if (!linkedIssue) {
+                res.status(404).json({ message: 'Linked issue not found' });
+                return;
+            }
 
-          await this.webhookService.triggerWebhooks('jira:issue_updated', {
-              sourceIssue: formattedSourceIssue,
-              linkedIssue: formattedLinkedIssue,
-              linkType: linkType
-          });
 
-          res.status(200).json({ message: 'Issues linked successfully' });
+            const linkSql = `INSERT INTO issue_links (source_issue_key, linked_issue_key, link_type) VALUES (?, ?, ?)`;
+            const linkParams = [sourceIssue.key, linkedIssueKey, linkType];
+            await this.databaseService.run(linkSql, linkParams);
 
-      } catch (error) {
-          console.error('Error linking issues:', error);
-          res.status(500).json({ message: 'Failed to link issues' });
-      }
-  }
+            const now = new Date().toISOString();
+            await this.databaseService.run(`UPDATE issues SET updated_at = ? WHERE key = ?`, [now, sourceIssue.key]);
+            await this.databaseService.run(`UPDATE issues SET updated_at = ? WHERE key = ?`, [now, linkedIssue.key]);
+
+
+            const updatedSourceIssue = await this.databaseService.get<DbIssue>('SELECT * FROM issues WHERE key = ?', [sourceIssue.key]);
+            const updatedLinkedIssue = await this.databaseService.get<DbIssue>('SELECT * FROM issues WHERE key = ?', [linkedIssueKey]);
+
+
+            if (!updatedSourceIssue || !updatedLinkedIssue) {
+                console.error('Failed to retrieve issues after linking for webhook payload.');
+                 res.status(201).json({ message: 'Issues linked successfully, but failed to retrieve updated data for webhook.' });
+                return;
+            }
+
+            const formattedSourceIssue = formatIssueResponse(updatedSourceIssue);
+            const formattedLinkedIssue = formatIssueResponse(updatedLinkedIssue);
+
+            const webhookPayload = {
+                 timestamp: Date.now(),
+                 webhookEvent: 'jira:issuelink_created',
+                 issueLink: {
+                     id: 0,
+                     sourceIssueId: sourceIssue.id,
+                     destinationIssueId: linkedIssue.id,
+                     issueLinkType: {
+                         name: linkType,
+
+                     }
+                 },
+
+
+             };
+
+            await triggerWebhooks('jira:issuelink_created', webhookPayload);
+
+
+            res.status(201).json({ message: 'Issues linked successfully' });
+
+        } catch (error: any) {
+
+            if (error.message?.includes('UNIQUE constraint failed')) {
+                res.status(400).json({ message: 'Issue link already exists' });
+            } else {
+                console.error('Error linking issues:', error);
+                res.status(500).json({ message: 'Failed to link issues' });
+            }
+        }
+    }
 }
 
-// Export singleton instance
-import { DatabaseService } from '../../services/databaseService';
+
 const databaseService = new DatabaseService();
-import { IssueKeyService } from '../../services/issueKeyService';
 const issueKeyService = new IssueKeyService(databaseService);
-import { WebhookService } from '../../services/webhookService';
-const webhookService = new WebhookService();
-export const issueController = new IssueController(databaseService, issueKeyService, webhookService);
+export const issueController = new IssueController(databaseService, issueKeyService);
