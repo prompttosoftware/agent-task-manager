@@ -1,6 +1,7 @@
 import { IssueController } from './issueController';
 import { DatabaseService } from '../../services/databaseService';
 import { IssueKeyService } from '../../services/issueKeyService';
+import { IssueStatusTransitionService } from '../../services/issueStatusTransitionService'; // Import the service
 import { Request, Response, NextFunction } from 'express';
 import { Issue } from '../../models/issue';
 import { ObjectId } from 'mongodb';
@@ -26,9 +27,12 @@ describe('IssueController', () => {
 
     const mockDatabaseService = createMock<DatabaseService>();
     const mockIssueKeyService = createMock<IssueKeyService>();
+    // Create a mock for IssueStatusTransitionService
+    const mockIssueStatusTransitionService = createMock<IssueStatusTransitionService>();
 
 
     beforeEach(() => {
+        // Reset mocks for all services
         mockDatabaseService.get.mockReset();
         mockDatabaseService.run.mockReset();
         mockIssueKeyService.getNextIssueKey.mockReset();
@@ -41,12 +45,16 @@ describe('IssueController', () => {
         mockDatabaseService.connect.mockReset();
         mockDatabaseService.disconnect.mockReset();
         mockDatabaseService.all.mockReset();
+        mockIssueStatusTransitionService.isValidTransition.mockReset(); // Reset the new mock
+
         (mockNext as jest.Mock).mockReset();
         mockTriggerWebhooks.mockClear(); // Reset mock calls before each test
 
+        // Instantiate IssueController with all three mock services
         controller = new IssueController(
             mockDatabaseService,
-            mockIssueKeyService
+            mockIssueKeyService,
+            mockIssueStatusTransitionService // Pass the new mock service
         );
 
         mockRequest = httpMocks.createRequest();
@@ -151,6 +159,7 @@ describe('IssueController', () => {
         const updateData = {
             summary: 'Updated issue summary',
             description: 'Updated description',
+            status: 'In Progress' // Include status update for transition check
         };
 
         const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
@@ -160,7 +169,7 @@ describe('IssueController', () => {
             summary: 'Original Summary',
             description: 'Original Description',
             key: issueKey,
-            status: 'To Do',
+            status: 'To Do', // Original status
             created_at: now,
             updated_at: now
         };
@@ -168,11 +177,14 @@ describe('IssueController', () => {
             ...preUpdateDbIssue,
             summary: updateData.summary,
             description: updateData.description,
+            status: updateData.status, // Updated status
             updated_at: new Date().toISOString() // Should be updated
         };
 
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        // Mock transition validation to return true
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
         // Mock run for UPDATE
         mockDatabaseService.run.mockResolvedValue(undefined);
         // Mock get for SELECT after update
@@ -182,11 +194,15 @@ describe('IssueController', () => {
         mockRequest.body = updateData;
         await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
 
+        // Expect transition validation to be called
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 21); // 'To Do' (11) to 'In Progress' (21)
+
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
-            expect.stringContaining('UPDATE issues SET summary = ?, description = ?, updated_at = ? WHERE key = ?'),
+            expect.stringContaining('UPDATE issues SET summary = ?, description = ?, status = ?, updated_at = ? WHERE key = ?'),
             expect.arrayContaining([
                 updateData.summary,
                 updateData.description,
+                updateData.status,
                 expect.any(String), // updated_at
                 issueKey
             ])
@@ -203,6 +219,53 @@ describe('IssueController', () => {
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
     });
+
+    it('should prevent update issue with invalid status transition', async () => {
+        const issueKey = 'PROJECT-INVALID';
+        const now = new Date().toISOString();
+        const updateData = {
+            status: 'Done' // Invalid transition from 'To Do' directly to 'Done' in default rules
+        };
+
+        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+            _id: new ObjectId().toHexString(),
+            id: 1,
+            issuetype: 'task',
+            summary: 'Original Summary',
+            description: 'Original Description',
+            key: issueKey,
+            status: 'To Do', // Original status
+            created_at: now,
+            updated_at: now
+        };
+
+        // Mock get for pre-update check
+        mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        // Mock transition validation to return false
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
+
+        mockRequest.params = { issueIdOrKey: issueKey };
+        mockRequest.body = updateData;
+        await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
+
+        // Expect transition validation to be called
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 31); // 'To Do' (11) to 'Done' (31)
+
+        // Ensure UPDATE was NOT called
+        expect(mockDatabaseService.run).not.toHaveBeenCalled();
+        // Ensure only the initial GET was called
+        expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
+
+        // Expect a 400 error response
+        expect(mockResponse.statusCode).toBe(400);
+        expect(JSON.parse(mockResponse._getData())).toEqual({ message: "Invalid status transition from 'To Do' to 'Done'" });
+        expect(mockResponse._isEndCalled()).toBe(true);
+
+        // Assert no webhook call
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+    });
+
 
     it('should delete an issue and trigger webhook', async () => {
         const issueKey = 'PROJECT-123';
@@ -242,6 +305,8 @@ describe('IssueController', () => {
         const issueKey = 'PROJECT-456';
         const now = new Date().toISOString();
         const newStatus = 'In Progress';
+        const newStatusId = 21; // ID for 'In Progress'
+        const oldStatusId = 11; // ID for 'To Do'
 
         const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
             _id: new ObjectId().toHexString(),
@@ -262,6 +327,8 @@ describe('IssueController', () => {
 
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        // Mock the transition validation to return true
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
         // Mock run for UPDATE status
         mockDatabaseService.run.mockResolvedValue(undefined);
         // Mock get for SELECT after update
@@ -270,6 +337,9 @@ describe('IssueController', () => {
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: newStatus } };
         await controller.transitionIssue(mockRequest as any as Request, mockResponse as any as Response);
+
+        // Assert that the transition service was called with correct IDs
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(oldStatusId, newStatusId);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET status = ?, updated_at = ? WHERE key = ?'),
@@ -285,6 +355,53 @@ describe('IssueController', () => {
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+    });
+
+    it('should prevent invalid issue status transition', async () => {
+        const issueKey = 'PROJECT-456';
+        const now = new Date().toISOString();
+        const invalidNewStatus = 'Done'; // Assume this is invalid from 'To Do'
+        const invalidNewStatusId = 31; // ID for 'Done'
+        const oldStatusId = 11; // ID for 'To Do'
+
+        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+            _id: new ObjectId().toHexString(),
+            id: 2,
+            issuetype: 'bug',
+            summary: 'Bug to transition',
+            description: 'Description',
+            key: issueKey,
+            status: 'To Do',
+            created_at: now,
+            updated_at: now
+        };
+
+        // Mock get for pre-update check
+        mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        // Mock the transition validation to return false
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
+
+        mockRequest.params = { issueIdOrKey: issueKey };
+        mockRequest.body = { transition: { name: invalidNewStatus } };
+        await controller.transitionIssue(mockRequest as any as Request, mockResponse as any as Response);
+
+        // Assert that the transition service was called
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(oldStatusId, invalidNewStatusId);
+
+        // Assert that the database run was NOT called
+        expect(mockDatabaseService.run).not.toHaveBeenCalled();
+        // Assert only one GET call was made
+        expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
+
+        // Assert response is 400 Bad Request
+        expect(mockResponse.statusCode).toBe(400);
+        expect(JSON.parse(mockResponse._getData())).toEqual({
+            message: "Invalid status transition from 'To Do' to 'Done'"
+        });
+        expect(mockResponse._isEndCalled()).toBe(true);
+
+        // Assert webhook was NOT called
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
     });
 
     it('should update an issue assignee and trigger webhook', async () => {
@@ -428,8 +545,9 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValueOnce(sourceDbIssue);
         // Mock get for linked issue check
         mockDatabaseService.get.mockResolvedValueOnce(linkedDbIssue);
-        // Mock run for INSERT link
-        mockDatabaseService.run.mockResolvedValueOnce(undefined);
+        // Mock run for INSERT link (return lastID for webhook)
+        const mockLinkId = 15;
+        mockDatabaseService.run.mockResolvedValueOnce({ lastID: mockLinkId } as any);
         // Mock run for UPDATE source issue
         mockDatabaseService.run.mockResolvedValueOnce(undefined);
         // Mock run for UPDATE linked issue
@@ -467,11 +585,15 @@ describe('IssueController', () => {
             timestamp: expect.any(Number), // Allow any timestamp generated by Date.now()
             webhookEvent: 'jira:issuelink_created',
             issueLink: {
-                id: 0, // Hardcoded in controller
+                id: mockLinkId, // Check the mock link ID
                 sourceIssueId: sourceDbIssue.id,
                 destinationIssueId: linkedDbIssue.id,
                 issueLinkType: {
                     name: linkType,
+                    // The controller uses hardcoded values here
+                    id: 0,
+                    inward: 'linked to',
+                    outward: 'links',
                 }
             },
         };

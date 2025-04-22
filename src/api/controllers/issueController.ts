@@ -4,6 +4,8 @@ import { formatIssueResponse } from '../../utils/jsonTransformer';
 import { Issue } from '../../models/issue';
 import { IssueKeyService } from '../../services/issueKeyService';
 import { triggerWebhooks } from '../../services/webhookService';
+import { IssueStatusTransitionService } from '../../services/issueStatusTransitionService';
+import { Status } from '../../models/status'; // Import Status if needed for type safety, though not strictly necessary for the mapping logic below
 
 interface IssueControllerInterface {
     getIssue(req: Request, res: Response): Promise<void>;
@@ -19,11 +21,28 @@ interface IssueControllerInterface {
 export class IssueController implements IssueControllerInterface {
     private databaseService: DatabaseService;
     private issueKeyService: IssueKeyService;
+    private issueStatusTransitionService: IssueStatusTransitionService; // Inject service
 
-    constructor(databaseService: DatabaseService, issueKeyService: IssueKeyService) {
+    constructor(
+        databaseService: DatabaseService,
+        issueKeyService: IssueKeyService,
+        issueStatusTransitionService: IssueStatusTransitionService // Accept service in constructor
+    ) {
         this.databaseService = databaseService;
         this.issueKeyService = issueKeyService;
+        this.issueStatusTransitionService = issueStatusTransitionService; // Assign service
     }
+
+    // Helper to map status name to ID (based on IssueStatusTransitionService logic)
+    private getStatusIdFromName(statusName: string): number | null {
+        switch (statusName) {
+            case 'To Do': return 11;
+            case 'In Progress': return 21;
+            case 'Done': return 31;
+            default: return null; // Unknown status name
+        }
+    }
+
     async getIssue(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
 
@@ -139,6 +158,22 @@ export class IssueController implements IssueControllerInterface {
                 return;
             }
 
+            // Status transition validation specific to updateIssue if status is being changed
+            if (fieldsToUpdate.includes('status') && updatedIssueData.status) {
+                const currentStatusId = this.getStatusIdFromName(preUpdateIssue.status);
+                const targetStatusId = this.getStatusIdFromName(updatedIssueData.status);
+
+                if (currentStatusId === null || targetStatusId === null) {
+                    res.status(400).json({ message: `Invalid status name provided: Current='${preUpdateIssue.status}', Target='${updatedIssueData.status}'` });
+                    return;
+                }
+
+                if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
+                    res.status(400).json({ message: `Invalid status transition from '${preUpdateIssue.status}' to '${updatedIssueData.status}'` });
+                    return;
+                }
+            }
+
 
             const updates: string[] = [];
             const params: any[] = [];
@@ -224,30 +259,49 @@ export class IssueController implements IssueControllerInterface {
              return;
         }
 
-        const newStatus = transition.name;
+        const newStatusName = transition.name; // This is the target status name
 
         try {
-             let issueIdColumn = 'id';
+            let issueIdColumn = 'id';
              if (isNaN(Number(issueIdOrKey))) {
                 issueIdColumn = 'key';
             }
 
-             type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
-            const preUpdateIssue = await this.databaseService.get<DbIssue>(
+            // 1. Fetch the current issue
+            type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
+            const currentIssue = await this.databaseService.get<DbIssue>(
                 `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
             );
 
-            if (!preUpdateIssue) {
+            if (!currentIssue) {
                 res.status(404).json({ message: 'Issue not found' });
                 return;
             }
 
+            // 2. Get current and target status IDs
+            const currentStatusId = this.getStatusIdFromName(currentIssue.status);
+            const targetStatusId = this.getStatusIdFromName(newStatusName);
 
+            if (currentStatusId === null || targetStatusId === null) {
+                res.status(400).json({ message: `Invalid status name provided: Current='${currentIssue.status}', Target='${newStatusName}'` });
+                return;
+            }
+
+            // 3. Validate the transition using the injected service
+            if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
+                res.status(400).json({
+                    message: `Invalid status transition from '${currentIssue.status}' to '${newStatusName}'`
+                });
+                return;
+            }
+
+            // 4. If valid, update the issue status in the database
             const sql = `UPDATE issues SET status = ?, updated_at = ? WHERE ${issueIdColumn} = ?`;
-            const params = [newStatus, new Date().toISOString(), issueIdOrKey];
+            const params = [newStatusName, new Date().toISOString(), issueIdOrKey];
             await this.databaseService.run(sql, params);
 
+            // 5. Fetch the updated issue to return/trigger webhooks
             const updatedIssue = await this.databaseService.get<DbIssue>(
                 `SELECT * FROM issues WHERE ${issueIdColumn} = ?`,
                 [issueIdOrKey]
@@ -255,9 +309,10 @@ export class IssueController implements IssueControllerInterface {
 
             if (updatedIssue) {
                  const formattedIssue = formatIssueResponse(updatedIssue);
-                await triggerWebhooks('jira:issue_updated', formattedIssue);
-                res.status(204).send();
+                await triggerWebhooks('jira:issue_updated', formattedIssue); // Trigger update webhook
+                res.status(204).send(); // Success, no content
             } else {
+                 // This case should ideally not happen if the update was successful
                  console.error('Issue transitioned but could not be retrieved afterwards.');
                  res.status(500).json({ message: 'Failed to retrieve updated issue after transition' });
             }
@@ -267,6 +322,7 @@ export class IssueController implements IssueControllerInterface {
             res.status(500).json({ message: 'Failed to transition issue' });
         }
     }
+
 
     async updateAssignee(req: Request, res: Response): Promise<void> {
         const { issueIdOrKey } = req.params;
@@ -367,15 +423,15 @@ export class IssueController implements IssueControllerInterface {
                  const formattedIssue = formatIssueResponse(updatedIssue);
                  await triggerWebhooks('jira:issue_updated', {
                     ...formattedIssue,
-
+                    // Potentially add attachment info to webhook payload if needed
                  });
 
                  res.status(200).json({
                       id: newAttachmentId,
                       filename: attachmentMetadata.filename,
-                      content: attachmentMetadata.url,
+                      content: attachmentMetadata.url, // Should probably be 'url' to match input/db
                       created: new Date().toISOString(),
-
+                      // Add other standard Jira attachment fields if needed
                   });
             } else {
                  console.error('Attachment added but could not retrieve updated issue afterwards.');
@@ -427,7 +483,8 @@ export class IssueController implements IssueControllerInterface {
 
             const linkSql = `INSERT INTO issue_links (source_issue_key, linked_issue_key, link_type) VALUES (?, ?, ?)`;
             const linkParams = [sourceIssue.key, linkedIssueKey, linkType];
-            await this.databaseService.run(linkSql, linkParams);
+            const result = await this.databaseService.run(linkSql, linkParams);
+            const linkId = (result as any)?.lastID; // Get the ID of the newly created link
 
             const now = new Date().toISOString();
             await this.databaseService.run(`UPDATE issues SET updated_at = ? WHERE key = ?`, [now, sourceIssue.key]);
@@ -440,27 +497,29 @@ export class IssueController implements IssueControllerInterface {
 
             if (!updatedSourceIssue || !updatedLinkedIssue) {
                 console.error('Failed to retrieve issues after linking for webhook payload.');
+                 // Link was created, but data retrieval failed. Still technically a success.
                  res.status(201).json({ message: 'Issues linked successfully, but failed to retrieve updated data for webhook.' });
                 return;
             }
 
-            const formattedSourceIssue = formatIssueResponse(updatedSourceIssue);
-            const formattedLinkedIssue = formatIssueResponse(updatedLinkedIssue);
-
+            // Construct a more standard Jira webhook payload for issue link creation
             const webhookPayload = {
                  timestamp: Date.now(),
                  webhookEvent: 'jira:issuelink_created',
                  issueLink: {
-                     id: 0,
+                     id: linkId, // Use the actual link ID
                      sourceIssueId: sourceIssue.id,
                      destinationIssueId: linkedIssue.id,
                      issueLinkType: {
+                         id: 0, // We don't have link type IDs, using 0 placeholder
                          name: linkType,
-
+                         inward: 'linked to', // Example, adjust as needed
+                         outward: 'links', // Example, adjust as needed
                      }
                  },
-
-
+                // Include minimal issue details if helpful for webhook consumers
+                 // sourceIssue: { key: sourceIssue.key, id: sourceIssue.id },
+                 // destinationIssue: { key: linkedIssue.key, id: linkedIssue.id }
              };
 
             await triggerWebhooks('jira:issuelink_created', webhookPayload);
@@ -481,6 +540,14 @@ export class IssueController implements IssueControllerInterface {
 }
 
 
+// Instantiate services
 const databaseService = new DatabaseService();
 const issueKeyService = new IssueKeyService(databaseService);
-export const issueController = new IssueController(databaseService, issueKeyService);
+const issueStatusTransitionService = new IssueStatusTransitionService(); // Instantiate the new service
+
+// Instantiate controller with all dependencies
+export const issueController = new IssueController(
+    databaseService,
+    issueKeyService,
+    issueStatusTransitionService // Pass the service instance
+);
