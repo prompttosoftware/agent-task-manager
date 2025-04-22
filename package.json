@@ -2,7 +2,8 @@
   "dependencies": {
     "@jest-mock/express": "^3.0.0",
     "axios": "^1.8.4",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "node-mocks-http": "^1.16.2"
   },
   "devDependencies": {
     "@golevelup/ts-jest": "^0.6.2",

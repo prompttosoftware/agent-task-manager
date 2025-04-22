@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getCreateMetadata } from '../api/controllers/metadataController';
+import { getCreateMetadata } from '../controllers/metadataController';
 
 const router = Router();
 

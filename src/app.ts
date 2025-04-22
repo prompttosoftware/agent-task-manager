@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { errorHandler } from './api/middleware/errorHandler';
-import { requestLogger } from './api/middleware/requestLogger';
+import errorHandler from './api/middleware/errorHandler';
+import requestLogger from './api/middleware/requestLogger';
 import issueRoutes from './api/routes/issueRoutes';
 import issueLinkRoutes from './api/routes/issueLinkRoutes';
 import epicRoutes from './api/routes/epicRoutes';

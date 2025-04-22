@@ -1,5 +1,5 @@
 import express from 'express';
-import { getEpics } from '../api/controllers/epicController';
+import { getEpics } from '../controllers/epicController';
 
 const router = express.Router();
 
