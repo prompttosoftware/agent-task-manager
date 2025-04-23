@@ -18,6 +18,8 @@ jest.mock('../../services/webhookService', () => ({
 // Cast the mock for type safety and autocompletion in tests
 const mockTriggerWebhooks = triggerWebhooks as jest.Mock;
 
+// Define a type for the database issue that includes the additional fields
+type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
 
 describe('IssueController', () => {
     let controller: IssueController;
@@ -77,7 +79,7 @@ describe('IssueController', () => {
         const issueKey = 'PROJ-1';
         const now = new Date().toISOString();
 
-        const createdDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const createdDbIssue: DbIssue = {
             _id: issueId, // This might not actually be set by DB insert, formatIssueResponse uses it
             id: 1, // Example DB primary key ID
             issuetype: issueData.issuetype,
@@ -97,7 +99,7 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValue(createdDbIssue);
 
         mockRequest.body = issueData;
-        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -127,7 +129,7 @@ describe('IssueController', () => {
 
     it('should get an issue by key', async () => {
         const now = new Date().toISOString();
-        const dbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const dbIssue: DbIssue = {
             _id: new ObjectId().toHexString(), // Needed for formatIssueResponse
             id: 1,
             issuetype: 'task',
@@ -135,6 +137,7 @@ describe('IssueController', () => {
             description: 'Test description',
             key: 'PROJECT-123',
             status: 'In Progress',
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
@@ -144,7 +147,7 @@ describe('IssueController', () => {
         mockRequest.params = {
             issueIdOrKey: 'PROJECT-123'
         };
-        await controller.getIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         const expectedFormattedIssue = formatIssueResponse(dbIssue);
@@ -162,7 +165,7 @@ describe('IssueController', () => {
             status: 'In Progress' // Include status update for transition check
         };
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 1,
             issuetype: 'task',
@@ -170,21 +173,30 @@ describe('IssueController', () => {
             description: 'Original Description',
             key: issueKey,
             status: 'To Do', // Original status
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
-        const postUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const postUpdateDbIssue: DbIssue = {
             ...preUpdateDbIssue,
             summary: updateData.summary,
             description: updateData.description,
-            status: updateData.status, // Updated status
+            status: updateData.status!, // Updated status
             updated_at: new Date().toISOString() // Should be updated
         };
 
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
-        // Mock transition validation to return true
-        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
+
+        // Mock isValidTransition implementation to return true
+        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
+            // Implement your status transition logic here.  For example:
+            if (preUpdateDbIssue.status === 'To Do' && updateData.status === 'In Progress') {
+                return true; // Allow To Do -> In Progress
+            }
+            return false; // Disallow other transitions
+        });
+
         // Mock run for UPDATE
         mockDatabaseService.run.mockResolvedValue(undefined);
         // Mock get for SELECT after update
@@ -192,10 +204,13 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         // Expect transition validation to be called
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 21); // 'To Do' (11) to 'In Progress' (21)
+        const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
+        const postUpdateStatusId = controller['getStatusIdFromName'](updateData.status!);
+
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!); // 'To Do' (11) to 'In Progress' (21)
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET summary = ?, description = ?, status = ?, updated_at = ? WHERE key = ?'),
@@ -227,7 +242,7 @@ describe('IssueController', () => {
             status: 'Done' // Invalid transition from 'To Do' directly to 'Done' in default rules
         };
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 1,
             issuetype: 'task',
@@ -235,6 +250,7 @@ describe('IssueController', () => {
             description: 'Original Description',
             key: issueKey,
             status: 'To Do', // Original status
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
@@ -246,10 +262,12 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         // Expect transition validation to be called
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 31); // 'To Do' (11) to 'Done' (31)
+        const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
+        const postUpdateStatusId = controller['getStatusIdFromName'](updateData.status!);
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!); // 'To Do' (11) to 'Done' (31)
 
         // Ensure UPDATE was NOT called
         expect(mockDatabaseService.run).not.toHaveBeenCalled();
@@ -270,7 +288,7 @@ describe('IssueController', () => {
     it('should delete an issue and trigger webhook', async () => {
         const issueKey = 'PROJECT-123';
         const now = new Date().toISOString();
-        const dbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const dbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 1,
             issuetype: 'task',
@@ -278,6 +296,7 @@ describe('IssueController', () => {
             description: 'Test description',
             key: issueKey,
             status: 'Done',
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
@@ -288,7 +307,7 @@ describe('IssueController', () => {
         mockDatabaseService.run.mockResolvedValue(undefined);
 
         mockRequest.params = { issueIdOrKey: issueKey };
-        await controller.deleteIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.deleteIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
         expect(mockDatabaseService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', [issueKey]);
@@ -308,7 +327,7 @@ describe('IssueController', () => {
         const newStatusId = 21; // ID for 'In Progress'
         const oldStatusId = 11; // ID for 'To Do'
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 2,
             issuetype: 'bug',
@@ -316,19 +335,28 @@ describe('IssueController', () => {
             description: 'Description',
             key: issueKey,
             status: 'To Do',
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
-        const postUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const postUpdateDbIssue: DbIssue = {
             ...preUpdateDbIssue,
             status: newStatus,
+            assignee_key: null,
             updated_at: new Date().toISOString() // Should be updated
         };
 
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
-        // Mock the transition validation to return true
-        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
+
+         // Mock isValidTransition implementation to return true
+        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
+            // Implement your status transition logic here.  For example:
+            if (preUpdateDbIssue.status === 'To Do' && newStatus === 'In Progress') {
+                return true; // Allow To Do -> In Progress
+            }
+            return false; // Disallow other transitions
+        });
         // Mock run for UPDATE status
         mockDatabaseService.run.mockResolvedValue(undefined);
         // Mock get for SELECT after update
@@ -336,10 +364,12 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: newStatus } };
-        await controller.transitionIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         // Assert that the transition service was called with correct IDs
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(oldStatusId, newStatusId);
+        const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
+        const postUpdateStatusId = controller['getStatusIdFromName'](newStatus);
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET status = ?, updated_at = ? WHERE key = ?'),
@@ -364,7 +394,7 @@ describe('IssueController', () => {
         const invalidNewStatusId = 31; // ID for 'Done'
         const oldStatusId = 11; // ID for 'To Do'
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 2,
             issuetype: 'bug',
@@ -372,6 +402,7 @@ describe('IssueController', () => {
             description: 'Description',
             key: issueKey,
             status: 'To Do',
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
@@ -379,14 +410,23 @@ describe('IssueController', () => {
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
         // Mock the transition validation to return false
-        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
+
+        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
+            // Implement your status transition logic here.  For example:
+            if (preUpdateDbIssue.status === 'To Do' && invalidNewStatus === 'Done') {
+                return false; // Disallow To Do -> Done
+            }
+            return true;
+        });
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: invalidNewStatus } };
-        await controller.transitionIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         // Assert that the transition service was called
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(oldStatusId, invalidNewStatusId);
+        const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
+        const postUpdateStatusId = controller['getStatusIdFromName'](invalidNewStatus);
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!);
 
         // Assert that the database run was NOT called
         expect(mockDatabaseService.run).not.toHaveBeenCalled();
@@ -409,7 +449,7 @@ describe('IssueController', () => {
         const now = new Date().toISOString();
         const newAssigneeKey = 'user-123';
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 3,
             issuetype: 'story',
@@ -421,7 +461,7 @@ describe('IssueController', () => {
             created_at: now,
             updated_at: now
         };
-        const postUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const postUpdateDbIssue: DbIssue = {
             ...preUpdateDbIssue,
             assignee_key: newAssigneeKey,
             updated_at: new Date().toISOString() // Should be updated
@@ -436,7 +476,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { assignee: newAssigneeKey };
-        await controller.updateAssignee(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.updateAssignee(mockRequest as Request, mockResponse as Response, mockNext);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
@@ -463,7 +503,7 @@ describe('IssueController', () => {
         };
         const newAttachmentId = 5;
 
-        const preUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+        const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
             id: 4,
             issuetype: 'task',
@@ -471,11 +511,13 @@ describe('IssueController', () => {
             description: 'Description',
             key: issueKey,
             status: 'To Do',
+            assignee_key: null,
             created_at: now,
             updated_at: now
         };
-         const postUpdateDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
+         const postUpdateDbIssue: DbIssue = {
              ...preUpdateDbIssue,
+             assignee_key: null,
              updated_at: new Date().toISOString() // Should be updated
          };
 
@@ -492,7 +534,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = attachmentData;
-        await controller.addAttachment(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.addAttachment(mockRequest as Request, mockResponse as Response, mockNext);
 
         // Check INSERT attachment call
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -529,16 +571,16 @@ describe('IssueController', () => {
         const linkType = 'blocks';
         const now = new Date().toISOString();
 
-        const sourceDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
-            _id: new ObjectId().toHexString(), id: 10, key: sourceIssueKey, issuetype: 'task', summary: 'Source', description: '', status: 'To Do', created_at: now, updated_at: now
+        const sourceDbIssue: DbIssue = {
+            _id: new ObjectId().toHexString(), id: 10, key: sourceIssueKey, issuetype: 'task', summary: 'Source', description: '', status: 'To Do', assignee_key: null, created_at: now, updated_at: now
         };
-        const linkedDbIssue: Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; } = {
-            _id: new ObjectId().toHexString(), id: 11, key: linkedIssueKey, issuetype: 'bug', summary: 'Linked', description: '', status: 'Open', created_at: now, updated_at: now
+        const linkedDbIssue: DbIssue = {
+            _id: new ObjectId().toHexString(), id: 11, key: linkedIssueKey, issuetype: 'bug', summary: 'Linked', description: '', status: 'Open', assignee_key: null, created_at: now, updated_at: now
         };
 
          const updatedTimestamp = new Date().toISOString();
-         const updatedSourceDbIssue = { ...sourceDbIssue, updated_at: updatedTimestamp };
-         const updatedLinkedDbIssue = { ...linkedDbIssue, updated_at: updatedTimestamp };
+         const updatedSourceDbIssue: DbIssue = { ...sourceDbIssue, updated_at: updatedTimestamp };
+         const updatedLinkedDbIssue: DbIssue = { ...linkedDbIssue, updated_at: updatedTimestamp };
 
 
         // Mock get for source issue check
@@ -560,7 +602,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: sourceIssueKey };
         mockRequest.body = { linkedIssueKey, linkType };
-        await controller.linkIssues(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.linkIssues(mockRequest as Request, mockResponse as Response, mockNext);
 
 
         // Check get calls (source, linked, updated source, updated linked)
@@ -618,7 +660,7 @@ describe('IssueController', () => {
             key: 'TEST-ERR' // included but controller uses generated key
         };
 
-        await controller.createIssue(mockRequest as any as Request, mockResponse as any as Response);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalled(); // Verify insert was attempted
@@ -630,4 +672,66 @@ describe('IssueController', () => {
         // No webhook trigger on error
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
     });
-});
+
+    // 1. Test the `getIssue` method with a non-existent issue ID, expecting a 404 response.
+    it('should return 404 for non-existent issue', async () => {
+        mockDatabaseService.get.mockResolvedValue(undefined); // Simulate issue not found
+
+        mockRequest.params = { issueIdOrKey: 'NONEXISTENT' };
+        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext);
+
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['NONEXISTENT']);
+        expect(mockResponse.statusCode).toBe(404);
+        expect(JSON.parse(mockResponse._getData())).toEqual({ message: 'Issue not found' });
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+    });
+
+    // 2. Test the `updateIssue` method, updating only the `assignee_key` field.
+    it('should update only the assignee_key field', async () => {
+        const issueKey = 'PROJECT-ASSIGNEE';
+        const now = new Date().toISOString();
+        const newAssigneeKey = 'user-456';
+        const updateData = { assignee_key: newAssigneeKey };
+
+        const preUpdateDbIssue: DbIssue = {
+            _id: new ObjectId().toHexString(),
+            id: 5,
+            issuetype: 'task',
+            summary: 'Assignee Test',
+            description: 'Testing assignee update',
+            key: issueKey,
+            status: 'To Do',
+            assignee_key: null,
+            created_at: now,
+            updated_at: now
+        };
+
+        const postUpdateDbIssue: DbIssue = {
+            ...preUpdateDbIssue,
+            assignee_key: newAssigneeKey,
+            updated_at: new Date().toISOString()
+        };
+
+        mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        mockDatabaseService.run.mockResolvedValueOnce(undefined);
+        mockDatabaseService.get.mockResolvedValueOnce(postUpdateDbIssue);
+
+        mockRequest.params = { issueIdOrKey: issueKey };
+        mockRequest.body = updateData;
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
+
+        expect(mockDatabaseService.run).toHaveBeenCalledWith(
+            expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
+            [newAssigneeKey, expect.any(String), issueKey]
+        );
+        expect(mockResponse.statusCode).toBe(204);
+        expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
+        const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
+        expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+    });
+
+    it('should call next with error if getStatusIdFromName returns null during update', async () => {
+        const issueKey = 'PROJECT-NULL';
+        const now = new Date().toISOString();
+        const updateData = {
+            status: 'Invalid Status'
