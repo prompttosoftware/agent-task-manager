@@ -6,6 +6,7 @@ import { IssueKeyService } from '../../services/issueKeyService';
 import { triggerWebhooks } from '../../services/webhookService';
 import { IssueStatusTransitionService } from '../../services/issueStatusTransitionService';
 import { Status } from '../../models/status'; // Import Status if needed for type safety, though not strictly necessary for the mapping logic below
+import { databaseService } from '../../services/database';
 
 interface IssueControllerInterface {
     getIssue(req: Request, res: Response): Promise<void>;
@@ -31,6 +32,16 @@ export class IssueController implements IssueControllerInterface {
         this.databaseService = databaseService;
         this.issueKeyService = issueKeyService;
         this.issueStatusTransitionService = issueStatusTransitionService; // Assign service
+
+        this.getIssue = this.getIssue.bind(this);
+        this.createIssue = this.createIssue.bind(this);
+        this.addAttachment = this.addAttachment.bind(this);
+        this.deleteIssue = this.deleteIssue.bind(this);
+        this.getStatusIdFromName = this.getStatusIdFromName.bind(this);
+        this.linkIssues = this.linkIssues.bind(this);
+        this.transitionIssue = this.transitionIssue.bind(this);
+        this.updateAssignee = this.updateAssignee.bind(this);
+        this.updateIssue = this.updateIssue.bind(this);
     }
 
     // Helper to map status name to ID (based on IssueStatusTransitionService logic)
@@ -541,7 +552,6 @@ export class IssueController implements IssueControllerInterface {
 
 
 // Instantiate services
-const databaseService = new DatabaseService();
 const issueKeyService = new IssueKeyService(databaseService);
 const issueStatusTransitionService = new IssueStatusTransitionService(); // Instantiate the new service
 
