@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import errorHandler from './api/middleware/errorHandler';
 import requestLogger from './api/middleware/requestLogger';
 import issueRoutes from './api/routes/issueRoutes';
@@ -16,10 +16,12 @@ app.use(requestLogger);
 app.use('/rest/api/3/issue', issueRoutes);
 app.use('/rest/api/3/issue-link', issueLinkRoutes);
 app.use('/rest/api/3/epic', epicRoutes);
-app.use('/rest/api/3/search', issueRoutes);
-app.use('/rest/api/3/issue', metadataRoutes);
+app.use('/rest/api/3/search', issueRoutes); // Re-use issueRoutes for search endpoint
+// Mount metadata routes under their own distinct path
+app.use('/rest/api/3/metadata', metadataRoutes); 
 
-// Error handling middleware.  Must be the last middleware.
+// Error handling middleware. Must be the last middleware.
 app.use(errorHandler);
 
-export default app;
+// Use named export
+export { app };
