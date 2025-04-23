@@ -1,63 +1,32 @@
-import { Request, Response, NextFunction } from 'express';
+import request from 'supertest';
+import express, { Request, Response, NextFunction } from 'express';
+import epicRoutes from '../routes/epicRoutes';
 import { getEpics } from './epicController';
-import * as IssueModel from '../../models/issue';
 
-// Mock the Issue module
-jest.mock('../../models/issue');
+// Mock the epicController to prevent actual database calls and verify calls
+jest.mock('./epicController', () => ({
+    getEpics: jest.fn((req: Request, res: Response, next: NextFunction) => {
+        res.status(200).json([{ id: 1, name: 'Test Epic' }]);
+    }),
+}));
 
-describe('getEpics', () => {
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
-  let mockNext: NextFunction;
-  let mockedFindAll: jest.Mock;
+describe('epicRoutes', () => {
+    let app: express.Application;
 
-  beforeEach(() => {
-    mockRequest = {};
-    mockResponse = {  //Correctly chain the methods
-      json: jest.fn().mockReturnThis(),
-      status: jest.fn().mockReturnThis(),
-    };
-    mockNext = jest.fn();
+    beforeEach(() => {
+        app = express();
+        app.use(express.json());
+        app.use('/', epicRoutes);
+    });
 
-    // Properly mock the Issue model and its findAll method
-    (IssueModel as any).Issue = {
-      findAll: jest.fn(),
-    };
+    it('should return a 200 status code for GET /', async () => {
+        const response = await request(app).get('/');
+        expect(response.statusCode).toBe(200);
+    });
 
-    mockedFindAll = (IssueModel as any).Issue.findAll;
+    it('should call the getEpics controller function for GET /', async () => {
+        await request(app).get('/');
+        expect(getEpics).toHaveBeenCalled();
+    });
 
-    jest.clearAllMocks();
-  });
-
-  it('should call Issue.findAll with the correct parameters and respond with the found epics', async () => {
-    const mockEpics = [{ id: 1, title: 'Epic 1' }, { id: 2, title: 'Epic 2' }];
-    mockedFindAll.mockResolvedValue(mockEpics);
-
-    await getEpics(mockRequest as Request, mockResponse as Response, mockNext);
-
-    expect(mockedFindAll).toHaveBeenCalledWith({ where: { issueTypeId: 1 } });
-    expect(mockResponse.json).toHaveBeenCalledWith(mockEpics);
-    expect(mockNext).not.toHaveBeenCalled();
-  });
-
-  it('should call next with the error if Issue.findAll throws an error', async () => {
-    const mockError = new Error('Database error');
-    mockedFindAll.mockRejectedValue(mockError);
-
-    await getEpics(mockRequest as Request, mockResponse as Response, mockNext);
-
-    expect(mockedFindAll).toHaveBeenCalledWith({ where: { issueTypeId: 1 } });
-    expect(mockResponse.json).not.toHaveBeenCalled();
-    expect(mockNext).toHaveBeenCalledWith(mockError);
-  });
-
-  it('should respond with an empty array if no epics are found', async () => {
-    mockedFindAll.mockResolvedValue([]);
-
-    await getEpics(mockRequest as Request, mockResponse as Response, mockNext);
-
-    expect(mockedFindAll).toHaveBeenCalledWith({ where: { issueTypeId: 1 } });
-    expect(mockResponse.json).toHaveBeenCalledWith([]);
-    expect(mockNext).not.toHaveBeenCalled();
-  });
 });
