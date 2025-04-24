@@ -99,7 +99,7 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValue(createdDbIssue);
 
         mockRequest.body = issueData;
-        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -147,7 +147,7 @@ describe('IssueController', () => {
         mockRequest.params = {
             issueIdOrKey: 'PROJECT-123'
         };
-        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.getIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         const expectedFormattedIssue = formatIssueResponse(dbIssue);
@@ -204,7 +204,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
 
         // Expect transition validation to be called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -262,7 +262,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
 
         // Expect transition validation to be called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -307,7 +307,7 @@ describe('IssueController', () => {
         mockDatabaseService.run.mockResolvedValue(undefined);
 
         mockRequest.params = { issueIdOrKey: issueKey };
-        await controller.deleteIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.deleteIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
         expect(mockDatabaseService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', [issueKey]);
@@ -364,7 +364,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: newStatus } };
-        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response);
 
         // Assert that the transition service was called with correct IDs
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -421,7 +421,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: invalidNewStatus } };
-        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response);
 
         // Assert that the transition service was called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -476,7 +476,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { assignee: newAssigneeKey };
-        await controller.updateAssignee(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.updateAssignee(mockRequest as Request, mockResponse as Response);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
@@ -534,7 +534,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = attachmentData;
-        await controller.addAttachment(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.addAttachment(mockRequest as Request, mockResponse as Response);
 
         // Check INSERT attachment call
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -602,7 +602,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: sourceIssueKey };
         mockRequest.body = { linkedIssueKey, linkType };
-        await controller.linkIssues(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.linkIssues(mockRequest as Request, mockResponse as Response);
 
 
         // Check get calls (source, linked, updated source, updated linked)
@@ -660,7 +660,7 @@ describe('IssueController', () => {
             key: 'TEST-ERR' // included but controller uses generated key
         };
 
-        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalled(); // Verify insert was attempted
@@ -678,7 +678,7 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValue(undefined); // Simulate issue not found
 
         mockRequest.params = { issueIdOrKey: 'NONEXISTENT' };
-        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.getIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['NONEXISTENT']);
         expect(mockResponse.statusCode).toBe(404);
@@ -718,7 +718,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
@@ -730,8 +730,48 @@ describe('IssueController', () => {
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
     });
 
-    it('should call next with error if getStatusIdFromName returns null during update', async () => {
+    it('should return 400 if status name is invalid during update', async () => {
         const issueKey = 'PROJECT-NULL';
         const now = new Date().toISOString();
         const updateData = {
-            status: 'Invalid Status'
+            status: 'Invalid Status' // Provide an invalid status name
+        };
+
+        const preUpdateDbIssue: DbIssue = {
+             _id: new ObjectId().toHexString(),
+             id: 6,
+             issuetype: 'task',
+             summary: 'Status Test',
+             description: 'Testing invalid status update',
+             key: issueKey,
+             status: 'To Do', // Valid current status
+             assignee_key: null,
+             created_at: now,
+             updated_at: now
+         };
+
+        // Mock get for pre-update check
+        mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+        // No need to mock transition service as it shouldn't be reached
+        // No need to mock run or subsequent get as update should fail
+
+        mockRequest.params = { issueIdOrKey: issueKey };
+        mockRequest.body = updateData;
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
+
+        // Ensure only the initial GET was called
+        expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
+
+        // Ensure UPDATE was NOT called
+        expect(mockDatabaseService.run).not.toHaveBeenCalled();
+
+        // Expect a 400 error response
+        expect(mockResponse.statusCode).toBe(400);
+        expect(JSON.parse(mockResponse._getData())).toEqual({ message: "Invalid status name provided: Current='To Do', Target='Invalid Status'" });
+        expect(mockResponse._isEndCalled()).toBe(true);
+
+        // Assert no webhook call
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+    });
+});

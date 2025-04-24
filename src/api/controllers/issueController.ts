@@ -6,7 +6,6 @@ import { IssueKeyService } from '../../services/issueKeyService';
 import { triggerWebhooks } from '../../services/webhookService';
 import { IssueStatusTransitionService } from '../../services/issueStatusTransitionService';
 import { Status } from '../../models/status'; // Import Status if needed for type safety, though not strictly necessary for the mapping logic below
-import { databaseService } from '../../services/database';
 
 interface IssueControllerInterface {
     getIssue(req: Request, res: Response): Promise<void>;
@@ -90,7 +89,7 @@ export class IssueController implements IssueControllerInterface {
         try {
             const issueData = req.body as Pick<Issue, 'issuetype' | 'summary' | 'description' | 'parentKey' | 'key'>;
 
-            if (!issueData.issuetype || !issueData.summary || !issueData.description || !issueData.key) {
+            if (!issueData.issuetype || !issueData.summary || !issueData.description) {
                 res.status(400).json({ message: 'Missing required fields' });
                 return;
             }
@@ -179,7 +178,7 @@ export class IssueController implements IssueControllerInterface {
                     return;
                 }
 
-                if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
+                if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId, this.databaseService)) {
                     res.status(400).json({ message: `Invalid status transition from '${preUpdateIssue.status}' to '${updatedIssueData.status}'` });
                     return;
                 }
@@ -300,7 +299,7 @@ export class IssueController implements IssueControllerInterface {
             }
 
             // 3. Validate the transition using the injected service
-            if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
+            if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId, this.databaseService)) {
                 res.status(400).json({
                     message: `Invalid status transition from '${currentIssue.status}' to '${newStatusName}'`
                 });
@@ -552,12 +551,5 @@ export class IssueController implements IssueControllerInterface {
 
 
 // Instantiate services
-const issueKeyService = new IssueKeyService(databaseService);
-const issueStatusTransitionService = new IssueStatusTransitionService(); // Instantiate the new service
 
 // Instantiate controller with all dependencies
-export const issueController = new IssueController(
-    databaseService,
-    issueKeyService,
-    issueStatusTransitionService // Pass the service instance
-);
