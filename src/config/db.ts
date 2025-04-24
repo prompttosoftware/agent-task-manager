@@ -19,3 +19,23 @@ export async function getDBConnection(): Promise<sqlite3.Database> {
         }
     });
 }
+
+export async function closeDBConnection(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (db) {
+      db.close((err) => {
+        if (err) {
+          console.error('Failed to close the database:', err.message);
+          reject(err);
+        } else {
+          console.log('Closed the database connection.');
+          db = null; // Reset the db variable after closing
+          resolve();
+        }
+      });
+    } else {
+      console.log('No database connection to close.');
+      resolve();
+    }
+  });
+}

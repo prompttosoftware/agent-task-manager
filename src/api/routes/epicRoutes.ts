@@ -1,8 +1,12 @@
 import express from 'express';
-import { getEpics } from '../controllers/epicController';
+import { EpicController } from '../controllers/epicController';
 
 const router = express.Router();
 
-router.get('/', getEpics);
+export default (epicController: EpicController) => {
+  // Use controller methods bound to the controller instance
+  router.get('/', epicController.getEpics.bind(epicController));
+  router.post('/', epicController.createEpic.bind(epicController));
 
-export default router;
+  return router;
+};
