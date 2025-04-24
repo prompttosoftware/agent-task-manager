@@ -99,7 +99,7 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValue(createdDbIssue);
 
         mockRequest.body = issueData;
-        await controller.createIssue(mockRequest as Request, mockResponse as Response);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -124,6 +124,7 @@ describe('IssueController', () => {
         // Assert webhook call
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_created', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
 
@@ -147,13 +148,14 @@ describe('IssueController', () => {
         mockRequest.params = {
             issueIdOrKey: 'PROJECT-123'
         };
-        await controller.getIssue(mockRequest as Request, mockResponse as Response);
+        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['PROJECT-123']);
         const expectedFormattedIssue = formatIssueResponse(dbIssue);
         expect(JSON.parse(mockResponse._getData())).toEqual(expectedFormattedIssue);
         // No webhook trigger for get
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
     it('should update an issue and trigger webhook', async () => {
@@ -189,13 +191,7 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
 
         // Mock isValidTransition implementation to return true
-        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
-            // Implement your status transition logic here.  For example:
-            if (preUpdateDbIssue.status === 'To Do' && updateData.status === 'In Progress') {
-                return true; // Allow To Do -> In Progress
-            }
-            return false; // Disallow other transitions
-        });
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
 
         // Mock run for UPDATE
         mockDatabaseService.run.mockResolvedValue(undefined);
@@ -204,7 +200,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Expect transition validation to be called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -233,6 +229,7 @@ describe('IssueController', () => {
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
     it('should prevent update issue with invalid status transition', async () => {
@@ -262,7 +259,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Expect transition validation to be called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
@@ -282,6 +279,7 @@ describe('IssueController', () => {
 
         // Assert no webhook call
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        expect(mockNext).not.toHaveBeenCalled(); // Controller handles response directly
     });
 
 
@@ -307,7 +305,7 @@ describe('IssueController', () => {
         mockDatabaseService.run.mockResolvedValue(undefined);
 
         mockRequest.params = { issueIdOrKey: issueKey };
-        await controller.deleteIssue(mockRequest as Request, mockResponse as Response);
+        await controller.deleteIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), [issueKey]);
         expect(mockDatabaseService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', [issueKey]);
@@ -318,14 +316,13 @@ describe('IssueController', () => {
         const expectedFormattedIssue = formatIssueResponse(dbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_deleted', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
     it('should transition an issue status and trigger webhook', async () => {
         const issueKey = 'PROJECT-456';
         const now = new Date().toISOString();
         const newStatus = 'In Progress';
-        const newStatusId = 21; // ID for 'In Progress'
-        const oldStatusId = 11; // ID for 'To Do'
 
         const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
@@ -350,13 +347,8 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
 
          // Mock isValidTransition implementation to return true
-        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
-            // Implement your status transition logic here.  For example:
-            if (preUpdateDbIssue.status === 'To Do' && newStatus === 'In Progress') {
-                return true; // Allow To Do -> In Progress
-            }
-            return false; // Disallow other transitions
-        });
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true);
+
         // Mock run for UPDATE status
         mockDatabaseService.run.mockResolvedValue(undefined);
         // Mock get for SELECT after update
@@ -364,12 +356,12 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: newStatus } };
-        await controller.transitionIssue(mockRequest as Request, mockResponse as Response);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Assert that the transition service was called with correct IDs
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
         const postUpdateStatusId = controller['getStatusIdFromName'](newStatus);
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!);
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!); // 'To Do' (11) to 'In Progress' (21)
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET status = ?, updated_at = ? WHERE key = ?'),
@@ -385,14 +377,13 @@ describe('IssueController', () => {
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
     it('should prevent invalid issue status transition', async () => {
         const issueKey = 'PROJECT-456';
         const now = new Date().toISOString();
         const invalidNewStatus = 'Done'; // Assume this is invalid from 'To Do'
-        const invalidNewStatusId = 31; // ID for 'Done'
-        const oldStatusId = 11; // ID for 'To Do'
 
         const preUpdateDbIssue: DbIssue = {
             _id: new ObjectId().toHexString(),
@@ -410,23 +401,16 @@ describe('IssueController', () => {
         // Mock get for pre-update check
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
         // Mock the transition validation to return false
-
-        mockIssueStatusTransitionService.isValidTransition.mockImplementation((currentStatusId: number, targetStatusId: number) => {
-            // Implement your status transition logic here.  For example:
-            if (preUpdateDbIssue.status === 'To Do' && invalidNewStatus === 'Done') {
-                return false; // Disallow To Do -> Done
-            }
-            return true;
-        });
+        mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { transition: { name: invalidNewStatus } };
-        await controller.transitionIssue(mockRequest as Request, mockResponse as Response);
+        await controller.transitionIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Assert that the transition service was called
         const preUpdateStatusId = controller['getStatusIdFromName'](preUpdateDbIssue.status);
         const postUpdateStatusId = controller['getStatusIdFromName'](invalidNewStatus);
-        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!);
+        expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(preUpdateStatusId!, postUpdateStatusId!); // 'To Do' (11) to 'Done' (31)
 
         // Assert that the database run was NOT called
         expect(mockDatabaseService.run).not.toHaveBeenCalled();
@@ -442,6 +426,7 @@ describe('IssueController', () => {
 
         // Assert webhook was NOT called
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        expect(mockNext).not.toHaveBeenCalled(); // Controller handles response directly
     });
 
     it('should update an issue assignee and trigger webhook', async () => {
@@ -476,7 +461,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = { assignee: newAssigneeKey };
-        await controller.updateAssignee(mockRequest as Request, mockResponse as Response);
+        await controller.updateAssignee(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
@@ -492,6 +477,7 @@ describe('IssueController', () => {
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
      it('should add an attachment to an issue and trigger webhook', async () => {
@@ -534,7 +520,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = attachmentData;
-        await controller.addAttachment(mockRequest as Request, mockResponse as Response);
+        await controller.addAttachment(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Check INSERT attachment call
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
@@ -560,9 +546,9 @@ describe('IssueController', () => {
 
         // Assert webhook call
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
-        // The controller adds the formatted issue inside an object for this specific webhook trigger
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
      it('should link two issues and trigger webhook', async () => {
@@ -602,7 +588,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: sourceIssueKey };
         mockRequest.body = { linkedIssueKey, linkType };
-        await controller.linkIssues(mockRequest as Request, mockResponse as Response);
+        await controller.linkIssues(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
 
         // Check get calls (source, linked, updated source, updated linked)
@@ -644,11 +630,11 @@ describe('IssueController', () => {
          // Check timestamp separately if needed more precisely
          const actualPayload = mockTriggerWebhooks.mock.calls[0][1];
          expect(actualPayload.timestamp).toBeCloseTo(Date.now(), -3); // Check if timestamp is recent (within ~1 second)
-
+         expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
 
-    it('should handle errors during creation and respond with 500', async () => {
+    it('should handle errors during creation and call next', async () => {
         const error = new Error('Database insert error');
         mockIssueKeyService.getNextIssueKey.mockResolvedValue('TASK-ERR'); // Assume key generation succeeds
         mockDatabaseService.run.mockRejectedValue(error); // Mock INSERT failure
@@ -660,16 +646,79 @@ describe('IssueController', () => {
             key: 'TEST-ERR' // included but controller uses generated key
         };
 
-        await controller.createIssue(mockRequest as Request, mockResponse as Response);
+        await controller.createIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
         expect(mockDatabaseService.run).toHaveBeenCalled(); // Verify insert was attempted
         expect(mockDatabaseService.get).not.toHaveBeenCalled(); // SELECT should not happen on insert error
-        // Verify the controller sent the error response itself
-        expect(mockResponse.statusCode).toBe(500);
-        expect(JSON.parse(mockResponse._getData())).toEqual({ message: 'Failed to create issue' });
-        expect(mockNext).not.toHaveBeenCalled(); // Controller handles response
+        // Verify the controller passed the error to the error handler
+        expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+        expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to create issue: Database insert error' }));
+        expect(mockResponse.statusCode).not.toBe(500); // Should not be set by controller directly
+        expect(mockResponse._isEndCalled()).toBe(false); // Response should not be ended by controller
         // No webhook trigger on error
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+    });
+
+    it('should call next with error if getIssue fails', async () => {
+        const error = new Error('Database get error');
+        mockDatabaseService.get.mockRejectedValue(error);
+
+        mockRequest.params = { issueIdOrKey: 'FAIL-GET' };
+        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
+
+        expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['FAIL-GET']);
+        expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+        expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to retrieve issue: Database get error' }));
+        expect(mockResponse._isEndCalled()).toBe(false);
+        expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+    });
+
+    it('should call next with error if updateIssue fails', async () => {
+         const issueKey = 'PROJECT-UPDATE-FAIL';
+         const now = new Date().toISOString();
+         const updateData = { summary: 'Update Fail' };
+         const error = new Error('Database update error');
+
+         const preUpdateDbIssue: DbIssue = {
+             _id: new ObjectId().toHexString(), id: 1, key: issueKey, status: 'To Do', issuetype: 'task', summary: 'Old', description: '', assignee_key: null, created_at: now, updated_at: now
+         };
+
+         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
+         mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true); // Assume valid transition
+         mockDatabaseService.run.mockRejectedValue(error); // Mock UPDATE failure
+
+         mockRequest.params = { issueIdOrKey: issueKey };
+         mockRequest.body = updateData;
+         await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
+
+         expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Only pre-check get
+         expect(mockDatabaseService.run).toHaveBeenCalled(); // Verify update was attempted
+         expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+         expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to update issue: Database update error' }));
+         expect(mockResponse._isEndCalled()).toBe(false);
+         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+     });
+
+    it('should call next with error if deleteIssue fails', async () => {
+        const issueKey = 'PROJECT-DELETE-FAIL';
+        const now = new Date().toISOString();
+        const error = new Error('Database delete error');
+        const dbIssue: DbIssue = {
+            _id: new ObjectId().toHexString(), id: 1, key: issueKey, status: 'Done', issuetype: 'task', summary: 'To Delete', description: '', assignee_key: null, created_at: now, updated_at: now
+        };
+
+        mockDatabaseService.get.mockResolvedValueOnce(dbIssue);
+        mockDatabaseService.run.mockRejectedValue(error); // Mock DELETE failure
+
+        mockRequest.params = { issueIdOrKey: issueKey };
+        await controller.deleteIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
+
+        expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
+        expect(mockDatabaseService.run).toHaveBeenCalledWith('DELETE FROM issues WHERE key = ?', [issueKey]);
+        expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
+        expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to delete issue: Database delete error' }));
+        expect(mockResponse._isEndCalled()).toBe(false);
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
     });
 
@@ -678,12 +727,13 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValue(undefined); // Simulate issue not found
 
         mockRequest.params = { issueIdOrKey: 'NONEXISTENT' };
-        await controller.getIssue(mockRequest as Request, mockResponse as Response);
+        await controller.getIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('SELECT * FROM issues WHERE key = ?'), ['NONEXISTENT']);
         expect(mockResponse.statusCode).toBe(404);
         expect(JSON.parse(mockResponse._getData())).toEqual({ message: 'Issue not found' });
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        expect(mockNext).not.toHaveBeenCalled(); // Controller handles 404 directly
     });
 
     // 2. Test the `updateIssue` method, updating only the `assignee_key` field.
@@ -715,10 +765,11 @@ describe('IssueController', () => {
         mockDatabaseService.get.mockResolvedValueOnce(preUpdateDbIssue);
         mockDatabaseService.run.mockResolvedValueOnce(undefined);
         mockDatabaseService.get.mockResolvedValueOnce(postUpdateDbIssue);
+        // No status transition, so no need to mock isValidTransition
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         expect(mockDatabaseService.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
@@ -728,6 +779,7 @@ describe('IssueController', () => {
         expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
         const expectedFormattedIssue = formatIssueResponse(postUpdateDbIssue);
         expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expectedFormattedIssue);
+        expect(mockNext).not.toHaveBeenCalled(); // Should not call next on success
     });
 
     it('should return 400 if status name is invalid during update', async () => {
@@ -757,7 +809,7 @@ describe('IssueController', () => {
 
         mockRequest.params = { issueIdOrKey: issueKey };
         mockRequest.body = updateData;
-        await controller.updateIssue(mockRequest as Request, mockResponse as Response);
+        await controller.updateIssue(mockRequest as Request, mockResponse as Response, mockNext as NextFunction);
 
         // Ensure only the initial GET was called
         expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
@@ -773,5 +825,6 @@ describe('IssueController', () => {
 
         // Assert no webhook call
         expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        expect(mockNext).not.toHaveBeenCalled(); // Controller handles response directly
     });
 });

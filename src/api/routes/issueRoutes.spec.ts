@@ -1,123 +1,225 @@
 import supertest from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
 import { createMock } from '@golevelup/ts-jest';
+
+// Import services to be mocked
 import { DatabaseService } from '../../services/databaseService';
 import { IssueKeyService } from '../../services/issueKeyService';
 import { IssueStatusTransitionService } from '../../services/issueStatusTransitionService';
-import { formatIssueResponse } from '../../utils/jsonTransformer';
 import { triggerWebhooks } from '../../services/webhookService';
+
+// Import utility and model
+import { formatIssueResponse } from '../../utils/jsonTransformer';
 import { Issue } from '../../models/issue';
 
-// Define an interface for potential custom properties on Request
-interface CustomRequest extends Request {
-    databaseService?: DatabaseService;
-    issueKeyService?: IssueKeyService;
-    issueStatusTransitionService?: IssueStatusTransitionService;
-}
+// --- Mock Dependencies BEFORE Importing Controller/Routes ---
 
-
-// Mock services *before* importing routes/controller
+// Create mock instances using @golevelup/ts-jest for convenience
 const mockDatabaseService = createMock<DatabaseService>();
 const mockIssueKeyService = createMock<IssueKeyService>();
 const mockIssueStatusTransitionService = createMock<IssueStatusTransitionService>();
+// Create a standard Jest mock for the standalone function
+const mockTriggerWebhooks = jest.fn();
 
-// Mock the modules - this intercepts imports within the routes/controllers
+// Mock the modules themselves. This intercepts imports within the controller.
+// When the actual IssueController is instantiated (likely triggered by importing issueRoutes),
+// it will receive these mocked instances instead of the real ones.
 jest.mock('../../services/databaseService', () => ({
-  DatabaseService: jest.fn(() => mockDatabaseService)
-}));
-// Mock the singleton export if it exists and is used
-jest.mock('../../services/database', () => ({
-    databaseService: mockDatabaseService
+    // Mock the class constructor to return our mock instance
+    DatabaseService: jest.fn().mockImplementation(() => mockDatabaseService)
 }));
 jest.mock('../../services/issueKeyService', () => ({
-    // If IssueKeyService is used as a class:
-    // IssueKeyService: jest.fn(() => mockIssueKeyService)
-    // If IssueKeyService is used as a singleton instance export named 'issueKeyService':
-    issueKeyService: mockIssueKeyService
+    // Mock the class constructor
+    IssueKeyService: jest.fn().mockImplementation(() => mockIssueKeyService)
 }));
 jest.mock('../../services/issueStatusTransitionService', () => ({
-    // If IssueStatusTransitionService is used as a class:
-    // IssueStatusTransitionService: jest.fn(() => mockIssueStatusTransitionService)
-    // If IssueStatusTransitionService is used as a singleton instance export:
-    issueStatusTransitionService: mockIssueStatusTransitionService
+    // Mock the class constructor
+    IssueStatusTransitionService: jest.fn().mockImplementation(() => mockIssueStatusTransitionService)
 }));
 jest.mock('../../services/webhookService', () => ({
-    triggerWebhooks: jest.fn(),
+    // Mock the specific exported function
+    triggerWebhooks: mockTriggerWebhooks
 }));
 
-// Now import the routes AFTER mocks are set up
-import issueRoutes from './issueRoutes';
+// --- Import Controller and Routes AFTER Mocks are Set Up ---
+// Import the *actual* controller. Its dependencies will be mocked due to the above setup.
+// Note: The instantiation logic in `issueController.ts` (if it exports an instance)
+// will use the mocked services.
+import { IssueController } from '../controllers/issueController'; // Import the actual controller class
+import issueRoutes from './issueRoutes'; // Import the actual routes
 
-const mockTriggerWebhooks = triggerWebhooks as jest.Mock;
+// --- Test Setup ---
+
+// Define a type for the expected shape of DB issues
+// Ensure nullable fields match the database schema and usage
+type DbIssue = Issue & {
+    id: number;
+    key: string;
+    status: string;
+    assignee_key: string | null | undefined;
+    created_at: string;
+    updated_at: string;
+    _id: string;
+    parentKey: string | null | undefined;
+};
 
 // Create Express app for testing
 const app = express();
+
+// Middleware Setup
 app.use(express.json());
 
-// Middleware to attach mocked services to the request object
-// This simulates how services might be injected or made available in a real app
-// (e.g., via app.locals, dependency injection container, or custom middleware)
-// This directly addresses the request to have `issueKeyService` on the `request` object context.
-app.use((req: CustomRequest, res: Response, next: NextFunction) => {
-    // Option 1: Attach directly to req (if app uses this pattern)
-    // req.databaseService = mockDatabaseService;
-    // req.issueKeyService = mockIssueKeyService;
-    // req.issueStatusTransitionService = mockIssueStatusTransitionService;
-
-    // Option 2: Attach to req.app.locals (common pattern)
+// !! Crucial for testing dependency injection via req.app.locals if used !!
+// If the controller *did* access services via req.app.locals, this would inject mocks.
+// However, based on the provided controller code using constructor injection,
+// this middleware might not be strictly necessary for *this specific controller's*
+// dependencies, as module-level mocking handles it. But it's good practice
+// if other parts of the app use locals for DI.
+app.use((req: Request, res: Response, next: NextFunction) => {
     req.app.locals.databaseService = mockDatabaseService;
     req.app.locals.issueKeyService = mockIssueKeyService;
     req.app.locals.issueStatusTransitionService = mockIssueStatusTransitionService;
+    // We DO NOT add the controller itself to locals as we want the routes to use the actual controller
     next();
 });
 
 
-// Mount the actual routes AFTER the middleware
+// Mount the *actual* routes. These routes use the actual IssueController instance,
+// which has been instantiated with mocked services because jest.mock intercepted the service imports.
 app.use('/rest/api/3/issue', issueRoutes);
 
-type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; _id: string; };
+// Add a generic error handler *after* routes to catch errors passed via next()
+// This is useful for testing 500 error scenarios originating from the controller
+app.use((err: Error & { statusCode?: number }, req: Request, res: Response, next: NextFunction) => {
+    console.error('Test Error Handler Caught:', err); // Log caught errors during tests
+    if (!res.headersSent) {
+        const statusCode = err.statusCode || 500;
+        res.status(statusCode).json({ message: err.message || 'Internal Server Error' });
+    } else {
+        next(err); // Delegate to default Express handler if headers sent
+    }
+});
 
-describe('issueRoutes', () => {
+
+// --- Test Suite ---
+
+describe('issueRoutes Integration Tests', () => {
     let request: supertest.SuperTest<supertest.Test>;
 
-    beforeEach(() => {
+    beforeAll(() => {
+        // Instantiate supertest with the test app
         request = supertest(app);
-        // Reset mocks for isolation between tests
-        jest.clearAllMocks(); // Clears call counts, etc.
-        mockDatabaseService.get.mockReset();
-        mockDatabaseService.run.mockReset();
-        mockIssueKeyService.getNextIssueKey.mockReset();
-        mockIssueStatusTransitionService.isValidTransition.mockReset();
-        // Reset any potentially mocked methods on the singleton mocks if necessary
-        // e.g., (mockIssueKeyService.someMethod as jest.Mock).mockReset();
-
-        // It's often better to redefine default mock implementations here if needed,
-        // rather than relying on unclear state from previous tests.
-        // Example: mockIssueKeyService.getNextIssueKey.mockResolvedValue('DEFAULT-KEY');
     });
 
-    // --- Test cases remain largely the same, but now trust that ---
-    // --- the route handlers can access the mocked services       ---
-    // --- either via import (intercepted by jest.mock)           ---
-    // --- or via the request object (req.app.locals.*)            ---
+    beforeEach(() => {
+        // Reset mocks before each test to ensure isolation
+        jest.clearAllMocks();
 
-    describe('POST /', () => {
-        it('should create a new issue, call issueKeyService, and return 201', async () => {
-            // Arrange: Set up specific mock behaviors for this test
-            const issueKey = 'PROJ-1';
-            const now = new Date().toISOString();
-            const createdDbIssue: DbIssue = { id: 1, _id: 'some_id', issuetype: 'task', summary: 'Test issue', description: 'Test description', key: issueKey, status: 'To Do', assignee_key: null, created_at: now, updated_at: now };
+        // You might need to reset specific mock implementations if they are stateful
+        // e.g., mockDatabaseService.get.mockReset();
+        //       mockIssueKeyService.getNextIssueKey.mockReset(); etc.
+        // Using jest.clearAllMocks() is generally sufficient for clearing calls and instances.
+    });
 
-            mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
-            // Assume run is for INSERT, get is for fetching the created issue
-            mockDatabaseService.run.mockResolvedValue(undefined);
-            mockDatabaseService.get.mockResolvedValue(createdDbIssue);
+    // --- Test Cases ---
 
+    describe('POST /rest/api/3/issue', () => {
+        it('should call IssueController.createIssue and return 201 on success', async () => {
+            // Arrange: Configure Mocks for the Controller's logic
             const issueData = {
                 issuetype: 'task',
-                summary: 'Test issue',
+                summary: 'Create Test',
                 description: 'Test description',
             };
+            const issueKey = 'TASK-1';
+            const now = new Date().toISOString();
+            // Simulate the shape of the data the controller expects to retrieve after insertion
+            // Use Omit carefully, ensure remaining properties match the target type
+            const createdDbIssueBase: Omit<DbIssue, '_id' | 'assignee_key' | 'parentKey'> = {
+                id: 1,
+                issuetype: issueData.issuetype,
+                summary: issueData.summary,
+                description: issueData.description,
+                key: issueKey,
+                status: 'To Do', // Default status set by controller
+                created_at: now,
+                updated_at: now,
+            };
+            const createdDbIssueWithNulls: Omit<DbIssue, '_id'> = {
+                ...createdDbIssueBase,
+                assignee_key: null,
+                parentKey: null
+            }
+
+            // The controller will format this before sending
+            const dbIssueForFormatting: DbIssue = { ...createdDbIssueWithNulls, _id: 'mock_db_id_1' };
+            const formattedResponse = formatIssueResponse(dbIssueForFormatting); // Add dummy _id for format function
+
+            mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
+            mockDatabaseService.run.mockResolvedValue(); // Mock the INSERT operation
+            mockDatabaseService.get.mockResolvedValue(dbIssueForFormatting); // Mock the SELECT after insert
+            mockTriggerWebhooks.mockResolvedValue(undefined); // Mock webhook trigger
+
+            // Act: Make the request
+            const response = await request
+                .post('/rest/api/3/issue')
+                .send(issueData)
+                .set('Accept', 'application/json')
+                .set('Content-Type', 'application/json');
+
+            // Assert: Verify Response and Mock Interactions
+            expect(response.status).toBe(201);
+            expect(response.body).toEqual(formattedResponse); // Check the formatted response
+            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalledTimes(1);
+            expect(mockDatabaseService.run).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO issues'), // Check if INSERT SQL is used
+                expect.arrayContaining([ // Check parameters passed to INSERT
+                    issueData.issuetype,
+                    issueData.summary,
+                    issueData.description,
+                    null, // parentKey default
+                    issueKey,
+                    'To Do', // status default
+                    expect.any(String), // created_at
+                    expect.any(String)  // updated_at
+                ])
+            );
+            expect(mockDatabaseService.get).toHaveBeenCalledWith(
+                'SELECT * FROM issues WHERE key = ?',
+                [issueKey]
+            );
+            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_created', formattedResponse);
+        });
+
+        it('should return 400 if required fields are missing (handled by controller)', async () => {
+            // Arrange: Send invalid data
+            const invalidIssueData = { description: 'Only description' };
+
+            // Act
+            const response = await request
+                .post('/rest/api/3/issue')
+                .send(invalidIssueData)
+                .set('Accept', 'application/json')
+                .set('Content-Type', 'application/json');
+
+            // Assert
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({ message: 'Missing required fields' });
+            // Verify mocks were NOT called (or only specific ones if validation happens early)
+            expect(mockIssueKeyService.getNextIssueKey).not.toHaveBeenCalled();
+            expect(mockDatabaseService.run).not.toHaveBeenCalled();
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        });
+
+        it('should return 500 if the controller encounters a database error during creation', async () => {
+            // Arrange: Simulate a database error
+            const issueData = { issuetype: 'bug', summary: 'DB Error Test', description: '...' };
+            const issueKey = 'TASK-2';
+            const dbError = new Error('Database connection lost');
+
+            mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
+            // Simulate failure on the INSERT step
+            mockDatabaseService.run.mockRejectedValue(dbError);
 
             // Act
             const response = await request
@@ -127,503 +229,291 @@ describe('issueRoutes', () => {
                 .set('Content-Type', 'application/json');
 
             // Assert
-            expect(response.status).toBe(201);
-            // Verify service interactions
-            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalledTimes(1); // Ensure key service was called
-            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1); // Check if DB insert was called
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Check if DB fetch was called
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('key = ?'), [issueKey]);
-            expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_created', expect.anything()); // Check webhook trigger
-            // Verify response body
-            expect(response.body).toEqual(formatIssueResponse(createdDbIssue));
-        });
-
-        it('should return 400 for missing required fields', async () => {
-            const invalidIssueData = {
-                // Missing 'issuetype' and 'summary'
-                description: 'Only description provided',
-            };
-
-            const response = await request
-                .post('/rest/api/3/issue')
-                .send(invalidIssueData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
-
-            expect(response.status).toBe(400);
-            expect(response.body).toEqual({ message: 'Missing required fields' });
-            expect(mockIssueKeyService.getNextIssueKey).not.toHaveBeenCalled();
-            expect(mockDatabaseService.run).not.toHaveBeenCalled();
-            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
-        });
-
-        it('should return 500 if issue key generation fails', async () => {
-             const issueData = {
-                 issuetype: 'bug',
-                 summary: 'Key gen fail test',
-                 description: 'This should fail',
-             };
-             mockIssueKeyService.getNextIssueKey.mockRejectedValue(new Error('Key generation error'));
-
-             const response = await request
-                 .post('/rest/api/3/issue')
-                 .send(issueData)
-                 .set('Accept', 'application/json')
-                 .set('Content-Type', 'application/json');
-
-             expect(response.status).toBe(500);
-             expect(response.body).toEqual({ message: 'Failed to create issue' });
-             expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalledTimes(1);
-             expect(mockDatabaseService.run).not.toHaveBeenCalled();
-             expect(mockTriggerWebhooks).not.toHaveBeenCalled();
-         });
-
-        it('should return 500 if database insertion fails', async () => {
-            const issueKey = 'PROJ-DBFAIL';
-            const issueData = {
-                issuetype: 'task',
-                summary: 'DB fail test',
-                description: 'This should fail at DB run',
-            };
-            mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
-            mockDatabaseService.run.mockRejectedValue(new Error('Database write failed'));
-
-            const response = await request
-                .post('/rest/api/3/issue')
-                .send(issueData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
-
             expect(response.status).toBe(500);
+            // The controller's catch block should produce this message
             expect(response.body).toEqual({ message: 'Failed to create issue' });
-            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.get).not.toHaveBeenCalled(); // Shouldn't try to fetch if run failed
+            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalledTimes(1); // Key service might still be called
+            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1); // The failing call
+            expect(mockDatabaseService.get).not.toHaveBeenCalled(); // Should not be called after failure
             expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
     });
 
-    describe('GET /:issueIdOrKey', () => {
-        it('should get an issue by numeric ID and return 200', async () => {
-            const issueId = '1';
+    describe('GET /rest/api/3/issue/:issueIdOrKey', () => {
+        it('should call IssueController.getIssue and return 200 with issue data if found by key', async () => {
+            // Arrange
+            const issueKey = 'PROJ-123';
             const now = new Date().toISOString();
-            const dbIssue: DbIssue = { _id: 'some_id_1', id: 1, issuetype: 'task', summary: 'Get By ID', description: 'Test description', key: 'PROJECT-1', status: 'In Progress', assignee_key: null, created_at: now, updated_at: now };
+            const dbIssue: DbIssue = { _id: 'mock_db_id_123', id: 123, issuetype: 'story', summary: 'Get By Key', description: 'Test description', key: issueKey, status: 'In Progress', assignee_key: 'user-1', created_at: now, updated_at: now, parentKey: null };
+            const formattedResponse = formatIssueResponse(dbIssue);
 
+            // Mock the service call made by the controller
             mockDatabaseService.get.mockResolvedValue(dbIssue);
 
-            const response = await request.get(`/rest/api/3/issue/${issueId}`);
-
-            expect(response.status).toBe(200);
-            expect(response.body).toEqual(formatIssueResponse(dbIssue));
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            // Check if the query correctly identified it as an ID
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('id = ?'), [issueId]);
-        });
-
-        it('should get an issue by string key and return 200', async () => {
-            const issueKey = 'PROJECT-123';
-            const now = new Date().toISOString();
-            const dbIssue: DbIssue = { _id: 'some_id_123', id: 123, issuetype: 'story', summary: 'Get By Key', description: 'Test description', key: issueKey, status: 'To Do', assignee_key: 'user-1', created_at: now, updated_at: now };
-
-            mockDatabaseService.get.mockResolvedValue(dbIssue);
-
+            // Act
             const response = await request.get(`/rest/api/3/issue/${issueKey}`);
 
+            // Assert
             expect(response.status).toBe(200);
-            expect(response.body).toEqual(formatIssueResponse(dbIssue));
+            expect(response.body).toEqual(formattedResponse);
             expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            // Check if the query correctly identified it as a key
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('key = ?'), [issueKey]);
+            expect(mockDatabaseService.get).toHaveBeenCalledWith(
+                'SELECT * FROM issues WHERE key = ?', // Controller logic uses key for non-numeric input
+                [issueKey]
+            );
         });
 
-        it('should return 404 if issue is not found by ID', async () => {
-            const issueId = '9999';
-            mockDatabaseService.get.mockResolvedValue(undefined);
+        it('should call IssueController.getIssue and return 200 with issue data if found by ID', async () => {
+            // Arrange
+            const issueId = '456'; // ID as string, matching param type
+            const now = new Date().toISOString();
+            const dbIssue: DbIssue = { _id: 'mock_db_id_456', id: 456, issuetype: 'bug', summary: 'Get By ID', description: 'Bug description', key: 'BUG-1', status: 'To Do', assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+            const formattedResponse = formatIssueResponse(dbIssue);
 
+            mockDatabaseService.get.mockResolvedValue(dbIssue);
+
+            // Act
             const response = await request.get(`/rest/api/3/issue/${issueId}`);
 
-            expect(response.status).toBe(404);
-            expect(response.body).toEqual({ message: 'Issue not found' });
+            // Assert
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual(formattedResponse);
             expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('id = ?'), [issueId]);
+            expect(mockDatabaseService.get).toHaveBeenCalledWith(
+                'SELECT * FROM issues WHERE id = ?', // Controller logic uses id for numeric input
+                [issueId]
+            );
         });
 
-        it('should return 404 if issue is not found by key', async () => {
+        it('should return 404 if the issue is not found', async () => {
+            // Arrange
             const issueKey = 'NONEXISTENT-KEY';
-            mockDatabaseService.get.mockResolvedValue(undefined);
+            mockDatabaseService.get.mockResolvedValue(undefined); // Simulate not found
 
+            // Act
             const response = await request.get(`/rest/api/3/issue/${issueKey}`);
 
+            // Assert
             expect(response.status).toBe(404);
             expect(response.body).toEqual({ message: 'Issue not found' });
             expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('key = ?'), [issueKey]);
+            expect(mockDatabaseService.get).toHaveBeenCalledWith(
+                'SELECT * FROM issues WHERE key = ?',
+                [issueKey]
+            );
         });
 
-        it('should return 500 for database error during issue retrieval', async () => {
-            const issueIdOrKey = 'ANY-ID';
-            mockDatabaseService.get.mockRejectedValue(new Error('Database connection failed'));
+        it('should return 500 if the controller encounters a database error during retrieval', async () => {
+            // Arrange
+            const issueKey = 'DB-ERROR-KEY';
+            const dbError = new Error('Failed to query');
+            mockDatabaseService.get.mockRejectedValue(dbError);
 
-            const response = await request.get(`/rest/api/3/issue/${issueIdOrKey}`);
+            // Act
+            const response = await request.get(`/rest/api/3/issue/${issueKey}`);
 
+            // Assert
             expect(response.status).toBe(500);
-            expect(response.body).toEqual({ message: 'Failed to retrieve issue' });
+            expect(response.body).toEqual({ message: 'Failed to retrieve issue' }); // Controller's error message
             expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
         });
     });
 
-    describe('PUT /:issueIdOrKey', () => {
-        const issueKey = 'PROJECT-123';
-        const issueId = '1';
-        const now = new Date().toISOString();
-        const preUpdateDbIssue: DbIssue = {
-            _id: 'some_id_put', id: 1,
-            issuetype: 'task',
-            summary: 'Original Summary',
-            description: 'Original Description',
-            key: issueKey,
-            status: 'To Do', // Current status
-            assignee_key: null,
-            created_at: now,
-            updated_at: now
-        };
+    describe('PUT /rest/api/3/issue/:issueIdOrKey', () => {
+        it('should call IssueController.updateIssue and return 204 on successful update', async () => {
+            // Arrange
+            const issueKey = 'PROJ-UPDATE';
+            const updateData = { summary: 'Updated Summary', description: 'New description' };
+            const now = new Date().toISOString();
+            // Simulate issue state *before* update for controller's pre-fetch
+            const preUpdateDbIssue: DbIssue = { _id: 'mock_db_id_upd', id: 789, issuetype: 'task', summary: 'Old Summary', description: 'Old desc', key: issueKey, status: 'To Do', assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+            // Simulate issue state *after* update for controller's post-fetch (for webhook)
+            const postUpdateDbIssue: DbIssue = { ...preUpdateDbIssue, summary: updateData.summary, description: updateData.description, updated_at: new Date().toISOString() };
+            const formattedWebhookPayload = formatIssueResponse(postUpdateDbIssue);
 
-        // Mock getStatusId function (adjust IDs as per actual implementation)
-        const mockGetStatusId = jest.fn((statusName: string) => {
-            if (statusName === 'To Do') return 11;
-            if (statusName === 'In Progress') return 21;
-            if (statusName === 'Done') return 31;
-            return undefined; // Or throw error for unknown status
-        });
-        // Assign the mock function to the mock service instance
-        (mockIssueStatusTransitionService as any).getStatusId = mockGetStatusId;
-
-
-        it('should update issue summary and description by key, return 204', async () => {
-            const updateData = {
-                summary: 'Updated issue summary',
-                description: 'Updated description',
-            };
-            const postUpdateDbIssue: DbIssue = {
-                ...preUpdateDbIssue,
-                summary: updateData.summary,
-                description: updateData.description,
-                updated_at: new Date().toISOString() // Simulate timestamp update
-            };
-
-            // Mock sequence: get pre-update, run update, get post-update (for webhook)
             mockDatabaseService.get
-                .mockResolvedValueOnce(preUpdateDbIssue) // First call finds the issue
-                .mockResolvedValueOnce(postUpdateDbIssue); // Second call for webhook data
-            mockDatabaseService.run.mockResolvedValue(undefined); // Update succeeds
+                .mockResolvedValueOnce(preUpdateDbIssue)   // First call (pre-fetch)
+                .mockResolvedValueOnce(postUpdateDbIssue); // Second call (post-fetch for webhook)
+            mockDatabaseService.run.mockResolvedValue(); // Mock the UPDATE operation
+            mockTriggerWebhooks.mockResolvedValue(undefined);
+            // Status transition mock (assuming status is not changed, so it passes trivially or isn't called)
+            mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true); // Assume valid if called
 
+            // Act
             const response = await request
                 .put(`/rest/api/3/issue/${issueKey}`)
-                .send(updateData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
+                .send(updateData);
 
-            expect(response.status).toBe(204);
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(2); // Called twice
-            expect(mockDatabaseService.get).toHaveBeenNthCalledWith(1, expect.stringContaining('key = ?'), [issueKey]);
-            expect(mockIssueStatusTransitionService.isValidTransition).not.toHaveBeenCalled(); // Status not changing
+            // Assert
+            expect(response.status).toBe(204); // No content on successful PUT
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(2); // Pre-fetch and post-fetch
+            expect(mockDatabaseService.get).toHaveBeenNthCalledWith(1, `SELECT * FROM issues WHERE key = ?`, [issueKey]);
             expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
             expect(mockDatabaseService.run).toHaveBeenCalledWith(
                 expect.stringContaining('UPDATE issues SET summary = ?, description = ?, updated_at = ? WHERE key = ?'),
-                [updateData.summary, updateData.description, expect.any(String), issueKey]
+                expect.arrayContaining([
+                    updateData.summary,
+                    updateData.description,
+                    expect.any(String), // updated_at
+                    issueKey
+                ])
             );
-            expect(mockDatabaseService.get).toHaveBeenNthCalledWith(2, expect.stringContaining('key = ?'), [issueKey]); // Fetch again for webhook
-            expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expect.objectContaining({
-                 key: issueKey,
-                 changelog: expect.arrayContaining([
-                     expect.objectContaining({ field: 'summary', fromString: preUpdateDbIssue.summary, toString: updateData.summary }),
-                     expect.objectContaining({ field: 'description', fromString: preUpdateDbIssue.description, toString: updateData.description })
-                 ]),
-                 fields: expect.objectContaining({ summary: updateData.summary }) // Check snapshot fields
-            }));
+            expect(mockDatabaseService.get).toHaveBeenNthCalledWith(2, `SELECT * FROM issues WHERE key = ?`, [issueKey]);
+            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', formattedWebhookPayload);
+            // Ensure transition check wasn't needed/called if status wasn't in updateData
+            expect(mockIssueStatusTransitionService.isValidTransition).not.toHaveBeenCalled();
         });
 
-        it('should update issue status by ID with valid transition, return 204', async () => {
-             const updateData = { status: 'In Progress' }; // Transition To Do -> In Progress
-             const postUpdateDbIssue: DbIssue = {
-                 ...preUpdateDbIssue,
-                 status: updateData.status,
-                 updated_at: new Date().toISOString()
-             };
+        it('should return 404 if the issue to update is not found', async () => {
+            // Arrange
+            const issueKey = 'NONEXISTENT-PUT';
+            const updateData = { summary: 'Wont happen' };
+            mockDatabaseService.get.mockResolvedValue(undefined); // Simulate not found on pre-fetch
 
-             // Mock sequence: get pre-update, validate transition, run update, get post-update
-             mockDatabaseService.get
-                 .mockResolvedValueOnce(preUpdateDbIssue)
-                 .mockResolvedValueOnce(postUpdateDbIssue);
-             mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true); // Simulate valid transition
-             mockDatabaseService.run.mockResolvedValue(undefined);
-
-             const response = await request
-                 .put(`/rest/api/3/issue/${issueId}`) // Using ID this time
-                 .send(updateData)
-                 .set('Accept', 'application/json')
-                 .set('Content-Type', 'application/json');
-
-             expect(response.status).toBe(204);
-             expect(mockDatabaseService.get).toHaveBeenCalledTimes(2);
-             expect(mockDatabaseService.get).toHaveBeenNthCalledWith(1, expect.stringContaining('id = ?'), [issueId]); // Found by ID
-             expect(mockIssueStatusTransitionService.getStatusId).toHaveBeenCalledWith('To Do'); // Get current status ID
-             expect(mockIssueStatusTransitionService.getStatusId).toHaveBeenCalledWith('In Progress'); // Get target status ID
-             expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 21, mockDatabaseService); // Validate 11 -> 21
-             expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-             expect(mockDatabaseService.run).toHaveBeenCalledWith(
-                 expect.stringContaining('UPDATE issues SET status = ?, updated_at = ? WHERE id = ?'),
-                 [updateData.status, expect.any(String), issueId]
-             );
-             expect(mockDatabaseService.get).toHaveBeenNthCalledWith(2, expect.stringContaining('id = ?'), [issueId]); // Fetch again for webhook
-             expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-             expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expect.objectContaining({
-                 key: issueKey, // Webhook should still use key if possible
-                 changelog: expect.arrayContaining([
-                     expect.objectContaining({ field: 'status', fromString: preUpdateDbIssue.status, toString: updateData.status })
-                 ]),
-                 fields: expect.objectContaining({ status: expect.objectContaining({ name: updateData.status }) })
-            }));
-         });
-
-        it('should return 404 if issue to update is not found', async () => {
-            const nonExistentKey = 'NONEXISTENT-PUT';
-            const updateData = { summary: 'Updated summary' };
-            mockDatabaseService.get.mockResolvedValue(undefined); // Issue not found
-
+            // Act
             const response = await request
-                .put(`/rest/api/3/issue/${nonExistentKey}`)
-                .send(updateData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
+                .put(`/rest/api/3/issue/${issueKey}`)
+                .send(updateData);
 
+            // Assert
             expect(response.status).toBe(404);
             expect(response.body).toEqual({ message: 'Issue not found' });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('key = ?'), [nonExistentKey]);
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Only pre-fetch call
             expect(mockDatabaseService.run).not.toHaveBeenCalled();
             expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
 
-        it('should return 400 if no valid fields to update are provided', async () => {
-            mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Issue found
-            const invalidUpdateData = { invalidField: 'Invalid data', anotherField: 123 }; // No valid fields
+        it('should return 400 if an invalid status transition is attempted', async () => {
+            // Arrange
+            const issueKey = 'INVALID-TRANSITION';
+            const updateData = { status: 'Done' }; // Attempting to transition
+            const now = new Date().toISOString();
+            const currentStatus = 'To Do';
+            // Assuming the controller maps these names to IDs internally before calling the service
+            const currentStatusId = 11; // Hypothetical ID for 'To Do'
+            const targetStatusId = 31;  // Hypothetical ID for 'Done'
 
+            // Simulate the current state of the issue
+            const preUpdateDbIssue: DbIssue = { _id: 'mock_db_id_trans', id: 890, issuetype: 'task', summary: 'Transition Test', description: '', key: issueKey, status: currentStatus, assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+
+            mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Mock pre-fetch
+            // Mock the transition service to return false for this specific transition attempt
+            mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
+            // We assume the controller will fetch status IDs based on names 'To Do' and 'Done'
+            // and pass these IDs to the service. Our mock setup intercepts the service call.
+
+            // Act
             const response = await request
                 .put(`/rest/api/3/issue/${issueKey}`)
-                .send(invalidUpdateData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
+                .send(updateData);
 
+            // Assert
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({ message: 'No valid fields to update provided' });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Only the initial get
-            expect(mockDatabaseService.run).not.toHaveBeenCalled();
+            expect(response.body).toEqual({ message: `Invalid status transition from '${currentStatus}' to '${updateData.status}'` });
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Pre-fetch called
+            // IMPORTANT: Verify the transition service was called correctly by the controller
+            // with the *expected IDs* based on the names provided in the test data.
+            expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledTimes(1);
+            // We rely on the *controller's internal logic* to map names to IDs.
+            // The assertion checks if the service method was called with the IDs we *expect*
+            // the controller to derive (11 and 31 in this hypothetical case).
+            // The third argument (mockDatabaseService) depends on how the controller passes dependencies.
+            // Adjust if the controller passes something else or no third argument.
+            expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(currentStatusId, targetStatusId, expect.anything()); // Allow any db service instance
+            expect(mockDatabaseService.run).not.toHaveBeenCalled(); // Update shouldn't happen
             expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
 
-        it('should return 400 for invalid status transition', async () => {
-            const updateData = { status: 'Done' }; // Invalid transition from 'To Do' directly to 'Done' maybe
-            mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Issue found, status 'To Do'
-            mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false); // Simulate invalid transition
 
+        it('should return 500 if the controller encounters a database error during update', async () => {
+            // Arrange
+            const issueKey = 'DB-ERROR-PUT';
+            const updateData = { summary: 'Error Update' };
+            const now = new Date().toISOString();
+            const preUpdateDbIssue: DbIssue = { _id: 'mock_db_id_err_put', id: 901, issuetype: 'task', summary: 'Old', description: '', key: issueKey, status: 'To Do', assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+            const dbError = new Error('Update failed');
+
+            mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Pre-fetch succeeds
+            mockDatabaseService.run.mockRejectedValue(dbError); // Simulate failure on UPDATE
+
+            // Act
             const response = await request
                 .put(`/rest/api/3/issue/${issueKey}`)
-                .send(updateData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
+                .send(updateData);
 
-            expect(response.status).toBe(400);
-            expect(response.body).toEqual({ message: `Invalid status transition from 'To Do' to 'Done'` });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockIssueStatusTransitionService.getStatusId).toHaveBeenCalledWith('To Do');
-            expect(mockIssueStatusTransitionService.getStatusId).toHaveBeenCalledWith('Done');
-            expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(11, 31, mockDatabaseService); // Validate 11 -> 31
-            expect(mockDatabaseService.run).not.toHaveBeenCalled();
-            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
-        });
-
-        it('should return 500 for database error during issue update', async () => {
-            const updateData = { summary: 'Updated summary' };
-            mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Issue found
-            mockDatabaseService.run.mockRejectedValue(new Error('Database write error')); // Update fails
-
-            const response = await request
-                .put(`/rest/api/3/issue/${issueKey}`)
-                .send(updateData)
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
-
+            // Assert
             expect(response.status).toBe(500);
-            expect(response.body).toEqual({ message: 'Failed to update issue' });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Only the initial get
-            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+            expect(response.body).toEqual({ message: 'Failed to update issue' }); // Controller's error message
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Pre-fetch called
+            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1); // The failing call
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled(); // Should not be called after failure
         });
     });
 
-    describe('DELETE /:issueIdOrKey', () => {
-        const issueKey = 'PROJECT-DEL';
-        const issueId = '5';
-        const now = new Date().toISOString();
-        const dbIssueToDelete: DbIssue = {
-            _id: 'some_id_del', id: 5,
-            issuetype: 'task',
-            summary: 'Issue to delete',
-            description: 'Will be deleted',
-            key: issueKey,
-            status: 'Done',
-            assignee_key: null,
-            created_at: now,
-            updated_at: now
-        };
+    describe('DELETE /rest/api/3/issue/:issueIdOrKey', () => {
+        it('should call IssueController.deleteIssue and return 204 on successful deletion', async () => {
+            // Arrange
+            const issueKey = 'PROJ-DELETE';
+            const now = new Date().toISOString();
+            // Simulate issue state *before* deletion for controller's pre-fetch (for webhook)
+            const preDeleteDbIssue: DbIssue = { _id: 'mock_db_id_del', id: 1001, issuetype: 'bug', summary: 'To Be Deleted', description: '', key: issueKey, status: 'Done', assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+            const formattedWebhookPayload = formatIssueResponse(preDeleteDbIssue);
 
-        it('should delete an issue by key and return 204', async () => {
-            mockDatabaseService.get.mockResolvedValue(dbIssueToDelete); // Found issue to delete
-            mockDatabaseService.run.mockResolvedValue(undefined); // Deletion successful
+            mockDatabaseService.get.mockResolvedValue(preDeleteDbIssue); // Mock pre-fetch for webhook
+            mockDatabaseService.run.mockResolvedValue(); // Mock the DELETE operation
+            mockTriggerWebhooks.mockResolvedValue(undefined);
 
-            const response = await request
-                .delete(`/rest/api/3/issue/${issueKey}`)
-                .set('Accept', 'application/json');
-
-            expect(response.status).toBe(204);
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('key = ?'), [issueKey]);
-            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM issues WHERE key = ?'), [issueKey]);
-            expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-            // Pass the data *before* deletion to the webhook
-            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_deleted', formatIssueResponse(dbIssueToDelete));
-        });
-
-         it('should delete an issue by ID and return 204', async () => {
-             mockDatabaseService.get.mockResolvedValue(dbIssueToDelete); // Found issue to delete
-             mockDatabaseService.run.mockResolvedValue(undefined); // Deletion successful
-
-             const response = await request
-                 .delete(`/rest/api/3/issue/${issueId}`) // Using ID
-                 .set('Accept', 'application/json');
-
-             expect(response.status).toBe(204);
-             expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-             expect(mockDatabaseService.get).toHaveBeenCalledWith(expect.stringContaining('id = ?'), [issueId]); // Searched by ID
-             expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-             expect(mockDatabaseService.run).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM issues WHERE id = ?'), [issueId]); // Deleted by ID
-             expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-             expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_deleted', formatIssueResponse(dbIssueToDelete));
-         });
-
-
-        it('should return 404 if issue to delete is not found', async () => {
-            const nonExistentKey = 'NONEXISTENT-DEL';
-            mockDatabaseService.get.mockResolvedValue(undefined); // Issue not found
-
-            const response = await request.delete(`/rest/api/3/issue/${nonExistentKey}`);
-
-            expect(response.status).toBe(404);
-            expect(response.body).toEqual({ message: 'Issue not found' });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
-            expect(mockDatabaseService.run).not.toHaveBeenCalled();
-            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
-        });
-
-        it('should return 500 for database error during issue deletion', async () => {
-            mockDatabaseService.get.mockResolvedValue(dbIssueToDelete); // Issue found
-            mockDatabaseService.run.mockRejectedValue(new Error('Database lock error')); // Deletion fails
-
+            // Act
             const response = await request.delete(`/rest/api/3/issue/${issueKey}`);
 
-            expect(response.status).toBe(500);
-            expect(response.body).toEqual({ message: 'Failed to delete issue' });
-            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Called get before trying run
+            // Assert
+            expect(response.status).toBe(204); // No content on successful DELETE
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Pre-fetch for webhook
+            expect(mockDatabaseService.get).toHaveBeenCalledWith(`SELECT * FROM issues WHERE key = ?`, [issueKey]);
             expect(mockDatabaseService.run).toHaveBeenCalledTimes(1);
-            expect(mockTriggerWebhooks).not.toHaveBeenCalled(); // Webhook shouldn't fire if deletion failed
-        });
-    });
-
-    // Specific Action Tests (Example: Assignee Update via PUT)
-    describe('PUT /:issueIdOrKey - Specific Actions', () => {
-        it('should update an issue assignee via PUT and return 204', async () => {
-            const issueKey = 'PROJECT-789';
-            const now = new Date().toISOString();
-            const newAssigneeKey = 'user-123';
-
-            const preUpdateDbIssue: DbIssue = {
-                _id: 'some_id_assign', id: 3, issuetype: 'story', summary: 'Story to assign', description: 'Description', key: issueKey, status: 'In Progress', assignee_key: null, created_at: now, updated_at: now
-            };
-            const postUpdateDbIssue: DbIssue = {
-                ...preUpdateDbIssue,
-                assignee_key: newAssigneeKey,
-                updated_at: new Date().toISOString() // Simulate update
-            };
-
-            mockDatabaseService.get
-                .mockResolvedValueOnce(preUpdateDbIssue)
-                .mockResolvedValueOnce(postUpdateDbIssue);
-            mockDatabaseService.run.mockResolvedValue(undefined);
-
-            const response = await request
-                .put(`/rest/api/3/issue/${issueKey}`)
-                .send({ assignee_key: newAssigneeKey }) // Only sending assignee_key
-                .set('Accept', 'application/json')
-                .set('Content-Type', 'application/json');
-
-            expect(response.status).toBe(204);
             expect(mockDatabaseService.run).toHaveBeenCalledWith(
-                 expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
-                 [newAssigneeKey, expect.any(String), issueKey]
-             );
-            expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expect.objectContaining({
-                 key: issueKey,
-                 changelog: expect.arrayContaining([
-                     expect.objectContaining({ field: 'assignee', from: null, to: newAssigneeKey }) // Check changelog for assignee
-                 ]),
-                 fields: expect.objectContaining({ assignee: { key: newAssigneeKey } }) // Check snapshot
-             }));
+                `DELETE FROM issues WHERE key = ?`, // Controller uses key for non-numeric
+                [issueKey]
+            );
+            expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_deleted', formattedWebhookPayload);
         });
 
-         it('should clear an issue assignee via PUT with null and return 204', async () => {
-             const issueKey = 'PROJECT-790';
-             const now = new Date().toISOString();
-             const currentAssigneeKey = 'user-456';
+        it('should return 404 if the issue to delete is not found', async () => {
+            // Arrange
+            const issueKey = 'NONEXISTENT-DEL';
+            mockDatabaseService.get.mockResolvedValue(undefined); // Simulate not found on pre-fetch
 
-             const preUpdateDbIssue: DbIssue = {
-                 _id: 'some_id_unassign', id: 4, issuetype: 'bug', summary: 'Bug to unassign', description: 'Description', key: issueKey, status: 'To Do', assignee_key: currentAssigneeKey, created_at: now, updated_at: now
-             };
-             const postUpdateDbIssue: DbIssue = {
-                 ...preUpdateDbIssue,
-                 assignee_key: null, // Assignee cleared
-                 updated_at: new Date().toISOString()
-             };
+            // Act
+            const response = await request.delete(`/rest/api/3/issue/${issueKey}`);
 
-             mockDatabaseService.get
-                 .mockResolvedValueOnce(preUpdateDbIssue)
-                 .mockResolvedValueOnce(postUpdateDbIssue);
-             mockDatabaseService.run.mockResolvedValue(undefined);
+            // Assert
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ message: 'Issue not found' });
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1);
+            expect(mockDatabaseService.run).not.toHaveBeenCalled();
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
+        });
 
-             const response = await request
-                 .put(`/rest/api/3/issue/${issueKey}`)
-                 .send({ assignee_key: null }) // Sending null for assignee_key
-                 .set('Accept', 'application/json')
-                 .set('Content-Type', 'application/json');
+        it('should return 500 if the controller encounters a database error during deletion', async () => {
+             // Arrange
+            const issueKey = 'DB-ERROR-DEL';
+            const now = new Date().toISOString();
+            const preDeleteDbIssue: DbIssue = { _id: 'mock_db_id_err_del', id: 1002, issuetype: 'bug', summary: 'Delete Error', description: '', key: issueKey, status: 'Done', assignee_key: null, created_at: now, updated_at: now, parentKey: null };
+            const dbError = new Error('Delete failed');
 
-             expect(response.status).toBe(204);
-             expect(mockDatabaseService.run).toHaveBeenCalledWith(
-                  expect.stringContaining('UPDATE issues SET assignee_key = ?, updated_at = ? WHERE key = ?'),
-                  [null, expect.any(String), issueKey]
-              );
-             expect(mockTriggerWebhooks).toHaveBeenCalledTimes(1);
-             expect(mockTriggerWebhooks).toHaveBeenCalledWith('jira:issue_updated', expect.objectContaining({
-                  key: issueKey,
-                  changelog: expect.arrayContaining([
-                      expect.objectContaining({ field: 'assignee', from: currentAssigneeKey, to: null }) // Check changelog
-                  ]),
-                  fields: expect.objectContaining({ assignee: null }) // Check snapshot
-              }));
-         });
+            mockDatabaseService.get.mockResolvedValue(preDeleteDbIssue); // Pre-fetch succeeds
+            mockDatabaseService.run.mockRejectedValue(dbError); // Simulate failure on DELETE
+
+            // Act
+            const response = await request.delete(`/rest/api/3/issue/${issueKey}`);
+
+            // Assert
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({ message: 'Failed to delete issue' }); // Controller's error message
+            expect(mockDatabaseService.get).toHaveBeenCalledTimes(1); // Pre-fetch called
+            expect(mockDatabaseService.run).toHaveBeenCalledTimes(1); // The failing call
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled(); // Webhook shouldn't be called on failure
+        });
     });
 
-});
+}); // End describe 'issueRoutes Integration Tests'

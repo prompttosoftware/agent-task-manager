@@ -1,7 +1,7 @@
 import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
 import epicRoutes from '../routes/epicRoutes';
-import { Issue } from '../../models/issue'; // Import the TYPE 'Issue'
+import { Issue as IssueType } from '../../models/issue'; // Import the TYPE 'Issue'
 import { DatabaseService } from '../../services/databaseService';
 import { IssueKeyService } from '../../services/issueKeyService';
 import { EpicController } from './epicController';
@@ -52,13 +52,13 @@ describe('Epic Controller', () => {
     describe('POST /epics', () => {
         it('should return a 201 status code and the created epic data on successful creation', async () => {
             // Arrange: Define the data sent in the request
-            const newEpicData: Omit<Issue, '_id' | 'key' | 'issuetype'> = {
+            const newEpicData: Omit<IssueType, '_id' | 'key' | 'issuetype'> = {
                 summary: 'New Epic',
                 description: 'New Epic Description',
                 // projectId: 'PROJ' // Assuming projectId might be needed to generate key
             };
             const generatedKey = 'PROJ-123';
-            const createdEpic: Issue = { // Expected structure of the created epic
+            const createdEpic: IssueType = { // Expected structure of the created epic
                 _id: expect.any(String), // Let the controller/service generate this
                 issuetype: 'Epic',
                 key: generatedKey,
@@ -151,7 +151,7 @@ describe('Epic Controller', () => {
         it('should return a 200 status code and the list of epics when successful', async () => {
             // Arrange: Mock the databaseService.all method to return a list of epics
             // Use the imported Issue TYPE for the array elements
-            const epics: Issue[] = [
+            const epics: IssueType[] = [
                 {
                     _id: 'epic-id-1',
                     issuetype: 'Epic',

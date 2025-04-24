@@ -552,4 +552,10 @@ export class IssueController implements IssueControllerInterface {
 
 // Instantiate services
 
+
 // Instantiate controller with all dependencies
+export const issueController = new IssueController(
+    new DatabaseService(),
+    new IssueKeyService(new DatabaseService()),
+    new IssueStatusTransitionService()
+);
