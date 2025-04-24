@@ -3,6 +3,6 @@ export interface Issue {
   issuetype: string;
   summary: string;
   description: string;
-  parentKey?: string;
+  parentKey?: string | null;
   key: string;
 }
