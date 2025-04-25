@@ -1,5 +1,8 @@
 // This file will contain the implementation for the webhook service.
 import axios from 'axios';
+import pRetry from 'p-retry';
+import { z } from 'zod';
+import { URL } from 'url';
 // Import the custom database connection interface and RunResult type
 import { getDBConnection, IDatabaseConnection, RunResult } from '../config/db';
 
@@ -17,14 +20,29 @@ interface WebhookRow {
     events: string; // Comma-separated list of events
 }
 
+const WebhookSchema = z.object({
+  url: z.string().url(),
+  events: z.string().refine(value => {
+    const validEvents = ['issue_created', 'issue_updated', 'issue_deleted']; // Define valid event types
+    const eventsArray = value.split(',').map(e => e.trim());
+    return eventsArray.every(event => validEvents.includes(event));
+  }, {
+    message: "Invalid event type. Supported events are: issue_created, issue_updated, issue_deleted",
+  }),
+});
+
+
 /**
  * Creates a new webhook subscription in the database.
  * @param webhookData - Object containing the URL and comma-separated events string.
  * @returns A promise resolving to the newly created webhook object with its ID.
- * @throws Throws an error if the database operation fails.
+ * @throws Throws an error if the database operation fails or if the input is invalid.
  */
 export const createWebhook = async (webhookData: { url: string; events: string }): Promise<WebhookRow> => {
   try {
+    // Validate input using Zod
+    WebhookSchema.parse(webhookData);
+
     // Use the custom interface for the database connection
     const db: IDatabaseConnection = await getDBConnection();
     const sql = `INSERT INTO Webhooks (url, events) VALUES (?, ?)`;
@@ -52,7 +70,7 @@ export const createWebhook = async (webhookData: { url: string; events: string }
       throw new Error('Database did not return last inserted ID after successful insertion.');
     }
   } catch (error: any) {
-    // Catch errors from getDBConnection or the db.run operation
+    // Catch errors from getDBConnection, Zod validation, or the db.run operation
     console.error('Error creating webhook:', error.message || error);
     // Re-throw the error so the caller (e.g., API route handler) can handle it.
     throw error;
@@ -91,6 +109,8 @@ export const deleteWebhook = async (webhookId: string): Promise<void> => {
     throw error;
   }
 };
+
+const MAX_RETRIES = 3;
 
 /**
  * Triggers registered webhooks for a specific event type.
@@ -134,7 +154,7 @@ export async function triggerWebhooks(eventType: string, issueData: any): Promis
         issue: issueData, // The actual issue data being triggered
       };
 
-      try {
+      const sendWebhook = async () => {
         console.log(`Attempting to send webhook to ${webhook.url} for event ${eventType}`);
         // Send the payload using an HTTP POST request
         // The axios.post call with 3 arguments (url, data, config) is correct.
@@ -145,7 +165,17 @@ export async function triggerWebhooks(eventType: string, issueData: any): Promis
           timeout: 10000, // 10 seconds timeout
         });
         console.log(`Webhook sent successfully to ${webhook.url} (Status: ${response.status}) for event ${eventType}`);
-        return { status: 'fulfilled', url: webhook.url, value: response.status }; // Indicate success
+        return response.status; // Indicate success
+      };
+
+      try {
+        const statusCode = await pRetry(sendWebhook, {
+          retries: MAX_RETRIES,
+          onFailedAttempt: (error) => {
+            console.log(`Attempt ${error.attemptNumber} failed. Retrying...`);
+          },
+        });
+        return { status: 'fulfilled', url: webhook.url, value: statusCode }; // Indicate success
       } catch (error: any) { // FIX: Explicitly typing 'error' as 'any' addresses TS7006.
         // The error message "Parameter 'err' implicitly has an 'any' type" pointing to line 95
         // was likely incorrect in its details (line number and parameter name). This catch
@@ -157,7 +187,7 @@ export async function triggerWebhooks(eventType: string, issueData: any): Promis
           ? `Axios Error: ${error.message} (Code: ${error.code}, Status: ${error.response?.status})`
           : (error.message || String(error));
         // Log detailed error information
-        console.error(`Error sending webhook to ${webhook.url} for event ${eventType}:`, errorDetails);
+        console.error(`Error sending webhook to ${webhook.url} for event ${eventType} after ${MAX_RETRIES + 1} attempts:`, errorDetails);
         return { status: 'rejected', url: webhook.url, reason: errorDetails }; // Indicate failure
       }
     });
