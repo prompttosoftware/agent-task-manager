@@ -1,94 +1,149 @@
-import request from 'supertest';
-import { app } from './app';
+import { Server } from 'http';
+import { AddressInfo } from 'net';
 import { databaseService } from './services/database';
+import { app } from './app';
 
 jest.mock('./services/database', () => {
   const mockDatabaseService = {
-    connect: jest.fn(),
+    connect: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
   };
   return { databaseService: mockDatabaseService };
 });
 
-describe('Server', () => {
-  let server: any;
+const originalExit = process.exit;
+
+describe('Server Shutdown', () => {
+  let server: Server;
+  let port: number;
+  let consoleLogSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
+  let processExitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    // Clear mocks before each test
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
+      /* do nothing */
+    });
     (databaseService.connect as jest.Mock).mockClear();
+    (databaseService.close as jest.Mock).mockClear();
+
+    // Prevent port conflicts by using a dynamic port
+    port = Math.floor(Math.random() * 10000) + 3000;
   });
 
   afterEach((done) => {
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    processExitSpy.mockRestore();
+
     if (server) {
-      server.close(done);
+      server.close((err) => {
+        if (err) {
+          console.error('Error closing server in afterEach:', err);
+        }
+        done();
+      });
     } else {
       done();
     }
   });
 
-  it('should start without errors', async () => {
-    (databaseService.connect as jest.Mock).mockResolvedValue(undefined);
-
-    const port = 3014; // Use a different port to avoid conflicts
-    server = app.listen(port, () => {
-      // Server started successfully
-    });
-
-    await new Promise<void>((resolve) => {
-      server.on('listening', () => {
-        resolve();
-      });
-    });
-
-    expect(server.listening).toBe(true);
-    
-    // Optionally make a request to the server to further verify it's running
-    const response = await request(`http://localhost:${port}`).get('/rest/api/3/issue'); // Or any other valid endpoint
-    expect(response.status).not.toBe(404); // Basic check to see if the endpoint exists and the server is running
-  }, 10000); // Increased timeout in case the server takes a while to start
-
-  it('should establish database connection before starting the server', async () => {
-    (databaseService.connect as jest.Mock).mockResolvedValue(undefined);
-
-    const port = 3015; // Use a different port to avoid conflicts
-    server = app.listen(port, () => {
-      // Server started successfully
-    });
-
-    await new Promise<void>((resolve) => {
-      server.on('listening', () => {
-        resolve();
-      });
-    });
-
-    expect(databaseService.connect).toHaveBeenCalled();
-  }, 10000); // Increased timeout in case the server takes a while to start
-
-  it('should catch database connection errors and log them', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const mockError = new Error('Database connection failed');
-    (databaseService.connect as jest.Mock).mockRejectedValue(mockError);
-
-    const port = 3016; // Use a different port to avoid conflicts
-    
-    // Wrap the server start in a promise to handle the async nature and errors
-    await new Promise<void>((resolve) => {
+  const startServer = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
       server = app.listen(port, () => {
-          // This should not be reached if the database connection fails.
+        resolve();
       });
 
-      server.on('error', (err: Error) => {
-          expect(err).toBeInstanceOf(Error); // Verify an error occurred
-          expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to start server:', mockError);
-          consoleErrorSpy.mockRestore();
-          resolve();
+      server.on('error', (err) => {
+        reject(err);
       });
-
-      // Use setTimeout as a fallback in case the 'error' event is not emitted.
-      setTimeout(() => {
-          expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to start server:', mockError);
-          consoleErrorSpy.mockRestore();
-          resolve();
-      }, 2000); 
     });
-  }, 10000); // Increased timeout in case the server takes a while to start
+  };
+
+
+  it('should handle SIGINT gracefully', async () => {
+    await startServer();
+
+    // Simulate SIGINT
+    process.emit('SIGINT');
+
+    // Wait for shutdown to complete (adjust timeout as needed)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    expect(consoleLogSpy).toHaveBeenCalledWith('Received SIGINT signal.');
+    expect(consoleLogSpy).toHaveBeenCalledWith('Shutting down server...');
+    expect(databaseService.close).toHaveBeenCalled();
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+  }, 10000);
+
+
+  it('should handle SIGTERM gracefully', async () => {
+    await startServer();
+
+    // Simulate SIGTERM
+    process.emit('SIGTERM');
+
+    // Wait for shutdown to complete (adjust timeout as needed)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    expect(consoleLogSpy).toHaveBeenCalledWith('Received SIGTERM signal.');
+    expect(consoleLogSpy).toHaveBeenCalledWith('Shutting down server...');
+    expect(databaseService.close).toHaveBeenCalled();
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+  }, 10000);
+
+
+  it('should exit with non-zero code if database close fails during shutdown', async () => {
+    (databaseService.close as jest.Mock).mockRejectedValue(new Error('Database close failed'));
+    await startServer();
+
+    // Simulate SIGINT
+    process.emit('SIGINT');
+
+    // Wait for shutdown to complete (adjust timeout as needed)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error closing database connection:'));
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+  }, 10000);
+
+
+  it('should exit with non-zero code if server close fails during shutdown', async () => {
+    jest.spyOn(server, 'close').mockImplementationOnce((callback?: (err?: Error) => void) => {
+      if (callback) {
+        callback(new Error('Server close failed'));
+      }
+      return server;
+    });
+
+    await startServer();
+
+    // Simulate SIGINT
+    process.emit('SIGINT');
+
+    // Wait for shutdown to complete (adjust timeout as needed)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error closing server:'));
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+  }, 10000);
+
+  it('should handle shutdown timeout', async () => {
+    // Mock database close to take longer than the timeout
+    (databaseService.close as jest.Mock).mockImplementation(
+      () => new Promise(resolve => setTimeout(resolve, 5000))
+    );
+    await startServer();
+
+    // Simulate SIGINT
+    process.emit('SIGINT');
+
+    // Wait for the timeout to occur
+    await new Promise((resolve) => setTimeout(resolve, 11000));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Shutdown timed out. Forcefully exiting.');
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+  }, 20000);
 });
