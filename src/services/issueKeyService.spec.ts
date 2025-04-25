@@ -147,4 +147,71 @@ describe('IssueKeyService', () => {
     await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('ensureTableExists error');
     expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
   });
+
+  it('should rollback transaction when ensureTableExists fails', async () => {
+    (mockDbService.ensureTableExists as jest.Mock).mockRejectedValue(new Error('Table creation failed'));
+    (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+
+    await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Table creation failed');
+    expect(mockDbService.ensureTableExists).toHaveBeenCalledWith('Metadata', [{ column: 'last_issue_index', type: 'INTEGER' }]);
+    expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+    expect(mockDbService.beginTransaction).not.toHaveBeenCalled();
+  });
+
+  it('should rollback transaction when beginTransaction fails', async () => {
+      (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+      (mockDbService.beginTransaction as jest.Mock).mockRejectedValue(new Error('Begin transaction failed'));
+      (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Begin transaction failed');
+      expect(mockDbService.ensureTableExists).toHaveBeenCalledWith('Metadata', [{ column: 'last_issue_index', type: 'INTEGER' }]);
+      expect(mockDbService.beginTransaction).toHaveBeenCalled();
+      expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('should rollback transaction when getSingleValue fails', async () => {
+      (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+      (mockDbService.beginTransaction as jest.Mock).mockResolvedValue(undefined);
+      (mockDbService.getSingleValue as jest.Mock).mockRejectedValue(new Error('Get value failed'));
+      (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Get value failed');
+      expect(mockDbService.ensureTableExists).toHaveBeenCalledWith('Metadata', [{ column: 'last_issue_index', type: 'INTEGER' }]);
+      expect(mockDbService.beginTransaction).toHaveBeenCalled();
+      expect(mockDbService.getSingleValue).toHaveBeenCalledWith('Metadata', 'last_issue_index');
+      expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('should rollback transaction when setSingleValue fails', async () => {
+      (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+      (mockDbService.beginTransaction as jest.Mock).mockResolvedValue(undefined);
+      (mockDbService.getSingleValue as jest.Mock).mockResolvedValue(0);
+      (mockDbService.setSingleValue as jest.Mock).mockRejectedValue(new Error('Set value failed'));
+      (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Set value failed');
+      expect(mockDbService.ensureTableExists).toHaveBeenCalledWith('Metadata', [{ column: 'last_issue_index', type: 'INTEGER' }]);
+      expect(mockDbService.beginTransaction).toHaveBeenCalled();
+      expect(mockDbService.getSingleValue).toHaveBeenCalledWith('Metadata', 'last_issue_index');
+      expect(mockDbService.setSingleValue).toHaveBeenCalledWith('Metadata', 'last_issue_index', 1);
+      expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('should not rollback if commitTransaction fails after successful update (unrealistic scenario, but good to check)', async () => {
+        (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+        (mockDbService.beginTransaction as jest.Mock).mockResolvedValue(undefined);
+        (mockDbService.getSingleValue as jest.Mock).mockResolvedValue(0);
+        (mockDbService.setSingleValue as jest.Mock).mockResolvedValue(undefined);
+        (mockDbService.commitTransaction as jest.Mock).mockRejectedValue(new Error('Commit failed'));
+        (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+
+        await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Commit failed');
+
+        expect(mockDbService.ensureTableExists).toHaveBeenCalled();
+        expect(mockDbService.beginTransaction).toHaveBeenCalled();
+        expect(mockDbService.getSingleValue).toHaveBeenCalled();
+        expect(mockDbService.setSingleValue).toHaveBeenCalled();
+        expect(mockDbService.commitTransaction).toHaveBeenCalled();
+        expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
 });
