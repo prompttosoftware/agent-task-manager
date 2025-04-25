@@ -96,6 +96,20 @@ describe('IssueKeyService', () => {
   });
 
   /**
+   * @description Tests transaction rollback on error during data retrieval.
+   */
+  it('should rollback transaction on error during data update', async () => {
+    (mockDbService.getSingleValue as jest.Mock).mockResolvedValue(0);
+    (mockDbService.setSingleValue as jest.Mock).mockRejectedValue(new Error('Update error'));
+    (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+    (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+    (mockDbService.beginTransaction as jest.Mock).mockResolvedValue(undefined);
+
+    await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Update error');
+    expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  /**
    * @description Tests transaction rollback on error during transaction begin.
    */
   it('should handle errors during transaction begin', async () => {
