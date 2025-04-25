@@ -1,4 +1,4 @@
-import { Database, OPEN_READWRITE, OPEN_CREATE } from 'sqlite3';
+import { IDatabaseConnection } from '../config/db';
 import { getDBConnection } from '../config/db';
 import sqlite3 from 'sqlite3';
 
@@ -17,7 +17,7 @@ export interface DatabaseService {
 }
 
 export class DatabaseService implements DatabaseService {
-    private db: sqlite3.Database | null = null;
+    private db: IDatabaseConnection | null = null;
 
     async connect(): Promise<void> {
         try {
@@ -31,18 +31,9 @@ export class DatabaseService implements DatabaseService {
 
     async disconnect(): Promise<void> {
         if (this.db) {
-            await new Promise<void>((resolve, reject) => {
-                this.db!.close((err) => {
-                    if (err) {
-                        console.error('DatabaseService failed to disconnect:', err);
-                        reject(err);
-                    } else {
-                        this.db = null;
-                        console.log('DatabaseService disconnected from the database.');
-                        resolve();
-                    }
-                });
-            });
+            await this.db.close();
+            this.db = null;
+            console.log('DatabaseService disconnected from the database.');
         }
     }
 
@@ -50,48 +41,21 @@ export class DatabaseService implements DatabaseService {
         if (!this.db) {
             throw new Error('Database not connected. Call connect() first.');
         }
-        return new Promise<void>((resolve, reject) => {
-            this.db!.run(sql, params, function (err: Error | null) {
-                if (err) {
-                    console.error(`DatabaseService run failed for SQL: ${sql}`, err);
-                    reject(err);
-                    return;
-                }
-                resolve();
-            });
-        });
+        await this.db.run(sql, params);
     }
 
     async get<T>(sql: string, params: any[] = []): Promise<T | undefined> {
         if (!this.db) {
             throw new Error('Database not connected. Call connect() first.');
         }
-        return new Promise<T | undefined>((resolve, reject) => {
-            this.db!.get(sql, params, (err: Error | null, row: T) => {
-                if (err) {
-                    console.error(`DatabaseService get failed for SQL: ${sql}`, err);
-                    reject(err);
-                    return;
-                }
-                resolve(row);
-            });
-        });
+        return this.db.get<T>(sql, params);
     }
 
     async all<T>(sql: string, params: any[] = []): Promise<T[]> {
         if (!this.db) {
             throw new Error('Database not connected. Call connect() first.');
         }
-        return new Promise<T[]>((resolve, reject) => {
-            this.db!.all(sql, params, (err: Error | null, rows: T[]) => {
-                if (err) {
-                    console.error(`DatabaseService all failed for SQL: ${sql}`, err);
-                    reject(err);
-                    return;
-                }
-                resolve(rows);
-            });
-        });
+        return this.db.all<T>(sql, params);
     }
 
     async ensureTableExists(tableName: string, columns: { column: string; type: string }[]): Promise<void> {
@@ -120,33 +84,14 @@ export class DatabaseService implements DatabaseService {
         let sql = `UPDATE ${tableName} SET value = ? WHERE key = ?`;
         let params = [value, key];
 
-        return new Promise<void>((resolve, reject) => {
-            this.db!.run(sql, params, (err: Error | null) => {
-                if (err) {
-                    console.error(`DatabaseService run failed for SQL: ${sql}`, err);
-                    reject(err);
-                    return;
-                }
-
-                // Check the number of rows affected using 'this.changes'
-                if ((this as any).changes === 0) {
-                    // If no rows were updated, insert a new row
-                    const insertSql = `INSERT INTO ${tableName} (key, value) VALUES (?, ?)`;
-                    const insertParams = [key, value];
-
-                    this.db!.run(insertSql, insertParams, (err: Error | null) => {
-                        if (err) {
-                            console.error(`DatabaseService run failed for SQL: ${insertSql}`, err);
-                            reject(err);
-                            return;
-                        }
-                        resolve();
-                    });
-                } else {
-                    resolve();
-                }
-            });
-        });
+        // Custom implementation to handle changes
+        const changes = await this.run(sql, params);
+        if (changes === undefined || changes === null) {
+          // If no rows were updated, insert a new row
+          const insertSql = `INSERT INTO ${tableName} (key, value) VALUES (?, ?)`;
+          const insertParams = [key, value];
+          await this.run(insertSql, insertParams);
+        }
     }
 
     async beginTransaction(): Promise<void> {
