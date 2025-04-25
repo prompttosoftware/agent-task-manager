@@ -1,6 +1,7 @@
 import { IssueStatusTransitionService } from './issueStatusTransitionService';
 import { DatabaseService } from './databaseService'; // Import the real service/interface
 import { IDatabaseConnection } from '../config/db'; // Import the connection interface type
+import { createMockDbConnection } from '../mocks/dbconnection.mock'; // Import the mock
 
 // Modify the mock class to extend the real DatabaseService.
 // This allows the mock to inherit the private 'db' property structure.
@@ -93,7 +94,7 @@ describe('IssueStatusTransitionService', () => {
   let service: IssueStatusTransitionService;
 
   beforeEach(() => {
-    service = new IssueStatusTransitionService();
+    service = new IssueStatusTransitionService(mockDatabaseService);
     // No need to mock specific database calls here as the current
     // implementation of isValidTransition is hardcoded and doesn't
     // use the databaseService parameter yet.
@@ -113,48 +114,48 @@ describe('IssueStatusTransitionService', () => {
 
   // Ensure mockDatabaseService is passed as the third argument in all relevant tests
   it('should allow transition from To Do (11) to In Progress (21)', () => {
-    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('In Progress')!)).toBe(true);
   });
 
   it('should not allow transition from To Do (11) to Done (31)', () => {
-    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('Done')!)).toBe(false);
   });
 
   it('should allow transition from In Progress (21) to To Do (11)', () => {
-    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('To Do')!, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('To Do')!)).toBe(true);
   });
 
   it('should allow transition from In Progress (21) to Done (31)', () => {
-    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('Done')!)).toBe(true);
   });
 
   it('should not allow transition from In Progress (21) to In Progress (21)', () => {
-    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('In Progress')!)).toBe(false);
   });
 
   it('should allow transition from Done (31) to To Do (11)', () => {
-    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('To Do')!, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('To Do')!)).toBe(true);
   });
 
   it('should allow transition from Done (31) to In Progress (21)', () => {
-    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('In Progress')!)).toBe(true);
   });
 
   it('should not allow transition from Done (31) to Done (31)', () => {
-    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('Done')!)).toBe(false);
   });
 
   it('should not allow transitions from unknown current status', () => {
-    expect(service.isValidTransition(10, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(false); // Unknown current status 10
-    expect(service.isValidTransition(99, service.getStatusId('To Do')!, mockDatabaseService)).toBe(false); // Unknown current status 99
+    expect(service.isValidTransition(10, service.getStatusId('In Progress')!)).toBe(false); // Unknown current status 10
+    expect(service.isValidTransition(99, service.getStatusId('To Do')!)).toBe(false); // Unknown current status 99
   });
 
   it('should not allow transitions to unknown target status (based on current logic)', () => {
     // Note: Current logic only defines valid *target* statuses per *current* status.
     // An unknown target status implicitly fails the checks within the switch cases.
-    expect(service.isValidTransition(service.getStatusId('To Do')!, 99, mockDatabaseService)).toBe(false); // To Do -> Unknown
-    expect(service.isValidTransition(service.getStatusId('In Progress')!, 99, mockDatabaseService)).toBe(false); // In Progress -> Unknown
-    expect(service.isValidTransition(service.getStatusId('Done')!, 99, mockDatabaseService)).toBe(false); // Done -> Unknown
+    expect(service.isValidTransition(service.getStatusId('To Do')!, 99)).toBe(false); // To Do -> Unknown
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, 99)).toBe(false); // In Progress -> Unknown
+    expect(service.isValidTransition(service.getStatusId('Done')!, 99)).toBe(false); // Done -> Unknown
   });
 
   it('should return correct status ID for known status names (case-insensitive)', () => {
