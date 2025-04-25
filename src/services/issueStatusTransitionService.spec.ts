@@ -113,48 +113,48 @@ describe('IssueStatusTransitionService', () => {
 
   // Ensure mockDatabaseService is passed as the third argument in all relevant tests
   it('should allow transition from To Do (11) to In Progress (21)', () => {
-    expect(service.isValidTransition(11, 21, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(true);
   });
 
   it('should not allow transition from To Do (11) to Done (31)', () => {
-    expect(service.isValidTransition(11, 31, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('To Do')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(false);
   });
 
   it('should allow transition from In Progress (21) to To Do (11)', () => {
-    expect(service.isValidTransition(21, 11, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('To Do')!, mockDatabaseService)).toBe(true);
   });
 
   it('should allow transition from In Progress (21) to Done (31)', () => {
-    expect(service.isValidTransition(21, 31, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(true);
   });
 
   it('should not allow transition from In Progress (21) to In Progress (21)', () => {
-    expect(service.isValidTransition(21, 21, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(false);
   });
 
   it('should allow transition from Done (31) to To Do (11)', () => {
-    expect(service.isValidTransition(31, 11, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('To Do')!, mockDatabaseService)).toBe(true);
   });
 
   it('should allow transition from Done (31) to In Progress (21)', () => {
-    expect(service.isValidTransition(31, 21, mockDatabaseService)).toBe(true);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(true);
   });
 
   it('should not allow transition from Done (31) to Done (31)', () => {
-    expect(service.isValidTransition(31, 31, mockDatabaseService)).toBe(false);
+    expect(service.isValidTransition(service.getStatusId('Done')!, service.getStatusId('Done')!, mockDatabaseService)).toBe(false);
   });
 
   it('should not allow transitions from unknown current status', () => {
-    expect(service.isValidTransition(10, 21, mockDatabaseService)).toBe(false); // Unknown current status 10
-    expect(service.isValidTransition(99, 11, mockDatabaseService)).toBe(false); // Unknown current status 99
+    expect(service.isValidTransition(10, service.getStatusId('In Progress')!, mockDatabaseService)).toBe(false); // Unknown current status 10
+    expect(service.isValidTransition(99, service.getStatusId('To Do')!, mockDatabaseService)).toBe(false); // Unknown current status 99
   });
 
   it('should not allow transitions to unknown target status (based on current logic)', () => {
     // Note: Current logic only defines valid *target* statuses per *current* status.
     // An unknown target status implicitly fails the checks within the switch cases.
-    expect(service.isValidTransition(11, 99, mockDatabaseService)).toBe(false); // To Do -> Unknown
-    expect(service.isValidTransition(21, 99, mockDatabaseService)).toBe(false); // In Progress -> Unknown
-    expect(service.isValidTransition(31, 99, mockDatabaseService)).toBe(false); // Done -> Unknown
+    expect(service.isValidTransition(service.getStatusId('To Do')!, 99, mockDatabaseService)).toBe(false); // To Do -> Unknown
+    expect(service.isValidTransition(service.getStatusId('In Progress')!, 99, mockDatabaseService)).toBe(false); // In Progress -> Unknown
+    expect(service.isValidTransition(service.getStatusId('Done')!, 99, mockDatabaseService)).toBe(false); // Done -> Unknown
   });
 
   it('should return correct status ID for known status names (case-insensitive)', () => {
