@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import errorHandler from './errorHandler';
+import { CustomError } from './customError';
 
 describe('errorHandler', () => {
   it('should handle errors correctly and return a 500 status code with an error message', () => {
-    const mockError = new Error('Test error message');
-    mockError.statusCode = 500;
+    const mockError = new CustomError('Test error message', 500);
     const mockReq = {} as Request;
     const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
     const mockNext = jest.fn() as NextFunction;
@@ -17,8 +17,7 @@ describe('errorHandler', () => {
   });
 
   it('should handle errors with a custom status code', () => {
-    const mockError = new Error('Custom error');
-    mockError.statusCode = 400;
+    const mockError = new CustomError('Custom error', 400);
     const mockReq = {} as Request;
     const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
     const mockNext = jest.fn() as NextFunction;
@@ -30,9 +29,7 @@ describe('errorHandler', () => {
   });
 
   it('should handle errors with errors object', () => {
-    const mockError = new Error('Validation error');
-    mockError.statusCode = 400;
-    mockError.errors = { field1: 'error message' };
+    const mockError = new CustomError('Validation error', 400, { field1: 'error message' });
     const mockReq = {} as Request;
     const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
     const mockNext = jest.fn() as NextFunction;
