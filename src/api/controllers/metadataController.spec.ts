@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getCreateMetadata } from './metadataController';
+import * as metadataController from './metadataController'; // Import the controller functions
 
 // Mock the console.error to prevent test output pollution and allow assertion
 const originalConsoleError = console.error;
@@ -13,6 +13,7 @@ afterAll(() => {
 beforeEach(() => {
   // Reset mocks before each test
   (console.error as jest.Mock).mockClear();
+  jest.clearAllMocks(); // Clear all mocks, including any potential future mocks
 });
 
 describe('metadataController', () => {
@@ -34,17 +35,22 @@ describe('metadataController', () => {
       json: jsonFn,
     };
     mockNext = jest.fn();
-    statusFn.mockClear();
-    jsonFn.mockClear();
-    setHeaderFn.mockClear();
   });
 
   describe('getCreateMetadata', () => {
-    it('should return 200 OK with the standard metadata structure on success', () => {
-      getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
-
+    // Test the successful execution path
+    it('should set Content-Type header to application/json', () => {
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
       expect(setHeaderFn).toHaveBeenCalledWith('Content-Type', 'application/json');
+    });
+
+    it('should return 200 OK status on success', () => {
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
       expect(statusFn).toHaveBeenCalledWith(200);
+    });
+
+    it('should return the standard metadata structure in the JSON response on success', () => {
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
       expect(jsonFn).toHaveBeenCalledWith({
         projects: [
           {
@@ -60,80 +66,130 @@ describe('metadataController', () => {
           },
         ],
       });
-      expect(mockNext).not.toHaveBeenCalled();
-      expect(console.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 Internal Server Error if setting header fails', () => {
+    it('should not call next() on success', () => {
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('should not log an error on success', () => {
+        metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
+        expect(console.error).not.toHaveBeenCalled();
+    });
+
+
+    // --- Error Handling Simulation using Mocks ---
+    // These tests simulate errors occurring *during* the response sending process,
+    // testing the try...catch block in the controller.
+
+    it('should return 500 and log error if res.setHeader throws', () => {
       const simulatedError = new Error('Simulated setHeader error');
       // Mock setHeader to throw an error
       setHeaderFn.mockImplementationOnce(() => {
         throw simulatedError;
       });
 
-      getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
 
       // Verify error handling path
       expect(statusFn).toHaveBeenCalledWith(500);
       expect(jsonFn).toHaveBeenCalledWith({ error: 'Failed to create metadata' });
       expect(console.error).toHaveBeenCalledWith('Error creating metadata:', simulatedError);
-      expect(mockNext).not.toHaveBeenCalled(); // Should not call next on error handled by sending response
+      expect(mockNext).not.toHaveBeenCalled(); // Error handled by sending response
 
       // Ensure other response methods weren't called successfully *after* the error
       expect(statusFn).toHaveBeenCalledTimes(1); // Only the error status
       expect(jsonFn).toHaveBeenCalledTimes(1); // Only the error json
     });
 
-     it('should return 500 Internal Server Error if sending status fails', () => {
+     it('should return 500 and log error if res.status throws', () => {
        const simulatedError = new Error('Simulated status error');
-       // Mock status to throw an error after setHeader is called
+       // Mock status to throw an error *after* setHeader is called
+       // We need to let the first call (setHeader) succeed
        statusFn.mockImplementationOnce(() => {
+           // This first call to status(200) will throw
          throw simulatedError;
        });
 
-       getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
 
-       // Verify error handling path
+       metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
+
+       // Verify sequence and error handling
        expect(setHeaderFn).toHaveBeenCalledWith('Content-Type', 'application/json'); // This should still be called before status
-       expect(statusFn).toHaveBeenCalledWith(200);
-       expect(statusFn).toHaveBeenCalledWith(500);
+       expect(statusFn).toHaveBeenCalledWith(200); // Attempted before error
+       expect(statusFn).toHaveBeenLastCalledWith(500); // Error handling call
        expect(jsonFn).toHaveBeenCalledWith({ error: 'Failed to create metadata' });
        expect(console.error).toHaveBeenCalledWith('Error creating metadata:', simulatedError);
        expect(mockNext).not.toHaveBeenCalled();
 
-       // Ensure status and json are called only once, and with the error response
+       // Ensure status was called twice (attempt success, then error), json once (error)
        expect(statusFn).toHaveBeenCalledTimes(2);
        expect(jsonFn).toHaveBeenCalledTimes(1);
      });
 
-    it('should return 500 Internal Server Error if sending JSON fails', () => {
+    it('should return 500 and log error if res.json throws', () => {
       const simulatedError = new Error('Simulated json error');
-      // Mock json to throw an error
+      // Mock json to throw an error *after* setHeader and status(200) are called
       jsonFn.mockImplementationOnce(() => {
+        // This first call to json (with success payload) will throw
         throw simulatedError;
       });
 
-      getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
+      metadataController.getCreateMetadata(mockRequest as Request, mockResponse as Response, mockNext);
 
-      // Verify error handling path
+      // Verify sequence and error handling
       expect(setHeaderFn).toHaveBeenCalledWith('Content-Type', 'application/json');
       expect(statusFn).toHaveBeenCalledWith(200);
-      expect(statusFn).toHaveBeenCalledWith(500);
-      expect(jsonFn).toHaveBeenCalledWith({ error: 'Failed to create metadata' });
+      expect(jsonFn).toHaveBeenCalledWith(expect.any(Object)); // Attempted success call before error
+      expect(statusFn).toHaveBeenLastCalledWith(500); // Error handling call
+      expect(jsonFn).toHaveBeenLastCalledWith({ error: 'Failed to create metadata' }); // Error handling call
       expect(console.error).toHaveBeenCalledWith('Error creating metadata:', simulatedError);
       expect(mockNext).not.toHaveBeenCalled();
 
-      // Ensure status and json are called only once, and with the error response
+      // Ensure status called twice (success attempt, error), json called twice (success attempt, error)
       expect(statusFn).toHaveBeenCalledTimes(2);
-      expect(jsonFn).toHaveBeenCalledTimes(1);
+      expect(jsonFn).toHaveBeenCalledTimes(2); // Called once for success attempt, once for error
     });
 
-    // Note: Testing for "database unavailability", "variations in metadata structure",
-    // or "empty metadata" is not directly applicable to the current static implementation
-    // of getCreateMetadata, as it doesn't interact with a database or dynamic data sources.
-    // The error tests above simulate general internal failures that could occur for various
-    // reasons, including issues that *might* stem from data source problems if the
-    // controller were more complex. If the controller were fetching data, we would mock
-    // the data fetching function to simulate these scenarios (e.g., throw DB error, return empty array, return malformed data).
+    // --- Notes on Testing Scenarios Not Applicable to Static Implementation ---
+    /*
+     * The following scenarios mentioned in the request are not directly testable
+     * with the *current* implementation of `getCreateMetadata` because it uses
+     * hardcoded, static data and does not interact with external systems like a database.
+     *
+     * - Database Unavailability: No database is accessed.
+     * - Invalid Metadata Structure: The structure is statically defined and assumed valid.
+     * - Empty Metadata: The metadata is hardcoded and non-empty.
+     *
+     * If `getCreateMetadata` were refactored to fetch data from a service or database,
+     * we would mock *that service/database call* to simulate these conditions:
+     *
+     * Example (if fetching from `metadataService.fetchData()`):
+     *
+     * jest.mock('../services/metadataService'); // Mock the service module
+     * const mockFetchData = metadataService.fetchData as jest.Mock;
+     *
+     * it('should handle database error', () => {
+     *   mockFetchData.mockRejectedValue(new Error('DB connection failed'));
+     *   getCreateMetadata(...);
+     *   // Assert 500 error response
+     * });
+     *
+     * it('should handle empty metadata from service', () => {
+     *   mockFetchData.mockResolvedValue({ projects: [] }); // Simulate empty data
+     *   getCreateMetadata(...);
+     *   // Assert appropriate response (e.g., 200 with empty array, or maybe 404/500 depending on requirements)
+     * });
+     *
+     * it('should handle invalid structure from service', () => {
+     *    mockFetchData.mockResolvedValue({ invalid_key: "some data" }); // Simulate malformed data
+     *    getCreateMetadata(...);
+     *    // Assert error handling (e.g., 500 response due to processing error)
+     * });
+     *
+     * The existing error tests (setHeader, status, json throwing) cover general runtime
+     * errors within the controller's execution scope.
+     */
   });
 });
