@@ -1,269 +1,459 @@
-import { getDBConnection } from './db';
-import sqlite3, { Database, RunResult, Statement } from 'sqlite3'; // Import needed types
+import sqlite3 from 'sqlite3'; // Import types for mocking
+import path from 'path'; // db.ts uses path
 
-// Define the type for the mock constructor explicitly
-type MockDatabaseConstructorType = jest.Mock<Database, [filename: string, mode?: number | undefined, callback?: ((err: Error | null) => void) | undefined]>;
+// --- Mocking Dependencies ---
 
-// Type for the mocked Database['run'] method, matching its overloads
-type MockedRunType = jest.MockedFunction<
-    ((sql: string, callback?: ((this: RunResult, err: Error | null) => void) | undefined) => Database) &
-    ((sql: string, params: any, callback?: ((this: RunResult, err: Error | null) => void) | undefined) => Database) &
-    ((sql: string, ...params: any[]) => Database)
->;
+// Mock environment variables if needed (optional, can set process.env directly)
+// jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-// Mock the sqlite3 module
-jest.mock('sqlite3', () => {
-    // Create a base mock object structure. Specific method mocks
-    // will be provided in beforeEach or individual tests for clarity.
-    // We will replace this generic object with a more specific one in beforeEach
-    const mockDatabase = {
-        run: jest.fn(),
-        get: jest.fn(),
-        all: jest.fn(),
-        close: jest.fn(),
-        configure: jest.fn(),
-        exec: jest.fn(),
-        prepare: jest.fn(),
-        // Add other Database methods if needed by getDBConnection or tests
-    };
+// Store mock instances and control functions accessible within the test scope
+// We need these to control the behavior of the mocked sqlite3 instance.
+let mockDbInstance: jest.Mocked<sqlite3.Database>;
+let capturedConstructorCallback: (err: Error | null) => void;
+let capturedPragmaCallback: (err: Error | null) => void;
+let capturedCloseCallback: (err: Error | null) => void;
+let mockRunFn: jest.Mock;
+let mockCloseFn: jest.Mock;
+let mockOnFn: jest.Mock;
 
-    // Ensure the mock constructor conforms to the expected signature and type
-    // The implementation will be overridden in beforeEach to return the test-specific mock instance
-    const MockDatabaseConstructor: MockDatabaseConstructorType = jest.fn().mockImplementation((filename: string, modeOrCallback?: number | ((err: Error | null) => void), callback?: (err: Error | null) => void) => {
-        const actualCallback = typeof modeOrCallback === 'function' ? modeOrCallback : callback;
-        // Default behavior: Simulate successful connection callback
-        if (actualCallback) {
-            // Use setTimeout to mimic async nature if needed, but immediate callback is usually fine for mocks
-            process.nextTick(() => actualCallback(null));
+/**
+ * Define the mock implementation for the sqlite3.Database constructor.
+ * This function will be called whenever 'new sqlite3.Database()' is executed in db.ts.
+ */
+const MockDatabaseConstructor = jest.fn().mockImplementation(function(this: any, filename: string, callback: (err: Error | null) => void) {
+    // Capture the callback provided to the constructor by db.ts.
+    // This allows tests to trigger connection success or failure asynchronously.
+    capturedConstructorCallback = callback;
+
+    // Define mock implementations for the database instance methods used by db.ts.
+    // These mocks will be attached to the object returned by the constructor ('this').
+
+    // Mock the 'run' method (used for PRAGMA)
+    mockRunFn = jest.fn().mockImplementation((sql: string, paramsOrCallback: any, callback?: any) => {
+        const actualCallback = typeof paramsOrCallback === 'function' ? paramsOrCallback : callback;
+
+        // Capture the callback specifically for the PRAGMA command to control its outcome in tests.
+        if (sql.toUpperCase().startsWith('PRAGMA FOREIGN_KEYS')) {
+            capturedPragmaCallback = actualCallback;
+        } else if (actualCallback) {
+            // Provide a default success behavior for any other 'run' calls if needed.
+            // Uses process.nextTick to simulate async behavior.
+            process.nextTick(() => actualCallback?.call({ lastID: 1, changes: 1 } as sqlite3.RunResult, null));
         }
-        // Return the generic mock database object defined above (this will be overridden)
-        return mockDatabase as unknown as Database;
-    }) as MockDatabaseConstructorType;
+        return this; // Return the mock instance ('this') to allow method chaining if any.
+    });
 
+    // Mock the 'close' method
+    mockCloseFn = jest.fn().mockImplementation((callback: (err: Error | null) => void) => {
+        // Capture the callback provided to 'close' to control its outcome in tests.
+        capturedCloseCallback = callback;
+    });
+
+    // Mock the 'on' method (used for error handling on the db instance)
+    mockOnFn = jest.fn();
+
+    // Assign the mocked methods to the instance being created ('this').
+    this.run = mockRunFn;
+    this.close = mockCloseFn;
+    this.on = mockOnFn;
+    // Add mocks for other sqlite3.Database methods (e.g., get, all, prepare) if they were used in db.ts.
+
+    // Store a reference to the created mock instance so tests can assert against its methods.
+    mockDbInstance = this as jest.Mocked<sqlite3.Database>;
+
+    // The constructor in JS implicitly returns 'this'.
+    return this;
+});
+
+// Apply the mock to the 'sqlite3' module.
+jest.mock('sqlite3', () => {
+    // The mock needs to export properties matching the real 'sqlite3' module.
     return {
-        // Provide the mocked constructor
+        // Provide the mock constructor.
         Database: MockDatabaseConstructor,
-        // Provide constants if used
-        OPEN_READWRITE: 1,
-        OPEN_CREATE: 2,
-        // Mock verbose if it's used implicitly or explicitly by the code under test
-        verbose: jest.fn(() => sqlite3), // Mock verbose to return the sqlite3 module itself
-    };
-});
-
-// Keep the existing mock for ./db but refine it
-jest.mock('./db', () => {
-    // Import the actual module ONLY to get its structure for mocking, not its implementation
-    const originalModule = jest.requireActual('./db');
-    return {
-        __esModule: true, // Preserve ES module status
-        // Mock the functions we want to control
-        getDBConnection: jest.fn(), // Implementation will be provided in tests/beforeEach
-        // We might need to mock closeDBConnection if tests use it later
-        closeDBConnection: jest.fn().mockResolvedValue(undefined), // Default mock for close
+        // Mock the 'verbose' function. db.ts calls sqlite3.verbose().Database(...).
+        // So, verbose() needs to return an object containing the mock constructor.
+        verbose: jest.fn(() => ({
+            Database: MockDatabaseConstructor,
+        })),
+        // Define any constants like OPEN_READWRITE if db.ts uses them directly (it doesn't currently).
+        // OPEN_READWRITE: jest.fn(),
+        // OPEN_CREATE: jest.fn(),
     };
 });
 
 
-describe('Database Connection', () => {
-    // Declare variables in the outer scope
-    let MockDatabaseConstructor: MockDatabaseConstructorType;
-    // Use a more specific type for the mock instance based on methods used
-    let mockDatabaseInstance: jest.Mocked<Pick<Database, 'run' | 'get' | 'all' | 'close'>>;
-    let getDBConnectionMock: jest.Mock<Promise<Database>>;
+// --- Test Suite ---
+
+// Import the module *under test* AFTER mocks are defined.
+// We are testing the actual functions from db.ts.
+import { getDBConnection, closeDBConnection } from './db';
+
+// Enable Jest's fake timers to control process.nextTick, setTimeout, etc. used in mocks/async operations.
+jest.useFakeTimers();
+
+describe('Database Configuration (db.ts)', () => {
+
+    // Calculate the expected default path once.
+    const defaultDbPath = './database.db';
+    const expectedDefaultDbPath = path.resolve(defaultDbPath);
 
     beforeEach(() => {
-        // Reset all mocks before each test to ensure isolation
+        // --- Test Setup ---
+        // 1. Reset all Jest mocks (clears call counts, implementations set by mockImplementationOnce, etc.)
         jest.clearAllMocks();
 
-        // **Initialize variables before they are used in closures**
+        // 2. Reset the state of the db.ts module. This is crucial because db.ts uses module-level
+        //    variables (db, connectionPromise) to implement the singleton pattern. Resetting ensures
+        //    each test starts with a clean slate (db = null, connectionPromise = null).
+        jest.resetModules();
 
-        // 1. Create the specific mock database instance for this test run
-        //    This instance will be returned by the mocked constructor and getDBConnection
-        mockDatabaseInstance = {
-            run: jest.fn<Database, [sql: string, ...params: any[]]>((sql: string, ...params: any[]) => {
-                 let callback: ((this: RunResult, err: Error | null) => void) | undefined;
-                 if (params.length > 0 && typeof params[params.length - 1] === 'function') {
-                     callback = params.pop() as (this: RunResult, err: Error | null) => void;
-                 }
-                 // Simulate successful run by calling the callback asynchronously
-                 if (callback) {
-                     process.nextTick(() => callback.call({ lastID: 1, changes: 1 } as RunResult, null));
-                 }
-                 return mockDatabaseInstance as unknown as Database; // Return self for chaining
-             }) as MockedRunType,
-            get: jest.fn(),
-            all: jest.fn(),
-            close: jest.fn((callback?: (err: Error | null) => void) => {
-                // Simulate successful close
-                if (callback) {
-                    process.nextTick(() => callback(null));
-                }
-            }),
-        };
+        // 3. Reset any manually captured callbacks or variables used for mock control.
+        //    Ensures mocks behave predictably based on the current test setup.
+        capturedConstructorCallback = (err: Error | null) => { /* no-op */ };
+        capturedPragmaCallback = (err: Error | null) => { /* no-op */ };
+        capturedCloseCallback = (err: Error | null) => { /* no-op */ };
 
-        // 2. Get the mock constructor from the mocked 'sqlite3' module
-        //    We require it here *after* mockDatabaseInstance is defined.
-        MockDatabaseConstructor = require('sqlite3').Database;
+        // 4. Ensure environment variables are reset or set as needed for the specific test.
+        //    The default state is no DATABASE_PATH override.
+        delete process.env.DATABASE_PATH;
 
-        // 3. Configure the mock constructor to return *our specific* mockDatabaseInstance
-        MockDatabaseConstructor.mockImplementation((filename: string, modeOrCallback?: number | ((err: Error | null) => void), callback?: (err: Error | null) => void) => {
-             const actualCallback = typeof modeOrCallback === 'function' ? modeOrCallback : callback;
-             // Simulate successful connection by default
-             if (actualCallback) {
-                 // Use process.nextTick to ensure the callback is asynchronous like the real one
-                 process.nextTick(() => actualCallback(null));
-             }
-             // Return the predefined mock instance for this test
-             return mockDatabaseInstance as unknown as Database;
+        // Note: Because of jest.resetModules(), if we needed to re-import db.ts *within* a test
+        // (e.g., after changing an env var), we'd use:
+        // const { getDBConnection } = require('./db');
+        // However, for most tests, the top-level import combined with beforeEach reset is sufficient.
+    });
+
+    afterEach(async () => {
+        // --- Test Teardown ---
+        // 1. Ensure any potentially open connection from a test is closed.
+        //    This uses the *actual* closeDBConnection function, which will interact with our mocks.
+        //    Import dynamically because resetModules might affect the top-level import if used mid-test.
+        //    Using require ensures we get the potentially fresh module instance.
+        try {
+            const { closeDBConnection: closeAfterTest } = require('./db');
+            await closeAfterTest();
+        } catch (error) {
+             // Ignore errors during cleanup to prevent cascading test failures
+             // console.error("Error during afterEach cleanup:", error);
+        }
+
+        // 2. Clean up any environment variables set during a test.
+        delete process.env.DATABASE_PATH;
+    });
+
+    // --- getDBConnection Tests ---
+    describe('getDBConnection', () => {
+        it('should establish a new connection successfully and configure PRAGMA', async () => {
+            // Arrange: Initiate the connection attempt.
+            const connectionPromise = getDBConnection();
+
+            // Assert: Check that the sqlite3 constructor was called correctly.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
+            expect(MockDatabaseConstructor).toHaveBeenCalledWith(expectedDefaultDbPath, expect.any(Function));
+            expect(capturedConstructorCallback).toBeDefined(); // Ensure the callback was captured.
+
+            // Act: Simulate the async constructor callback succeeding. Use process.nextTick
+            //      and advanceTimersByTime to ensure the callback runs within the test flow.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0); // Allow the constructor callback microtask to run
+
+            // Assert: Check that the PRAGMA command was executed after successful connection.
+            expect(mockRunFn).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;', expect.any(Function));
+            expect(capturedPragmaCallback).toBeDefined(); // Ensure the PRAGMA callback was captured.
+
+            // Act: Simulate the PRAGMA command succeeding.
+            process.nextTick(() => capturedPragmaCallback(null));
+
+            // Assert: The main promise returned by getDBConnection should now resolve.
+            // Use await to get the resolved value (the db instance).
+            const db = await connectionPromise;
+
+            // Assert: Check the resolved value and side effects.
+            expect(db).toBeDefined();
+            // The resolved db should be the instance created by our mock constructor.
+            expect(db).toBe(mockDbInstance);
+            // Check that the error handler was attached to the db instance.
+            expect(mockOnFn).toHaveBeenCalledWith('error', expect.any(Function));
         });
 
-        // 4. Get the mock function for getDBConnection from the mocked './db' module
-        //    Casting here ensures TS knows it's the mock function.
-        getDBConnectionMock = getDBConnection as jest.Mock<Promise<Database>>;
+        it('should use DATABASE_PATH environment variable if set', async () => {
+            // Arrange: Set the environment variable and determine the expected path.
+            const customPath = './custom/path/test.db';
+            const expectedCustomPath = path.resolve(customPath);
+            process.env.DATABASE_PATH = customPath;
 
-        // 5. Provide a default implementation for the mocked getDBConnection
-        //    This simulates the logic of the actual function but uses the mocks.
-        //    Crucially, it uses the mockDatabaseInstance defined above.
-        getDBConnectionMock.mockImplementation(async () => {
-             // Simulate the Promise-based connection logic by directly using the
-             // pre-configured mock constructor.
-             return new Promise((resolve, reject) => {
-                 // This call will trigger the MockDatabaseConstructor implementation above.
-                 new (require('sqlite3').Database)('./database.db', (err: Error | null) => {
-                     if (err) {
-                         // If the constructor's callback provides an error (e.g., from mockImplementationOnce), reject.
-                         reject(err);
-                     } else {
-                         // If the constructor's callback is successful, resolve with the instance
-                         // the constructor was configured to return (which is mockDatabaseInstance).
-                         // We resolve *with* mockDatabaseInstance, avoiding potential timing issues
-                         // with intermediate variables inside the promise executor.
-                         resolve(mockDatabaseInstance as unknown as Database);
-                     }
-                 });
-             });
-         });
-    });
+            // Act: Force module reset so db.ts reads the updated process.env.
+            jest.resetModules();
+            // Re-import the function to test after resetting the module.
+            const { getDBConnection: getConnectionWithCustomPath } = require('./db');
+            // Also re-require the mock constructor if its reference might have been affected by resetModules
+            const MockDatabaseConstructorReset = require('sqlite3').Database;
 
-    it('should establish a database connection successfully', async () => {
-        // Call the function under test (which is the mocked version)
-        const db = await getDBConnection(); // Uses the default mock implementation from beforeEach
+            const connectionPromise = getConnectionWithCustomPath();
 
-        // Assertions
-        expect(getDBConnectionMock).toHaveBeenCalledTimes(1);
-        // Check if the underlying sqlite3 constructor mock was called by the getDBConnection mock
-        expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
-        expect(MockDatabaseConstructor).toHaveBeenCalledWith('./database.db', expect.any(Function));
-        // Assert that the function resolved with the specific mock database instance created in beforeEach
-        expect(db).toBe(mockDatabaseInstance);
-    });
+            // Assert: Verify constructor was called with the custom path.
+            expect(MockDatabaseConstructorReset).toHaveBeenCalledTimes(1);
+            expect(MockDatabaseConstructorReset).toHaveBeenCalledWith(expectedCustomPath, expect.any(Function));
 
-    it('should return the existing database connection if it already exists', async () => {
-        // This test verifies the caching mechanism if implemented in the actual db.ts.
-        // We simulate this caching within a test-specific mock implementation
-        // for getDBConnection, leveraging the shared mockDatabaseInstance.
+            // Note: Capturing callbacks after resetModules needs careful handling. Assuming the top-level
+            // capture variables still work correctly with Jest's mocking layer here.
+            expect(capturedConstructorCallback).toBeDefined();
 
-        let internalDbInstanceCache: Database | null = null; // Variable to simulate the cached instance
+            // Act: Simulate successful connection and PRAGMA callbacks.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            expect(mockRunFn).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;', expect.any(Function));
+            expect(capturedPragmaCallback).toBeDefined();
+            process.nextTick(() => capturedPragmaCallback(null));
 
-        // Override the default mock implementation specifically for this test
-        getDBConnectionMock.mockImplementation(async () => {
-            if (internalDbInstanceCache) {
-                // If cached, return the cached instance (which should be mockDatabaseInstance)
-                return Promise.resolve(internalDbInstanceCache);
-            }
-            // If not cached, simulate creating and caching the connection
-            return new Promise((resolve, reject) => {
-                // Call the mock constructor to simulate DB creation
-                new (require('sqlite3').Database)('./database.db', (err: Error | null) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        // On successful mock construction, cache and resolve
-                        // with the shared mockDatabaseInstance.
-                        internalDbInstanceCache = mockDatabaseInstance as unknown as Database; // Cache the instance
-                        resolve(mockDatabaseInstance as unknown as Database); // Resolve with the instance
-                    }
-                });
-            });
+            // Assert: The promise should resolve successfully.
+            await expect(connectionPromise).resolves.toBeDefined();
         });
 
-        // Call getDBConnection twice
-        const db1 = await getDBConnection();
-        const db2 = await getDBConnection();
 
-        // Assertions
-        // getDBConnection's mock was called twice
-        expect(getDBConnectionMock).toHaveBeenCalledTimes(2);
-        // The underlying sqlite3.Database constructor mock was only called once (due to caching logic)
-        expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
-        // Both calls should return the exact same mock instance
-        expect(db1).toBe(mockDatabaseInstance);
-        expect(db2).toBe(mockDatabaseInstance);
-        expect(db1).toBe(db2); // Explicitly check they are the same object
-    });
+        it('should return the existing connection instance on subsequent calls (singleton behavior)', async () => {
+            // Arrange: Call getDBConnection once and complete the connection process.
+            const promise1 = getDBConnection();
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            const db1 = await promise1; // Wait for the first connection
 
+            // Act: Call getDBConnection again.
+            const db2 = await getDBConnection();
 
-    it('should handle database connection errors', async () => {
-        const connectionError = new Error('Failed to connect to the database');
-
-        // Configure the mock constructor *specifically for this test* to simulate an error scenario.
-        // Use mockImplementationOnce to override the default implementation just for this call.
-         MockDatabaseConstructor.mockImplementationOnce((filename: string, modeOrCallback?: number | ((err: Error | null) => void), callback?: (err: Error | null) => void) => {
-            const actualCallback = typeof modeOrCallback === 'function' ? modeOrCallback : callback;
-            // Simulate the constructor's callback being called with an error (asynchronously)
-            if (actualCallback) {
-                process.nextTick(() => actualCallback(connectionError));
-            }
-            // The constructor might still return an object even if the async callback fails.
-            // Return our mock instance so the promise flow can continue and handle the rejection.
-            return mockDatabaseInstance as unknown as Database;
+            // Assert:
+            // 1. The constructor should only have been called once for the first connection.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
+            // 2. Both calls should resolve to the exact same instance.
+            expect(db2).toBe(db1);
+            expect(db2).toBe(mockDbInstance); // Verify it's the instance from our mock.
         });
 
-         // The default getDBConnectionMock implementation from beforeEach is used here.
-         // It correctly handles promise rejection based on the constructor's callback error.
+        it('should handle concurrent connection requests correctly (connection pooling simulation)', async () => {
+            // Arrange: Initiate multiple connection requests concurrently without awaiting them yet.
+            const promise1 = getDBConnection();
+            const promise2 = getDBConnection();
+            const promise3 = getDBConnection();
 
-        // Call the function and assert that it rejects with the expected error
-        await expect(getDBConnection()).rejects.toThrow(connectionError);
+            // Assert: Even with concurrent calls, the constructor should only be invoked once
+            //         due to the 'connectionPromise' lock in db.ts.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
+            expect(MockDatabaseConstructor).toHaveBeenCalledWith(expectedDefaultDbPath, expect.any(Function));
 
-        // Assert that the constructor mock was called (even though it resulted in an error)
-        expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
-        expect(MockDatabaseConstructor).toHaveBeenCalledWith('./database.db', expect.any(Function));
-        // Ensure getDBConnection itself was called
-        expect(getDBConnectionMock).toHaveBeenCalledTimes(1);
-    });
+            // Act: Simulate the single connection attempt succeeding (constructor + PRAGMA).
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0); // Let constructor callback run
+            process.nextTick(() => capturedPragmaCallback(null)); // Let PRAGMA callback run
 
-    // Example test for using a mocked DB method
-    it('should simulate executing a run command successfully', async () => {
-        // Get the connection (which returns mockDatabaseInstance via the default mock)
-        const db = await getDBConnection(); // db is mockDatabaseInstance
+            // Assert: Wait for all concurrent promises to resolve and check their results.
+            const [db1, db2, db3] = await Promise.all([promise1, promise2, promise3]);
 
-        // Call the 'run' method on the database instance
-        // Use a promise to wait for the async callback simulation
-        await new Promise<void>((resolve, reject) => {
-            // The callback function provided here will be invoked by our mock 'run' implementation
-            db.run('INSERT INTO test (col) VALUES (?)', ['value'], function(this: RunResult, err) {
-                try {
-                    // Assertions inside the callback
-                    expect(err).toBeNull(); // Expect no error from the mock callback
-                    // Check the 'this' context provided by the mock callback.call
-                    expect(this.lastID).toBe(1);
-                    expect(this.changes).toBe(1);
-                    resolve(); // Resolve the promise indicating success
-                } catch (assertionError) {
-                    reject(assertionError); // Reject if assertions fail
-                }
-            });
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1); // Verify again constructor only ran once.
+            expect(db1).toBe(mockDbInstance); // All should resolve to the same instance.
+            expect(db2).toBe(db1);
+            expect(db3).toBe(db1);
         });
 
-        // Assert that the mock 'run' method (on mockDatabaseInstance) was called correctly
-        expect(mockDatabaseInstance.run).toHaveBeenCalledTimes(1);
-        // The mock implementation separates the callback, so we check params without it explicitly here,
-        // but verify a function was passed as the last arg.
-        expect(mockDatabaseInstance.run).toHaveBeenCalledWith(
-            'INSERT INTO test (col) VALUES (?)', // SQL string
-            ['value'],                           // Parameters
-            expect.any(Function)                 // The original callback function passed in
-        );
+        it('should reject the promise if the database connection fails', async () => {
+            // Arrange: Define the connection error.
+            const connectionError = new Error('Disk I/O error');
+            // Initiate the connection attempt.
+            const promise = getDBConnection();
+
+            // Assert: Constructor was called.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
+            expect(capturedConstructorCallback).toBeDefined();
+
+            // Act: Simulate the constructor callback failing with an error.
+            process.nextTick(() => capturedConstructorCallback(connectionError));
+
+            // Assert: The promise returned by getDBConnection should reject with a specific error message.
+            await expect(promise).rejects.toThrow(`Database connection failed: ${connectionError.message}`);
+
+            // --- Verify Retry Behavior ---
+            // Arrange: Attempt to connect again after the failure.
+            const promise2 = getDBConnection();
+
+            // Assert: A new connection attempt should be made (constructor called again).
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(2);
+
+            // Act: Simulate the second attempt succeeding.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            expect(mockRunFn).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;', expect.any(Function));
+            process.nextTick(() => capturedPragmaCallback(null));
+
+            // Assert: The second promise should resolve successfully.
+            await expect(promise2).resolves.toBe(mockDbInstance);
+        });
+
+        it('should resolve the promise even if PRAGMA command fails (logging a warning)', async () => {
+            // Arrange: Define the PRAGMA error and spy on console.error to check logging.
+            const pragmaError = new Error('PRAGMA command failed');
+            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(); // Suppress log during test
+
+            // Act: Initiate connection.
+            const promise = getDBConnection();
+
+            // Act: Simulate connection success.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1);
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0); // Let constructor callback run
+
+            // Assert: PRAGMA command was called.
+            expect(mockRunFn).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;', expect.any(Function));
+            expect(capturedPragmaCallback).toBeDefined();
+
+            // Act: Simulate the PRAGMA callback failing.
+            process.nextTick(() => capturedPragmaCallback(pragmaError));
+
+            // Assert: The main promise should still resolve successfully.
+            await expect(promise).resolves.toBe(mockDbInstance);
+
+            // Assert: Check that the warning was logged to the console.
+            expect(consoleErrorSpy).toHaveBeenCalledWith(
+                "[WARN] Failed to enable PRAGMA foreign_keys:",
+                pragmaError.message
+            );
+
+            // Cleanup spy
+            consoleErrorSpy.mockRestore();
+        });
     });
+
+    // --- closeDBConnection Tests ---
+    describe('closeDBConnection', () => {
+        it('should close the active connection successfully', async () => {
+            // Arrange: Establish a connection first.
+            const promiseConnect = getDBConnection();
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            await promiseConnect; // Ensure connection is established and db instance is set internally
+
+            // Act: Call the function to close the connection.
+            const closePromise = closeDBConnection();
+
+            // Assert: The mock database's close method should have been called.
+            expect(mockCloseFn).toHaveBeenCalledTimes(1);
+            expect(capturedCloseCallback).toBeDefined(); // Ensure the callback was captured.
+
+            // Act: Simulate the close callback succeeding.
+            process.nextTick(() => capturedCloseCallback(null));
+
+            // Assert: The promise returned by closeDBConnection should resolve.
+            await expect(closePromise).resolves.toBeUndefined();
+
+            // --- Verify Internal State Reset ---
+            // Arrange: Attempt to get a connection again.
+            const promiseReconnect = getDBConnection();
+
+            // Assert: The constructor should be called again, indicating the previous instance was cleared.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(2);
+
+            // Cleanup: Complete the second connection attempt for isolation.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            await promiseReconnect;
+        });
+
+        it('should do nothing and resolve immediately if no connection is active', async () => {
+            // Arrange: Ensure no connection exists (default state after beforeEach).
+
+            // Act: Call closeDBConnection.
+            const closePromise = closeDBConnection();
+
+            // Assert: The promise should resolve immediately.
+            await expect(closePromise).resolves.toBeUndefined();
+            // Assert: Neither the constructor nor the close method should have been called.
+            expect(MockDatabaseConstructor).not.toHaveBeenCalled();
+            expect(mockCloseFn).not.toHaveBeenCalled();
+        });
+
+        it('should resolve immediately if connection attempt is pending but not finished', async () => {
+            // Arrange: Start a connection attempt but *do not* trigger its callbacks yet.
+            const connectPromise = getDBConnection();
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(1); // Constructor called, but callback pending
+
+            // Act: Call close while the connection promise (connectionPromise in db.ts) is pending.
+            const closePromise = closeDBConnection();
+
+            // Assert: closeDBConnection should resolve quickly because the internal 'db' variable is still null.
+            // It should *not* wait for the pending connection, nor call db.close().
+            await expect(closePromise).resolves.toBeUndefined();
+            expect(mockCloseFn).not.toHaveBeenCalled();
+
+            // --- Verify Subsequent Behavior ---
+            // Act: Now, let the original pending connection succeed.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+
+            // Assert: The original connection promise should eventually resolve.
+            await expect(connectPromise).resolves.toBeDefined();
+
+            // Act: Try getting the connection again.
+            // Because closeDBConnection was called (and likely nulled the internal 'db' and 'connectionPromise' refs
+            // even though the actual db object wasn't ready to close), a new connection attempt should start.
+            const connectPromise2 = getDBConnection();
+
+            // Assert: A new connection attempt is made.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(2);
+
+            // Cleanup second attempt
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            await connectPromise2;
+        });
+
+
+        it('should reject if closing the underlying database connection fails', async () => {
+            // Arrange: Establish a connection first.
+            const promiseConnect = getDBConnection();
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            await promiseConnect; // Connection established
+
+            // Arrange: Define the error for the close operation.
+            const closeError = new Error('Failed to close DB file handle');
+
+            // Act: Call closeDBConnection.
+            const closePromise = closeDBConnection();
+
+            // Assert: The mock close method was called.
+            expect(mockCloseFn).toHaveBeenCalledTimes(1);
+            expect(capturedCloseCallback).toBeDefined();
+
+            // Act: Simulate the close callback failing with an error.
+            process.nextTick(() => capturedCloseCallback(closeError));
+
+            // Assert: The promise returned by closeDBConnection should reject.
+            await expect(closePromise).rejects.toThrow(`Failed to close database: ${closeError.message}`);
+
+            // --- Verify Internal State Reset (even on error) ---
+             // Arrange: Attempt to get a connection again.
+            const promiseReconnect = getDBConnection();
+
+            // Assert: The constructor should be called again, indicating the internal refs were cleared despite the close error.
+            expect(MockDatabaseConstructor).toHaveBeenCalledTimes(2);
+
+            // Cleanup: Complete the second connection attempt.
+            process.nextTick(() => capturedConstructorCallback(null));
+            await jest.advanceTimersByTimeAsync(0);
+            process.nextTick(() => capturedPragmaCallback(null));
+            await promiseReconnect;
+        });
+    });
+
+    // Note on Graceful Shutdown:
+    // Testing the process.on('SIGINT', ...) handlers is generally considered integration testing
+    // as it involves mocking process signals and process.exit. Unit tests typically focus on
+    // the exported functions like getDBConnection and closeDBConnection, assuming the signal
+    // handlers correctly call closeDBConnection (which is tested here).
+
 });
