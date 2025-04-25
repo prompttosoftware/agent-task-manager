@@ -41,12 +41,12 @@ describe('errorHandler', () => {
   });
 
   it('should return a 500 status code and default message if no message provided', () => {
-    const mockError = {};
+    const mockError = new CustomError('Internal Server Error', 500);
     const mockReq = {} as Request;
     const mockRes = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
     const mockNext = jest.fn() as NextFunction;
 
-    errorHandler(mockError as any, mockReq, mockRes, mockNext);
+    errorHandler(mockError, mockReq, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(500);
     expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({ errorMessages: ['Internal Server Error'] }));
