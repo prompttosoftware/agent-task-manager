@@ -97,13 +97,15 @@ export default tseslint.config(
     },
 
     // Optional: Further override rules for specific file types (e.g., tests)
-    // {
-    //     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"], // Target test files
-    //     rules: {
-    //         // Relax or change rules specific to tests
-    //         // '@typescript-eslint/no-non-null-assertion': 'off', // Example
-    //     },
-    // },
+    {
+        files: ["**/*.spec.{ts,tsx,js,jsx}", "**/*.test.{ts,tsx,js,jsx}"], // Target test files
+        rules: {
+            // Relax or change rules specific to tests
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/explicit-function-return-type': 'off',
+            'no-console': 'off',
+        },
+    },
 
     // Optional: Global rule overrides (apply last, affecting all matched files)
     // {
