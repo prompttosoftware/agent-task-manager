@@ -1,7 +1,7 @@
 import request from 'supertest';
 import express, { Request, Response, NextFunction, Router } from 'express';
 
-// --- Mock Dependencies --- 
+// --- Mock Dependencies ---
 // Mock routers *before* importing the app module.
 // This prevents actual route logic but allows testing mounting.
 
@@ -40,13 +40,22 @@ jest.mock('./api/middleware/requestLogger', () => ({
   default: mockRequestLogger,
 }));
 
-// --- Import App --- 
+// Mock the DatabaseService *and* its potential underlying connection source
+import { createMockDbConnection } from './mocks/sqlite3.mock';
+const mockDbConnection = createMockDbConnection();
+jest.mock('./config/db', () => ({
+    getDBConnection: jest.fn().mockResolvedValue(mockDbConnection),
+    closeDBConnection: jest.fn().mockResolvedValue(undefined)
+}));
+
+
+// --- Import App ---
 // Import the app *after* mocks are set up
 import { app } from './app';
 // Import the actual error handler for direct testing
 import errorHandler from './api/middleware/errorHandler';
 
-// --- Tests --- 
+// --- Tests ---
 describe('App Integration Tests', () => {
   beforeEach(() => {
     // Reset call counts for the logger mock before each test
@@ -98,7 +107,7 @@ describe('App Integration Tests', () => {
 
   it('should mount metadataRoutes at /rest/api/3/metadata', async () => {
     // Request path updated to reflect the change in app.ts
-    const response = await request(app).get('/rest/api/3/metadata/metadata-test'); 
+    const response = await request(app).get('/rest/api/3/metadata/metadata-test');
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ router: 'metadata' }); // Should be handled by the 'metadata' mock router
   });
@@ -108,10 +117,10 @@ describe('App Integration Tests', () => {
     const response = await request(app).get('/non-existent-route-abcdef');
     expect(response.status).toBe(404);
     // Express default 404 handler sends HTML or plain text, not JSON from our custom handler
-    expect(response.headers['content-type']).toMatch(/html|text/); // Check content type is not JSON
-    expect(response.text).toMatch(/Cannot GET \/non-existent-route-abcdef/i); // Check text content
+    expect(response.headers['content-type']).toMatch(/html|text/);
+    expect(response.text).toMatch(/Cannot GET \/non-existent-route-abcdef/i);
     // Default express 404 often results in an empty body when testing with supertest if content-type isn't json
-    expect(response.body).toEqual({}); 
+    expect(response.body).toEqual({});
   });
 
   // Test the errorHandler in isolation
@@ -135,7 +144,7 @@ describe('App Integration Tests', () => {
     expect(response.status).toBe(500); // Default status code from errorHandler
     expect(response.body).toEqual({
       errorMessages: ['Test Error Triggered'],
-      errors: {}, // errorHandler initializes errors to {} if not provided
+      errors: {},
     });
   });
 
