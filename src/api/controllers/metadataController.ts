@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction, Router } from 'express';
 
+/**
+ * @description Gets the metadata for creating issues.
+ * @param {Request} req Express request object
+ * @param {Response} res Express response object
+ * @param {NextFunction} next Express next function
+ */
 const getCreateMetadata = (req: Request, res: Response, next: NextFunction) => {
   try {
     const metadata = {
