@@ -88,6 +88,8 @@ describe('IssueKeyService', () => {
   it('should rollback transaction on error during data retrieval', async () => {
     (mockDbService.getSingleValue as jest.Mock).mockRejectedValue(new Error('Database error'));
     (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+    (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
+    (mockDbService.beginTransaction as jest.Mock).mockResolvedValue(undefined);
 
     await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Database error');
     expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
@@ -99,6 +101,7 @@ describe('IssueKeyService', () => {
   it('should handle errors during transaction begin', async () => {
     (mockDbService.beginTransaction as jest.Mock).mockRejectedValue(new Error('Transaction error'));
     (mockDbService.rollbackTransaction as jest.Mock).mockResolvedValue(undefined);
+    (mockDbService.ensureTableExists as jest.Mock).mockResolvedValue(undefined);
 
     await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Transaction error');
     expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
