@@ -1,17 +1,15 @@
 import { IssueKeyService } from './issueKeyService';
 import { DatabaseService } from './databaseService';
 
-jest.mock('./databaseService'); // This is sufficient
+jest.mock('./databaseService');
 
 describe('IssueKeyService', () => {
   let issueKeyService: IssueKeyService;
-  let mockDbService: jest.Mocked<DatabaseService>; // Use the interface
+  let mockDbService: jest.Mocked<DatabaseService>;
 
   beforeEach(() => {
-    // Create a mock implementation using jest.mocked
     const MockDatabaseService = DatabaseService as jest.Mock<DatabaseService>;
     mockDbService = new MockDatabaseService() as jest.Mocked<DatabaseService>;
-
     issueKeyService = new IssueKeyService(mockDbService);
   });
 
@@ -46,5 +44,28 @@ describe('IssueKeyService', () => {
 
     await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Database error');
     expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('should handle errors during transaction', async () => {
+    (mockDbService.beginTransaction as jest.Mock).mockRejectedValue(new Error('Transaction error'));
+
+    await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Transaction error');
+    expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+  
+  it('should handle errors during commit', async () => {
+      (mockDbService.commitTransaction as jest.Mock).mockRejectedValue(new Error('Commit error'));
+      (mockDbService.getSingleValue as jest.Mock).mockResolvedValue(0);
+      (mockDbService.setSingleValue as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('Commit error');
+      expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('should handle errors during ensureTableExists', async () => {
+      (mockDbService.ensureTableExists as jest.Mock).mockRejectedValue(new Error('ensureTableExists error'));
+
+      await expect(issueKeyService.getNextIssueKey()).rejects.toThrow('ensureTableExists error');
+      expect(mockDbService.rollbackTransaction).toHaveBeenCalled();
   });
 });
