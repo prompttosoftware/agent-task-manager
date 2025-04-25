@@ -5,9 +5,11 @@ import issueRoutes from './api/routes/issueRoutes';
 import issueLinkRoutes from './api/routes/issueLinkRoutes';
 import epicRoutes from './api/routes/epicRoutes';
 import metadataRoutes from './api/routes/metadataRoutes';
-import { DatabaseService } from './services/databaseService';
+import { databaseService } from './services/database';
 import { IssueKeyService } from './services/issueKeyService'; // Import the IssueKeyService type
+import { IssueController } from './api/controllers/issueController';
 import { EpicController } from './api/controllers/epicController';
+import { IssueStatusTransitionService } from './services/issueStatusTransitionService';
 
 // --- Type Augmentation for Express Request ---
 // It's generally recommended to place this in a dedicated types file (e.g., src/types/express/index.d.ts)
@@ -30,9 +32,14 @@ app.use(express.json());
 app.use(requestLogger);
 
 // Instantiate services
-const databaseService = new DatabaseService();
 const issueKeyService = new IssueKeyService(databaseService);
+const issueStatusTransitionService = new IssueStatusTransitionService();
 const epicController = new EpicController(databaseService, issueKeyService);
+const issueController = new IssueController(
+    databaseService,
+    issueKeyService,
+    issueStatusTransitionService
+);
 
 // Routes
 app.use('/rest/api/3/issue', issueRoutes);
