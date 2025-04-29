@@ -1,6 +1,6 @@
 // This file will contain the implementation for the webhook service.
 import axios from 'axios';
-import pRetry from 'p-retry';
+import pRetry, { FailedAttemptError } from 'p-retry';
 import { z } from 'zod';
 import { URL } from 'url';
 // Import the custom database connection interface and RunResult type
@@ -171,7 +171,7 @@ export async function triggerWebhooks(eventType: string, issueData: any): Promis
       try {
         const statusCode = await pRetry(sendWebhook, {
           retries: MAX_RETRIES,
-          onFailedAttempt: (error) => {
+          onFailedAttempt: (error: FailedAttemptError) => {
             console.log(`Attempt ${error.attemptNumber} failed. Retrying...`);
           },
         });
