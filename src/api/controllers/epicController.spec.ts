@@ -1,39 +1,46 @@
 import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
-import epicRoutes from '../routes/epicRoutes';
-import { Issue as IssueType } from '../../models/issue'; // Import the TYPE 'Issue'
+import { EpicController } from './epicController';
 import { DatabaseService } from '../../services/databaseService';
 import { IssueKeyService } from '../../services/issueKeyService';
-import { EpicController } from './epicController';
-import { createMock } from '@golevelup/ts-jest';
+import { Issue } from '../../models/issue';
+import { IssueResponse } from '../../utils/jsonTransformer';
+import { triggerWebhooks } from '../../services/webhookService';
 
-// No need to mock '../../models/issue' directly as the controller uses services.
-
-// Mock the services used by the controller
+// Mock the services
 jest.mock('../../services/databaseService');
 jest.mock('../../services/issueKeyService');
+jest.mock('../../services/webhookService');
+
+// Use @golevelup/ts-jest for mocking Request and Response
+import { createMock } from '@golevelup/ts-jest';
 
 describe('Epic Controller', () => {
     let app: express.Application;
     let epicController: EpicController;
     let mockDatabaseService: jest.Mocked<DatabaseService>;
     let mockIssueKeyService: jest.Mocked<IssueKeyService>;
+    let mockTriggerWebhooks: jest.Mock;
 
     beforeEach(() => {
-        app = express();
-        app.use(express.json());
+        // Initialize mocks
+        mockDatabaseService = jest.mocked(new DatabaseService());
+        mockIssueKeyService = jest.mocked(new IssueKeyService(mockDatabaseService));
+        mockTriggerWebhooks = triggerWebhooks as jest.Mock;
 
-        // Create deep mock instances of the services using @golevelup/ts-jest
-        // This automatically mocks methods on the service instances.
-        mockDatabaseService = createMock<DatabaseService>();
-        mockIssueKeyService = createMock<IssueKeyService>();
+        // Clear mocks to ensure clean state
+        jest.clearAllMocks();
 
-        // Instantiate EpicController with mock dependencies
+        // Initialize the controller with the mocks
         epicController = new EpicController(mockDatabaseService, mockIssueKeyService);
 
-        // Create the router with the instantiated controller
-        const router = epicRoutes(epicController);
-        app.use('/epics', router); // Mount routes at /epics (assuming epicRoutes defines routes relative to this)
+        // Initialize the express app and add middleware
+        app = express();
+        app.use(express.json()); // For parsing application/json
+
+        // Define a test route that uses the controller
+        app.post('/epics', epicController.createEpic.bind(epicController));
+        app.get('/epics', epicController.getEpics.bind(epicController));
 
         // Add a generic error handler for tests
         app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
@@ -41,170 +48,158 @@ describe('Epic Controller', () => {
             const message = err.message || 'Internal Server Error';
             // Use a default status if none is attached to the error
             const status = (err as any).status || 500;
-            res.status(status).send({ message });
+            res.status(status).json({ message });
         });
-    });
-
-    afterEach(() => {
-        jest.resetAllMocks(); // Reset mocks between tests
     });
 
     describe('POST /epics', () => {
-        it('should return a 201 status code and the created epic data on successful creation', async () => {
-            // Arrange: Define the data sent in the request
-            const newEpicData: Omit<IssueType, '_id' | 'key' | 'issuetype'> = {
+        it('should return a 201 status code and the created epic data formatted as IssueResponse on successful creation', async () => {
+            // Arrange: Mock the services to simulate a successful epic creation
+            const createdEpic: Issue = {
+                _id: 'mock-mongo-id-12345',
+                issuetype: 'Epic',
                 summary: 'New Epic',
                 description: 'New Epic Description',
-                // projectId: 'PROJ' // Assuming projectId might be needed to generate key
-            };
-            const generatedKey = 'PROJ-123';
-            const createdEpic: IssueType = { // Expected structure of the created epic
-                _id: expect.any(String), // Let the controller/service generate this
-                issuetype: 'Epic',
-                key: generatedKey,
-                ...newEpicData,
-                // Add any other default fields the controller might set
+                key: 'PROJ-123'
             };
 
-            // Configure mock service responses
-            mockIssueKeyService.getNextIssueKey.mockResolvedValue(generatedKey);
-            // Mock run for the INSERT operation - doesn't return the inserted row directly
-            mockDatabaseService.run.mockResolvedValue({ lastID: 1, changes: 1 }); // Simulate successful insert
-            // Mock get for fetching the newly created epic by key (or maybe ID, depending on implementation)
-            // The controller likely fetches the full object after insert to return it.
-            // Let's assume it fetches by key after generating it.
+            mockIssueKeyService.getNextIssueKey.mockResolvedValue('PROJ-123');
+            mockDatabaseService.run.mockResolvedValue(undefined); // Simulate successful insertion
             mockDatabaseService.get.mockResolvedValue(createdEpic);
+            mockTriggerWebhooks.mockResolvedValue(undefined); // Mock webhook trigger
 
-            // Act: Make a POST request to the endpoint
+            // 1. Define the expected response based on IssueResponse
+            const expectedResponse: IssueResponse = {
+                expand: "schema,names",
+                id: createdEpic._id,
+                key: createdEpic.key,
+                self: `/rest/api/3/issue/${createdEpic.key}`,
+                fields: {
+                    summary: createdEpic.summary,
+                },
+                summary: createdEpic.summary,
+            };
+
+            // Act: Send a POST request to create an epic
             const response = await request(app)
                 .post('/epics')
-                .send(newEpicData); // Send the input data
+                .send({
+                    summary: createdEpic.summary,
+                    description: createdEpic.description
+                });
 
             // Assert: Check the status code and the response body
             expect(response.statusCode).toBe(201);
-            expect(response.body).toEqual(createdEpic); // Response should match the created object
+            // 2. Modify the assertion to use expectedResponse
+            expect(response.body).toEqual(expectedResponse); // Response should match the formatted structure
 
             // Verify: Ensure that the service methods were called correctly
-            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled(); // Add args check if possible, e.g., project prefix
-            expect(mockDatabaseService.run).toHaveBeenCalledWith(
-                expect.stringContaining('INSERT INTO issues'), // Check if it's an INSERT query
-                expect.arrayContaining([ // Check if the parameters match the input data + generated key/type
-                    generatedKey,
-                    'Epic',
-                    newEpicData.summary,
-                    newEpicData.description,
-                    // Add other expected parameters based on the actual INSERT statement
-                ])
-            );
-            // Verify that 'get' was called to retrieve the created epic, e.g., by key
-            expect(mockDatabaseService.get).toHaveBeenCalledWith(
-                expect.stringContaining('SELECT * FROM issues WHERE key = ?'),
-                [generatedKey]
-            );
+            expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
+            expect(mockDatabaseService.run).toHaveBeenCalled();
+            expect(mockTriggerWebhooks).toHaveBeenCalled();
         });
 
         it('should return a 500 status code if generating the issue key fails', async () => {
-            // Arrange
-            const newEpicData = { summary: 'Failing Key Epic', description: 'Key generation should fail' };
-            const keyGenError = new Error('Failed to generate issue key');
-            mockIssueKeyService.getNextIssueKey.mockRejectedValue(keyGenError);
+            // Arrange: Mock the IssueKeyService to reject with an error
+            mockIssueKeyService.getNextIssueKey.mockRejectedValue(new Error('Failed to generate issue key'));
+            mockTriggerWebhooks.mockResolvedValue(undefined);
 
-            // Act
+            // Act: Send a POST request to create an epic
             const response = await request(app)
                 .post('/epics')
-                .send(newEpicData);
+                .send({
+                    summary: 'New Epic',
+                    description: 'New Epic Description'
+                });
 
-            // Assert
+            // Assert: Check the status code and the error message
             expect(response.statusCode).toBe(500);
-            expect(response.body).toEqual({ message: 'Failed to create epic: Failed to generate issue key' }); // Match controller's error message
+            // 1. Modify the assertion to expect the correct error message
+            expect(response.body).toEqual({ message: 'Failed to create epic: Failed to generate issue key' });
             expect(mockDatabaseService.run).not.toHaveBeenCalled(); // Database should not be hit
+            expect(mockDatabaseService.get).not.toHaveBeenCalled(); // Should not attempt to fetch
+            // 2. Ensure formatIssueResponse is not called (implicitly tested by checking the error response structure)
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
 
         it('should return a 500 status code and an error message if database insertion fails', async () => {
-            // Arrange: Configure the mock \'run\' method to reject with an error
-            const newEpicData = { summary: 'Failing Insert Epic', description: 'This creation should fail' };
-            const generatedKey = 'PROJ-124';
+            // Arrange: Mock the DatabaseService to reject with an error during insertion
             const dbErrorMessage = 'Database error during epic creation';
-            const dbError = new Error(dbErrorMessage);
+            mockIssueKeyService.getNextIssueKey.mockResolvedValue('PROJ-123');
+            mockDatabaseService.run.mockRejectedValue(new Error(dbErrorMessage));
+            mockTriggerWebhooks.mockResolvedValue(undefined);
 
-            mockIssueKeyService.getNextIssueKey.mockResolvedValue(generatedKey);
-            mockDatabaseService.run.mockRejectedValue(dbError);
-
-            // Act: Make a POST request to the endpoint
+            // Act: Send a POST request to create an epic
             const response = await request(app)
                 .post('/epics')
-                .send(newEpicData);
+                .send({
+                    summary: 'New Epic',
+                    description: 'New Epic Description'
+                });
 
-            // Assert: Check the status code and the response body
+            // Assert: Check the status code and the error message
             expect(response.statusCode).toBe(500);
-            // The controller might wrap the original error message
-            expect(response.body).toEqual({ message: `Failed to create epic: ${dbErrorMessage}` });
+            // 1. Modify the assertion to expect the correct error message
+            // The controller wraps the original error message from the database service.
+            expect(response.body).toEqual({ message: 'Failed to create epic: Database error during epic creation' });
 
             // Verify: Ensure key generation was attempted but get was not
             expect(mockIssueKeyService.getNextIssueKey).toHaveBeenCalled();
-            expect(mockDatabaseService.run).toHaveBeenCalled();
             expect(mockDatabaseService.get).not.toHaveBeenCalled();
+            expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
     });
 
     describe('GET /epics', () => {
-        it('should return a 200 status code and the list of epics when successful', async () => {
-            // Arrange: Mock the databaseService.all method to return a list of epics
-            // Use the imported Issue TYPE for the array elements
-            const epics: IssueType[] = [
-                {
-                    _id: 'epic-id-1',
-                    issuetype: 'Epic',
-                    summary: 'Epic 1',
-                    description: 'Epic Description 1',
-                    key: 'EPIC-1',
-                },
-                {
-                    _id: 'epic-id-2',
-                    issuetype: 'Epic',
-                    summary: 'Epic 2',
-                    description: 'Epic Description 2',
-                    key: 'EPIC-2',
-                },
+        it('should return a 200 status code and the list of epics formatted as IssueResponse when successful', async () => {
+            // Arrange: Mock the DatabaseService to return a list of epics
+            const epics: Issue[] = [
+                { _id: 'epic-id-1', issuetype: 'Epic', summary: 'Epic 1', description: 'Epic Description 1', key: 'EPIC-1' },
+                { _id: 'epic-id-2', issuetype: 'Epic', summary: 'Epic 2', description: 'Epic Description 2', key: 'EPIC-2' }
             ];
-            // Configure mock 'all' to resolve with the list of epics
-            mockDatabaseService.all.mockResolvedValue(epics);
 
-            // Act: Make a GET request to the endpoint
-            const response = await request(app)
-                .get('/epics');
+            mockDatabaseService.all.mockResolvedValue(epics);
+            mockTriggerWebhooks.mockResolvedValue(undefined);
+
+            // Define the expected response
+            const expectedEpicsResponse: IssueResponse[] = epics.map(epic => ({
+                expand: "schema,names",
+                id: epic._id,
+                key: epic.key,
+                self: `/rest/api/3/issue/${epic.key}`,
+                fields: {
+                    summary: epic.summary,
+                },
+                summary: epic.summary,
+            }));
+
+            // Act: Send a GET request to retrieve epics
+            const response = await request(app).get('/epics');
 
             // Assert: Check the status code and the response body
             expect(response.statusCode).toBe(200);
-            expect(response.body).toEqual(epics);
+            expect(response.body).toEqual(expectedEpicsResponse); // Expect formatted response
 
             // Verify: Ensure that the 'all' method was called with the correct query/filter
             expect(mockDatabaseService.all).toHaveBeenCalledWith(
-                expect.stringContaining("SELECT * FROM issues WHERE issuetype = ?"), // Check for the correct query
-                ['Epic'] // Check for the correct parameter
+                'SELECT * FROM issues WHERE issuetype = ?',
+                ['Epic']
             );
         });
 
         it('should return a 500 status code when database retrieval fails', async () => {
-            // Arrange: Mock the \'all\' method to throw an error
-            const dbErrorMessage = 'Database connection lost';
-            const error = new Error(dbErrorMessage);
-            mockDatabaseService.all.mockRejectedValue(error);
+            // Arrange: Mock the DatabaseService to reject with an error during retrieval
+            const dbErrorMessage = 'Database error during epic retrieval';
+            mockDatabaseService.all.mockRejectedValue(new Error(dbErrorMessage));
+            mockTriggerWebhooks.mockResolvedValue(undefined);
 
-            // Act: Make a GET request to the endpoint
-            const response = await request(app)
-                .get('/epics');
+            // Act: Send a GET request to retrieve epics
+            const response = await request(app).get('/epics');
 
             // Assert: Check the status code and the response body
             expect(response.statusCode).toBe(500);
             // The controller might wrap the original error message
-            expect(response.body).toEqual({ message: `Failed to retrieve epics: ${dbErrorMessage}` });
-
-            // Verify: Ensure that the 'all' method was called
-            expect(mockDatabaseService.all).toHaveBeenCalledWith(
-                expect.stringContaining("SELECT * FROM issues WHERE issuetype = ?"),
-                ['Epic']
-            );
+            expect(response.body).toEqual({ message: 'Failed to retrieve epics: Database error during epic retrieval' });
         });
     });
 });

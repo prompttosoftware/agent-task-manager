@@ -29,8 +29,9 @@ export class EpicController {
             // Format response using the utility function
             const formattedEpics = epics.map(formatIssueResponse);
             res.json(formattedEpics);
-        } catch (error) {
-            next(error); // Pass errors to the Express error handler
+        } catch (error: any) {
+            console.error('Error getting epics:', error);
+            next(new Error(`Failed to retrieve epics: ${error.message}`)); // Pass errors to the Express error handler
         }
     }
 
@@ -97,11 +98,11 @@ export class EpicController {
                 console.error(`Failed to retrieve newly created epic with key ${issueKey} after insertion.`);
                 res.status(500).json({ message: 'Failed to retrieve newly created epic after creation.' });
             }
-        } catch (error) {
+        } catch (error: any) {
             // 11. Handle potential errors during the process
             console.error('Error creating epic:', error);
             // Pass the error to the Express error handling middleware
-            next(error);
+            next(new Error(`Failed to create epic: ${error.message}`));
         }
     }
 }
