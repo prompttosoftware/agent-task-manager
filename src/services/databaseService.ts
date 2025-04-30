@@ -1,10 +1,7 @@
-import { Pool } from 'pg';
 import { IDatabaseConnection } from '../config/db';
-import { getDBConnection } from '../config/db';
-import sqlite3 from 'sqlite3';
 
 export interface DatabaseService {
-    connect(): Promise<void>;
+    connect(db: IDatabaseConnection): Promise<void>;
     disconnect(): Promise<void>;
     run(sql: string, params?: any[]): Promise<void>;
     get<T>(sql: string, params?: any[]): Promise<T | undefined>;
@@ -18,79 +15,66 @@ export interface DatabaseService {
 }
 
 export class DatabaseService implements DatabaseService {
-    private pool: Pool | null = null;
+    private db: IDatabaseConnection | null = null;
 
-    async connect(): Promise<void> {
-        try {
-            this.pool = new Pool({
-                user: process.env.DB_USER,
-                host: process.env.DB_HOST,
-                database: process.env.DB_NAME,
-                password: process.env.DB_PASSWORD,
-                port: Number(process.env.DB_PORT),
-                max: 20, // max number of clients in the pool
-                idleTimeoutMillis: 30000, // how long a client is allowed to remain idle before being closed
-                connectionTimeoutMillis: 2000, // how long to wait for a connection before timing out
-            });
-            console.log('DatabaseService connected to the database pool.');
-        } catch (error) {
-            console.error('DatabaseService failed to connect:', error);
-            throw error;
-        }
+    async connect(db: IDatabaseConnection): Promise<void> {
+        this.db = db;
+        console.log('DatabaseService connected to the injected database connection.');
     }
 
     async disconnect(): Promise<void> {
-        if (this.pool) {
-            await this.pool.end();
-            this.pool = null;
-            console.log('DatabaseService disconnected from the database pool.');
-        }
+        this.db = null;
+        console.log('DatabaseService disconnected from the database.');
     }
 
     async run(sql: string, params: any[] = []): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-
-        const client = await this.pool.connect();
-        try {
-            await client.query(sql, params);
-        } finally {
-            client.release();
-        }
+        return new Promise<void>((resolve, reject) => {
+            this.db!.run(sql, params, function (err: Error | null) {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
     }
 
     async get<T>(sql: string, params: any[] = []): Promise<T | undefined> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-
-        const client = await this.pool.connect();
-        try {
-            const result = await client.query(sql, params);
-            return result.rows[0] as T;
-        } finally {
-            client.release();
-        }
+        return new Promise<T | undefined>((resolve, reject) => {
+            this.db!.get<T>(sql, params, (err: Error | null, row: T) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(row);
+                }
+            });
+        });
     }
 
     async all<T>(sql: string, params: any[] = []): Promise<T[]> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-
-        const client = await this.pool.connect();
-        try {
-            const result = await client.query(sql, params);
-            return result.rows as T[];
-        } finally {
-            client.release();
-        }
+        return new Promise<T[]>((resolve, reject) => {
+            this.db!.all<T>(sql, params, (err: Error | null, rows: T[]) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
     }
 
     async ensureTableExists(tableName: string, columns: { column: string; type: string }[]): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
         const columnDefinitions = columns.map(col => `${col.column} ${col.type}`).join(', ');
         const sql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columnDefinitions})`;
@@ -98,70 +82,55 @@ export class DatabaseService implements DatabaseService {
     }
 
     async getSingleValue<T>(tableName: string, key: string): Promise<T | undefined> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
         const sql = `SELECT value FROM ${tableName} WHERE key = $1`;
-        const row = await this.get<{ value: T }>(sql, [key]);
-        return row?.value;
+        const result = await this.get<{ value: T }>(sql, [key]);
+        if (result) {
+            return (result as { value: T }).value;
+        }
+        return undefined;
     }
 
     async setSingleValue<T>(tableName: string, key: string, value: T): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
 
         // First, try to update the existing row
         let sql = `UPDATE ${tableName} SET value = $1 WHERE key = $2`;
         let params = [value, key];
 
-        const client = await this.pool.connect();
-        try {
-            const result = await client.query(sql, params);
-            if (result.rowCount === 0) {
-                // If no rows were updated, insert a new row
-                const insertSql = `INSERT INTO ${tableName} (key, value) VALUES ($1, $2)`;
-                const insertParams = [key, value];
-                await client.query(insertSql, insertParams);
-            }
-        } finally {
-            client.release();
+        await this.run(sql, params);
+        const updateResult = await this.get<{ changes: number }>(`SELECT changes() AS changes`);
+
+        if (updateResult === undefined || updateResult.changes === 0) {
+            // If no rows were updated, insert a new row
+            const insertSql = `INSERT INTO ${tableName} (key, value) VALUES ($1, $2)`;
+            const insertParams = [key, value];
+            await this.run(insertSql, insertParams);
         }
     }
 
     async beginTransaction(): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+       if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
-        } finally {
-            client.release();
-        }
+        await this.run('BEGIN');
     }
 
     async commitTransaction(): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-        const client = await this.pool.connect();
-        try {
-            await client.query('COMMIT');
-        } finally {
-            client.release();
-        }
+        await this.run('COMMIT');
     }
 
     async rollbackTransaction(): Promise<void> {
-        if (!this.pool) {
-            throw new Error('Database not connected. Call connect() first.');
+        if (!this.db) {
+            throw new Error('Database not connected. Inject a database connection.');
         }
-        const client = await this.pool.connect();
-        try {
-            await client.query('ROLLBACK');
-        } finally {
-            client.release();
-        }
+        await this.run('ROLLBACK');
     }
 }
