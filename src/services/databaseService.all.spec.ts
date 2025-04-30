@@ -1,37 +1,24 @@
 // src/services/databaseService.all.spec.ts
 
 import { DatabaseService } from './databaseService';
-import { getDBConnection, IDatabaseConnection } from '../config/db';
-import { createMockDbConnection } from '../mocks/sqlite3.mock';
+import { IDatabaseConnection } from '../config/db';
+import { mockVerbose } from '../mocks/sqlite3.mock';
 import { jest } from '@jest/globals';
-
-// Mock the module that provides the connection
-jest.mock('../config/db', () => ({
-    ...jest.requireActual('../config/db'), // Keep actual parts if needed
-    getDBConnection: jest.fn(), // Mock the function that returns the connection
-    closeDBConnection: jest.fn().mockResolvedValue(undefined),
-}));
-
-// Type assertion for the mocked function
-const mockGetDBConnection = getDBConnection as jest.Mock;
+import { MockedObject } from 'jest-mock';
 
 describe('DatabaseService.all', () => {
     let databaseService: DatabaseService;
-    let mockDb: jest.Mocked<IDatabaseConnection>;
+    let mockDb: MockedObject<IDatabaseConnection>;
 
-    beforeEach(() => {
-        // Create a fresh mock for IDatabaseConnection
-        mockDb = createMockDbConnection();
-
-        // Configure getDBConnection to return this mock
-        mockGetDBConnection.mockResolvedValue(mockDb);
+    beforeEach(async () => {
+        const mockSqlite3 = mockVerbose();
+        const MockNativeDatabase = mockSqlite3.Database;
+        mockDb = new MockNativeDatabase(':memory:') as any;
 
         databaseService = new DatabaseService();
+        await databaseService.connect(mockDb); // Inject mockDb
 
-        // Reset mocks before test
         jest.clearAllMocks();
-        // Reconfigure getDBConnection for the implicit connect call
-        mockGetDBConnection.mockResolvedValue(mockDb);
     });
 
     it('should call db.all with the provided SQL and params', async () => {
@@ -39,15 +26,17 @@ describe('DatabaseService.all', () => {
         const sql = 'SELECT * FROM test';
         const params: any[] = [];
         const expectedResult = [{ id: 1, value: 'testValue1' }, { id: 2, value: 'testValue2' }];
-        mockDb.all.mockResolvedValue(expectedResult); // Configure mock result
+
+        mockDb.all = jest.fn((sql: string, params: any[], callback: (err: Error | null, rows?: any[]) => void) => {
+            callback(null, expectedResult);
+        }) as any;
 
         // Act
         const result = await databaseService.all(sql, params);
 
         // Assert
-        expect(mockGetDBConnection).toHaveBeenCalledTimes(1);
         expect(mockDb.all).toHaveBeenCalledTimes(1);
-        expect(mockDb.all).toHaveBeenCalledWith(sql, params);
+        expect(mockDb.all).toHaveBeenCalledWith(sql, params, expect.any(Function));
         expect(result).toBe(expectedResult);
     });
 
@@ -55,15 +44,16 @@ describe('DatabaseService.all', () => {
         // Arrange
         const sql = 'SELECT * FROM test WHERE id = ?';
         const params = [99];
-        mockDb.all.mockResolvedValue([]); // Configure mock result (not found)
+        mockDb.all = jest.fn((sql: string, params: any[], callback: (err: Error | null, rows?: any[]) => void) => {
+            callback(null, []);
+        }) as any;
 
         // Act
         const result = await databaseService.all(sql, params);
 
         // Assert
-        expect(mockGetDBConnection).toHaveBeenCalledTimes(1);
         expect(mockDb.all).toHaveBeenCalledTimes(1);
-        expect(mockDb.all).toHaveBeenCalledWith(sql, params);
+        expect(mockDb.all).toHaveBeenCalledWith(sql, params, expect.any(Function));
         expect(result).toEqual([]);
     });
 
@@ -72,12 +62,14 @@ describe('DatabaseService.all', () => {
         const sql = 'SELECT * FROM test WHERE id = ?';
         const params = [1];
         const expectedError = new Error('Database query failed');
-        mockDb.all.mockRejectedValue(expectedError); // Configure mock to reject
+
+        mockDb.all = jest.fn((sql: string, params: any[], callback: (err: Error | null, rows?: any[]) => void) => {
+            callback(expectedError, undefined);
+        }) as any;
 
         // Act & Assert
         await expect(databaseService.all(sql, params)).rejects.toThrow(expectedError);
-        expect(mockGetDBConnection).toHaveBeenCalledTimes(1);
         expect(mockDb.all).toHaveBeenCalledTimes(1);
-        expect(mockDb.all).toHaveBeenCalledWith(sql, params);
+        expect(mockDb.all).toHaveBeenCalledWith(sql, params, expect.any(Function));
     });
 });
