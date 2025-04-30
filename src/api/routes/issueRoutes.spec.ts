@@ -156,7 +156,7 @@ describe('issueRoutes Integration Tests', () => {
             const formattedResponse = formatIssueResponse(dbIssueForFormatting); // Add dummy _id for format function
 
             mockIssueKeyService.getNextIssueKey.mockResolvedValue(issueKey);
-            mockDatabaseService.run.mockResolvedValue(); // Mock the INSERT operation
+            mockDatabaseService.run.mockResolvedValue(undefined); // Mock the INSERT operation
             mockDatabaseService.get.mockResolvedValue(dbIssueForFormatting); // Mock the SELECT after insert
             mockTriggerWebhooks.mockResolvedValue(undefined); // Mock webhook trigger
 
@@ -334,10 +334,10 @@ describe('issueRoutes Integration Tests', () => {
             mockDatabaseService.get
                 .mockResolvedValueOnce(preUpdateDbIssue)   // First call (pre-fetch)
                 .mockResolvedValueOnce(postUpdateDbIssue); // Second call (post-fetch for webhook)
-            mockDatabaseService.run.mockResolvedValue(); // Mock the UPDATE operation
+            mockDatabaseService.run.mockResolvedValue(undefined); // Mock the UPDATE operation
             mockTriggerWebhooks.mockResolvedValue(undefined);
             // Status transition mock (assuming status is not changed, so it passes trivially or isn't called)
-            mockIssueStatusTransitionService.isValidTransition.mockReturnValue(true); // Assume valid if called
+            mockIssueStatusTransitionService.isValidTransition.mockResolvedValue(true); // Assume valid if called
 
             // Act
             const response = await request
@@ -398,7 +398,7 @@ describe('issueRoutes Integration Tests', () => {
 
             mockDatabaseService.get.mockResolvedValue(preUpdateDbIssue); // Mock pre-fetch
             // Mock the transition service to return false for this specific transition attempt
-            mockIssueStatusTransitionService.isValidTransition.mockReturnValue(false);
+            mockIssueStatusTransitionService.isValidTransition.mockResolvedValue(false);
             // We assume the controller will fetch status IDs based on names 'To Do' and 'Done'
             // and pass these IDs to the service. Our mock setup intercepts the service call.
 
@@ -419,7 +419,7 @@ describe('issueRoutes Integration Tests', () => {
             // the controller to derive (11 and 31 in this hypothetical case).
             // The third argument (mockDatabaseService) depends on how the controller passes dependencies.
             // Adjust if the controller passes something else or no third argument.
-            expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(currentStatusId, targetStatusId, expect.anything()); // Allow any db service instance
+            expect(mockIssueStatusTransitionService.isValidTransition).toHaveBeenCalledWith(currentStatusId, targetStatusId);
             expect(mockDatabaseService.run).not.toHaveBeenCalled(); // Update shouldn't happen
             expect(mockTriggerWebhooks).not.toHaveBeenCalled();
         });
@@ -460,7 +460,7 @@ describe('issueRoutes Integration Tests', () => {
             const formattedWebhookPayload = formatIssueResponse(preDeleteDbIssue);
 
             mockDatabaseService.get.mockResolvedValue(preDeleteDbIssue); // Mock pre-fetch for webhook
-            mockDatabaseService.run.mockResolvedValue(); // Mock the DELETE operation
+            mockDatabaseService.run.mockResolvedValue(undefined); // Mock the DELETE operation
             mockTriggerWebhooks.mockResolvedValue(undefined);
 
             // Act
