@@ -1,5 +1,4 @@
 // src/api/controllers/issueController.createIssue.spec.ts
-
 import { IssueController } from './issueController';
 import { DatabaseService } from '../../services/databaseService';
 import { IssueKeyService } from '../../services/issueKeyService';
@@ -9,15 +8,13 @@ import { Issue } from '../../models/issue';
 import { ObjectId } from 'mongodb'; // Used for _id generation in tests
 import httpMocks from 'node-mocks-http';
 import { triggerWebhooks } from '../../services/webhookService';
-import { formatIssueResponse } from '../../utils/jsonTransformer';
+import { formatIssueResponse } from '../../utils/jsonTransformer'; // Assuming this is where the function is
 import { createMockDbConnection } from '../../mocks/sqlite3.mock';
 
 // Mock external dependencies
 jest.mock('../../services/webhookService', () => ({}));
-
 jest.mock('../../services/issueKeyService');
 jest.mock('../../services/issueStatusTransitionService');
-
 // Mock the DatabaseService *and* its potential underlying connection source
 const mockDbConnection = createMockDbConnection();
 jest.mock('../../config/db', () => ({
@@ -41,25 +38,21 @@ const mockDatabaseServiceInstance = {
 jest.mock('../../services/databaseService', () => {
     return {DatabaseService: jest.fn().mockImplementation(() => mockDatabaseServiceInstance)};
 });
-
 const mockTriggerWebhooks = triggerWebhooks as jest.Mock;
-
 type DbIssue = Issue & { id: number; key: string; status: string; assignee_key?: string | null; created_at: string; updated_at: string; };
-
 describe('IssueController - createIssue', () => {
     let controller: IssueController;
     let mockRequest: httpMocks.MockRequest<Request>;
     let mockResponse: httpMocks.MockResponse<Response>;
     const mockNext: jest.Mock = jest.fn();
-
     beforeEach(() => {
         jest.clearAllMocks();
         Object.values(mockDatabaseServiceInstance).forEach(mockFn => mockFn.mockClear());
         controller = new IssueController(
             new DatabaseService(),
-            new IssueKeyService(),
-            new IssueStatusTransitionService()
-        );
+            new IssueKeyService(mockDatabaseServiceInstance),
+            new IssueStatusTransitionService(mockDatabaseServiceInstance)
+            );
         mockRequest = httpMocks.createRequest();
         mockResponse = httpMocks.createResponse();
     });

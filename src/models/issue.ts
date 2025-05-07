@@ -1,17 +1,9 @@
 import { z } from 'zod';
-
 /**
  * Represents a generic issue, often corresponding to an item in an issue tracking system.
  * Contains core details necessary to identify and describe an issue.
  */
 export interface Issue {
-  /**
-   * Unique identifier for the issue, often assigned by the underlying data store (e.g., MongoDB ObjectId).
-   * Must be a non-empty string.
-   * @example '60c72b2f9b1e8a5a4d8b4567'
-   */
-  _id: string;
-
   /**
    * The type of the issue (e.g., Bug, Task, Story, Epic).
    * Helps categorize the issue. Must be a non-empty string.
@@ -19,21 +11,18 @@ export interface Issue {
    * @example 'Story'
    */
   issuetype: string;
-
   /**
    * A brief summary or title of the issue.
    * Must be a non-empty string.
    * @example 'Login button unresponsive on Safari'
    */
   summary: string;
-
   /**
    * A detailed description of the issue, including steps to reproduce, context, etc.
    * Must be a non-empty string.
    * @example 'When a user clicks the login button on Safari version 15.1, nothing happens. Expected behavior is redirection to the dashboard.'
    */
   description: string;
-
   /**
    * Optional key of the parent issue, if this issue is a sub-task or part of a larger item (like an Epic).
    * Can be a string, null, or undefined.
@@ -41,13 +30,19 @@ export interface Issue {
    * @example null // No parent
    */
   parentKey?: string | null;
-
   /**
    * A human-readable unique identifier for the issue, often used in project management tools (e.g., JIRA key).
    * Must be a non-empty string.
    * @example 'PROJECT-456'
    */
   key: string;
+  /**
+   * Unique identifier for the issue, often assigned by the underlying data store (e.g., MongoDB ObjectId).
+   * Must be a non-empty string.
+   * @example '60c72b2f9b1e8a5a4d8b4567'
+   */
+  _id: string;
+
 }
 
 /**
