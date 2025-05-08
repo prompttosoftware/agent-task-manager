@@ -12,19 +12,28 @@ jest.mock('../../services/databaseService');
 jest.mock('../../services/issueKeyService');
 jest.mock('../../services/webhookService');
 
-// Use @golevelup/ts-jest for mocking Request and Response
-import { createMock } from '@golevelup/ts-jest';
+import { getDBConnection } from '../../config/db';
+import { initializeDatabaseSchema } from '../../config/databaseSchema';
+import { databaseService } from '../../services/database';
 
 describe('Epic Controller', () => {
+    jest.setTimeout(30000);
+
     let app: express.Application;
     let epicController: EpicController;
     let mockDatabaseService: jest.Mocked<DatabaseService>;
     let mockIssueKeyService: jest.Mocked<IssueKeyService>;
     let mockTriggerWebhooks: jest.Mock;
 
+    beforeAll(async () => {
+            const db = await getDBConnection();
+            await databaseService.connect(db);
+            await initializeDatabaseSchema(databaseService);
+    });
+
     beforeEach(() => {
         // Initialize mocks
-        mockDatabaseService = jest.mocked(new DatabaseService());
+        mockDatabaseService = jest.mocked(databaseService);
         mockIssueKeyService = jest.mocked(new IssueKeyService(mockDatabaseService));
         mockTriggerWebhooks = triggerWebhooks as jest.Mock;
 

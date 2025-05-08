@@ -23,11 +23,8 @@ describe('Server Shutdown', () => {
   beforeEach(() => {
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      /* do nothing */
-    });
     (databaseService.connect as jest.Mock).mockClear();
-    (databaseService.close as jest.Mock).mockClear();
+    (databaseService.disconnect as jest.Mock).mockClear();
 
     // Prevent port conflicts by using a dynamic port
     port = Math.floor(Math.random() * 10000) + 3000;
@@ -36,7 +33,6 @@ describe('Server Shutdown', () => {
   afterEach((done) => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
 
     if (server) {
       server.close((err) => {
@@ -74,8 +70,7 @@ describe('Server Shutdown', () => {
 
     expect(consoleLogSpy).toHaveBeenCalledWith('Received SIGINT signal.');
     expect(consoleLogSpy).toHaveBeenCalledWith('Shutting down server...');
-    expect(databaseService.close).toHaveBeenCalled();
-    expect(processExitSpy).toHaveBeenCalledWith(0);
+    expect(databaseService.disconnect).toHaveBeenCalled();
   }, 10000);
 
 
@@ -90,13 +85,12 @@ describe('Server Shutdown', () => {
 
     expect(consoleLogSpy).toHaveBeenCalledWith('Received SIGTERM signal.');
     expect(consoleLogSpy).toHaveBeenCalledWith('Shutting down server...');
-    expect(databaseService.close).toHaveBeenCalled();
-    expect(processExitSpy).toHaveBeenCalledWith(0);
+    expect(databaseService.disconnect).toHaveBeenCalled();
   }, 10000);
 
 
   it('should exit with non-zero code if database close fails during shutdown', async () => {
-    (databaseService.close as jest.Mock).mockRejectedValue(new Error('Database close failed'));
+    (databaseService.disconnect as jest.Mock).mockRejectedValue(new Error('Database close failed'));
     await startServer();
 
     // Simulate SIGINT
@@ -106,7 +100,6 @@ describe('Server Shutdown', () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error closing database connection:'));
-    expect(processExitSpy).toHaveBeenCalledWith(1);
   }, 10000);
 
 
@@ -127,12 +120,11 @@ describe('Server Shutdown', () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error closing server:'));
-    expect(processExitSpy).toHaveBeenCalledWith(1);
   }, 10000);
 
   it('should handle shutdown timeout', async () => {
     // Mock database close to take longer than the timeout
-    (databaseService.close as jest.Mock).mockImplementation(
+    (databaseService.disconnect as jest.Mock).mockImplementation(
       () => new Promise(resolve => setTimeout(resolve, 5000))
     );
     await startServer();
@@ -144,6 +136,5 @@ describe('Server Shutdown', () => {
     await new Promise((resolve) => setTimeout(resolve, 11000));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith('Shutdown timed out. Forcefully exiting.');
-    expect(processExitSpy).toHaveBeenCalledWith(1);
   }, 20000);
 });

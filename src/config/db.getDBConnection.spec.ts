@@ -1,6 +1,5 @@
 import sqlite3 from 'sqlite3'; // Import types for mocking
 import path from 'path'; // db.ts uses path
-import { createMockDbConnection } from '../mocks/dbconnection.mock';
 import { IDatabaseConnection } from './db';
 
 // --- Mocking Dependencies ---
@@ -280,29 +279,5 @@ describe('getDBConnection', () => {
         );
 
         consoleErrorSpy.mockRestore();
-    });
-
-    // Test kept from previous iteration - verifying the mock helper works
-    it('should mock the IDatabaseConnection', async () => {
-        const mockDbConnection = createMockDbConnection();
-
-        // Temporarily mock getDBConnection *within this test only*
-        // Note: This overrides the module-level mock for this specific 'it' block
-        jest.doMock('./db', () => ({
-            ...jest.requireActual('./db'), // Keep other exports real if needed
-            getDBConnection: jest.fn().mockResolvedValue(mockDbConnection),
-            // closeDBConnection: jest.fn().mockResolvedValue(undefined) // Mock close if used
-        }));
-
-        // Need to re-require after jest.doMock
-        const { getDBConnection: getDBConnectionMocked } = require('./db');
-
-        const db = await getDBConnectionMocked();
-
-        expect(db).toBe(mockDbConnection);
-        expect(getDBConnectionMocked).toHaveBeenCalled();
-
-        // Undoes the mock for subsequent tests
-        jest.dontMock('./db');
     });
 });

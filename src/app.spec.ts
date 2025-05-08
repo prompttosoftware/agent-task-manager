@@ -40,15 +40,6 @@ jest.mock('./api/middleware/requestLogger', () => ({
   default: mockRequestLogger,
 }));
 
-// Mock the DatabaseService *and* its potential underlying connection source
-import { createMockDbConnection } from './mocks/sqlite3.mock';
-const mockDbConnection = createMockDbConnection();
-jest.mock('./config/db', () => ({
-    getDBConnection: jest.fn().mockResolvedValue(mockDbConnection),
-    closeDBConnection: jest.fn().mockResolvedValue(undefined)
-}));
-
-
 // --- Import App ---
 // Import the app *after* mocks are set up
 import { app } from './app';

@@ -33,7 +33,7 @@ describe('databaseService', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
         dbService = new DatabaseService();
-        await dbService.connect();
+        await dbService.connect(mockDb);
         mockDb = ((mockedSqlite3.Database as unknown) as Mock<any>).mock.instances[0];
     });
 

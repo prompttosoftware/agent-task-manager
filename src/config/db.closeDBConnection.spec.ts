@@ -265,7 +265,7 @@ describe('closeDBConnection', () => {
         await jest.advanceTimersByTimeAsync(0);
 
         // Assert: The promise returned by closeDBConnection should reject.
-        await expect(closePromise).rejects.toThrow(\`Failed to close database: ${closeError.message}\`);
+        await expect(closePromise).rejects.toThrow(`Failed to close database: ${closeError.message}`);
 
         // --- Verify Internal State Reset (even on error) ---
          // Arrange: Attempt to get a connection again.

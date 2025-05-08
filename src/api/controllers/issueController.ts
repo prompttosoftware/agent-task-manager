@@ -178,7 +178,7 @@ export class IssueController implements IssueControllerInterface {
                     return;
                 }
 
-                if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId, this.databaseService)) {
+                if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
                     res.status(400).json({ message: `Invalid status transition from '${preUpdateIssue.status}' to '${updatedIssueData.status}'` });
                     return;
                 }
@@ -299,7 +299,7 @@ export class IssueController implements IssueControllerInterface {
             }
 
             // 3. Validate the transition using the injected service
-            if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId, this.databaseService)) {
+            if (!this.issueStatusTransitionService.isValidTransition(currentStatusId, targetStatusId)) {
                 res.status(400).json({
                     message: `Invalid status transition from '${currentIssue.status}' to '${newStatusName}'`
                 });

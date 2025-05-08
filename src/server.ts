@@ -1,7 +1,8 @@
-import app from './app';
+import { app } from './app';
 import { databaseService } from './services/database';
 import { initializeDatabaseSchema } from './config/databaseSchema';
 import { Server } from 'http';
+import { getDBConnection } from './config/db';
 
 const port = process.env.PORT || 3013;
 const SHUTDOWN_TIMEOUT = 10000; // 10 seconds, configurable
@@ -10,7 +11,8 @@ let server: Server;
 
 const startServer = async () => {
   try {
-    await databaseService.connect();
+    const db = await getDBConnection();
+    await databaseService.connect(db);
     await initializeDatabaseSchema(databaseService);
     server = app.listen(port, () => {
       console.log(`Server is running on port ${port}`);
@@ -26,7 +28,7 @@ const shutdown = async () => {
 
   try {
     console.log('Closing database connection...');
-    await databaseService.close();
+    await databaseService.disconnect();
     console.log('Database connection closed.');
   } catch (dbError) {
     console.error('Error closing database connection:', dbError);

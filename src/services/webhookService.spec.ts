@@ -13,11 +13,11 @@ jest.mock('axios');
 
 describe('webhookService', () => {
     let mockGetDBConnection: jest.Mock;
-    let mockAxios: jest.Mocked<typeof axios>;
+    let mockAxios: jest.MockedFunctionDeep<typeof axios>;
 
     beforeEach(() => {
         mockGetDBConnection = jest.mocked(getDBConnection);
-        mockAxios = jest.mocked(axios, true);
+        mockAxios = jest.mocked(axios);
     });
 
     afterEach(() => {

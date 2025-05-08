@@ -24,7 +24,7 @@ const app = express();
 
 // Instantiate services
 const issueKeyService = new IssueKeyService(databaseService);
-const issueStatusTransitionService = new IssueStatusTransitionService();
+const issueStatusTransitionService = new IssueStatusTransitionService(databaseService);
 const issueController = new IssueController(
     databaseService,
     issueKeyService,
