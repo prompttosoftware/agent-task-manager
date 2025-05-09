@@ -36,18 +36,18 @@ coverage/
 # Environment files
 .env
 
-# Add build artifacts
+# Build artifacts
 /build
 
-# Add npm artifacts
+# npm artifacts
 /npm-debug.log
 /yarn-error.log
 .cache
 
-# Add .env.local file
+# .env.local file
 .env.local
 
-# Ignore all files in the 'docs' directory
+# Docs
 docs/*
 !docs/README.md
 
@@ -59,3 +59,9 @@ data/seeds/*.sql
 
 # Plan files
 plan.txt
+
+# TypeScript compilation artifacts
+*.tsbuildinfo
+
+# Local database
+data/db.json
