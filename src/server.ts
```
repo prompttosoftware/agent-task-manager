@@ -1,0 +1,8 @@
+import express from 'express'; // Although not directly used in server.ts, it's good practice to import it when building an express app.
+import app from './app'; // Import the express app instance from app.ts
+
+const port = process.env.PORT || 3000; // Use environment port or default to 3000
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
