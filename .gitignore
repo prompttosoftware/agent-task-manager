@@ -1,7 +1,6 @@
-# Node modules
 node_modules/
-# Compiled output
 dist/
+.data/db.json
 # Logs
 logs/*.log
 *.log
@@ -26,7 +25,6 @@ coverage/
 # Environment files
 .env
 # Build artifacts
-.data/db.json
 .cache
 # .env.local file
 .env.local
@@ -41,6 +39,3 @@ data/seeds/*.sql
 plan.txt
 # TypeScript compilation artifacts
 *.tsbuildinfo
-
-# Local database
-
