@@ -69,6 +69,3 @@ plan.txt
 
 # Local database
 data/db.json
-
-# Custom ignores
-.data/db.json
