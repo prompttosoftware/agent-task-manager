@@ -25,9 +25,11 @@ export interface Bug extends BaseIssue {}
 export interface Epic extends BaseIssue, EpicSpecifics {}
 export interface Subtask extends BaseIssue, SubtaskSpecifics {}
 
-export type AnyIssue = Task | Story | Epic | Bug | Subtask;
+import { DbSchema } from './DbSchema';
 
-export interface DbSchema {
-  issues: AnyIssue[];
-  issueKeyCounter: number;
-}
+/**
+ * Represents any possible issue type within the system.
+ * This is a union type comprising {@link Task}, {@link Story}, {@link Epic}, {@link Bug}, and {@link Subtask}.
+ * All these types inherit common properties from the {@link BaseIssue} interface.
+ */
+export type AnyIssue = Task | Story | Epic | Bug | Subtask;
