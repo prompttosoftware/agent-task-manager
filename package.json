@@ -1,0 +1,25 @@
+{
+  "name": "agent-task-manager",
+  "version": "1.0.0",
+  "description": "Task manager for the agent",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.15.19",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@types/express": "^5.0.2",
+    "@types/uuid": "^10.0.0",
+    "express": "^5.1.0",
+    "uuid": "^11.1.0"
+  }
+}
