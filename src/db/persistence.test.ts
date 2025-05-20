@@ -1,4 +1,5 @@
-import { loadDatabase, saveDatabase } from './persistence';
+import { loadDatabase } from './loadDatabase';
+import { saveDatabase } from './saveDatabase';
 import { DbSchema } from '../models/DbSchema';
 import { AnyIssue } from '../models/anyIssue';
 import { DB_FILE_PATH } from './constants';
@@ -69,10 +70,15 @@ describe('persistence', () => {
       }
     }
 
+    // Now call loadDatabase which should create the directory
     await loadDatabase();
+
+    // Check if the directory was created
     try {
         await fs.access(dirPath);
+        // If access succeeds, the directory exists. Nothing more to do.
     } catch (error) {
+        // If access fails, the directory was not created.
         assert.fail(".data directory was not created"); // Use Chai's assert.fail
     }
   });
