@@ -1,11 +1,14 @@
-|-
-import { loadDatabase, saveDatabase, DB_FILE_PATH, DbSchema } from './persistence';
+import { loadDatabase, saveDatabase } from './persistence';
+import { DbSchema } from '../models/DbSchema';
+import { AnyIssue } from '../models/anyIssue';
+import { DB_FILE_PATH } from './constants';
 import fs from 'fs/promises';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { expect, assert } from 'chai'; // Import expect and assert from chai
+import 'mocha'; // Explicitly import mocha to ensure types are loaded
 
-describe('persistence', {
-  retries: 2
-}, () => {
+describe('persistence', () => {
   beforeEach(async () => {
     // Ensure the test file doesn't exist before each test
     try {
@@ -29,14 +32,30 @@ describe('persistence', {
 
   it('should load and initialize database if file does not exist', async () => {
     const db = await loadDatabase();
-    expect(db).toEqual({ issues: [], issueKeyCounter: 0 });
+    expect(db).to.deep.equal({ issues: [], issueKeyCounter: 0 }); // Use Chai's deep.equal
   });
 
   it('should save and load database correctly', async () => {
-    const initialData: DbSchema = { issues: [{ key: 'ATM-1', summary: 'Test issue' }], issueKeyCounter: 1 };
+    const now = new Date().toISOString();
+    const initialData: DbSchema = {
+      issues: [
+        {
+          id: uuidv4(), // Generate UUID
+          key: 'ATM-1', // Example key
+          issueType: "Task", // Changed from IssueType.Task to string literal
+          summary: 'Implement user authentication', // Example summary
+          description: 'As a user, I want to be able to log in...', // Example description
+          status: "Todo", // Changed from Status.ToDo to string literal
+          createdAt: now, // Current time
+          updatedAt: now, // Current time
+        } as AnyIssue // Cast to AnyIssue to satisfy type
+      ],
+      issueKeyCounter: 1
+    };
     await saveDatabase(initialData);
     const loadedData = await loadDatabase();
-    expect(loadedData).toEqual(initialData);
+    // Deep comparison using toEqual should work for JSON-like objects
+    expect(loadedData).to.deep.equal(initialData); // Use Chai's deep.equal
   });
 
   it('should create the .data directory if it does not exist', async () => {
@@ -54,7 +73,7 @@ describe('persistence', {
     try {
         await fs.access(dirPath);
     } catch (error) {
-        fail(".data directory was not created");
+        assert.fail(".data directory was not created"); // Use Chai's assert.fail
     }
   });
 });
