@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { createIssue as createIssueService } from '../../services/issueService';
 
 /**
  * Handles the creation of a new issue.
@@ -6,9 +7,7 @@ import { Request, Response } from 'express';
  * @param req - The Express request object.
  * @param res - The Express response object.
  */
-export const createIssue = (req: Request, res: Response): void => {
-  console.log('createIssue function called');
-
+export const createIssue = async (req: Request, res: Response): Promise<void> => {
   const { fields } = req.body;
 
   if (!fields?.project?.key) {
@@ -23,6 +22,20 @@ export const createIssue = (req: Request, res: Response): void => {
     return res.status(400).json({ error: 'Summary is required' });
   }
 
-  console.log('Request body:', req.body);
-  res.status(201).json({ message: 'Issue creation request received' });
+  try {
+    const createdIssue = await createIssueService({
+      projectKey: fields.project.key,
+      issueTypeId: fields.issuetype.id,
+      summary: fields.summary,
+      description: fields.description,
+    });
+    res.status(201).json({
+      id: createdIssue.id,
+      key: createdIssue.key,
+      self: createdIssue.self,
+    });
+  } catch (error) {
+    console.error('Error creating issue:', error);
+    res.status(500).json({ error: 'Failed to create issue' });
+  }
 };
