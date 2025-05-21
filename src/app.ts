@@ -1,10 +1,12 @@
 import express, { Application, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import issueRoutes from './api/routes/issueRoutes';
 
 const app: Application = express();
 const port = 3000;
 
 app.use(express.json());
+app.use('/rest/api/2', issueRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello World!');
