@@ -16,8 +16,6 @@ const router = Router();
  *           schema:
  *             type: object
  *             properties:
- *               // Define the schema properties based on expected Jira issue creation payload
- *               // Example (simplified):
  *               fields:
  *                 type: object
  *                 properties:
@@ -55,8 +53,6 @@ const router = Router();
  *             schema:
  *               type: object
  *               properties:
- *                 // Define the schema properties based on expected response from Jira
- *                 // Example (simplified):
  *                 id:
  *                   type: string
  *                 key:
