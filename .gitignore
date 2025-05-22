@@ -1,6 +1,3 @@
-node_modules/
-dist/
-.data/db.json
 # Node modules
 node_modules/
 
