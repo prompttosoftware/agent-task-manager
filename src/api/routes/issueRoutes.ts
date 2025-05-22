@@ -28,9 +28,9 @@ const router = Router();
  *                   issuetype:
  *                     type: object
  *                     properties:
- *                       id:
+ *                       name:
  *                         type: string
- *                         description: The ID of the issue type
+ *                         description: The name of the issue type (e.g., 'Story', 'Bug'). Available issue types are 'Story', 'Bug', 'Task', and 'Epic'.
  *                   summary:
  *                     type: string
  *                     description: The summary/title of the issue
@@ -42,7 +42,7 @@ const router = Router();
  *                 project:
  *                   key: "TEST"
  *                 issuetype:
- *                   id: "10002" # Example ID for a Story
+ *                   name: "Story"
  *                 summary: "This is a test issue"
  *                 description: "Creating an issue via the API."
  *     responses:
