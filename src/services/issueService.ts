@@ -9,6 +9,7 @@ export interface IssueCreationData {
     issueTypeId: string;
     summary: string;
     description?: string;
+    parentKey?: string;
 }
 
 /**
@@ -42,6 +43,12 @@ export const createIssue = async (data: IssueCreationData): Promise<Issue> => {
           updated: new Date().toISOString(), // Set update timestamp
       }
   };
+
+    // Set parent issue key if provided
+    if (data.parentKey) {
+        // @ts-ignore - parentKey does not exist in the general issue type, but should be set on the subtask
+        newIssue.parentIssueKey = data.parentKey;
+    }
 
   // 4. Add the new issue to the database and update the counter
   db.issues.push(newIssue);
