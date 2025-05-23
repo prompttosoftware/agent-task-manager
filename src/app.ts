@@ -1,13 +1,30 @@
 import express, { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { AnyIssue, DbSchema } from './models';
 
 const app = express();
 const port = 3000;
 
+// In-memory database
+const db: DbSchema = {
+  issues: [],
+  issueKeyCounter: 1,
+};
+
 app.use(express.json());
 
 app.get('/', (req: Request, res: Response) => {
-  res.send('Hello World!');
+  const exampleIssue: AnyIssue = {
+    id: uuidv4(),
+    key: `ISSUE-${db.issueKeyCounter++}`,
+    issueType: 'Task',
+    summary: 'Example Task',
+    description: 'This is a sample task',
+    status: 'Todo',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  res.json(exampleIssue);
 });
 
 export default app;
