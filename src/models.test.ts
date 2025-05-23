@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AnyIssue, Task, Story, Epic, Bug, Subtask, DbSchema } from './models';
+import { AnyIssue, Task, Story, Epic, Bug, Subtask, DbSchema, loadDatabase, saveDatabase, DB_FILE_PATH } from './models';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 describe('models', () => {
   it('AnyIssue type should accept all concrete issue types (Task, Story, Epic, Bug, Subtask)', () => {
@@ -96,5 +98,66 @@ describe('models', () => {
 
     // If the code compiles and reaches this point without type errors during assignment,
     // the test implicitly confirms that AnyIssue is a valid union of all specified types.
+  });
+
+  describe('loadDatabase', () => {
+    it('should load the database from the file if it exists', async () => {
+      // Create a dummy database file
+      const testData: DbSchema = { issues: [{ id: uuidv4(), key: 'TEST-1', issueType: 'Task', summary: 'Test', status: 'Todo', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }], issueKeyCounter: 1 };
+      const dbFilePath = DB_FILE_PATH;
+      const dataDir = path.dirname(dbFilePath);
+
+      await fs.mkdir(dataDir, { recursive: true });
+      await fs.writeFile(dbFilePath, JSON.stringify(testData));
+
+      const loadedData = await loadDatabase();
+      expect(loadedData).toEqual(testData);
+
+      // Clean up the test file
+      await fs.unlink(dbFilePath);
+    });
+
+    it('should initialize the database if the file does not exist', async () => {
+      // Ensure the file does not exist
+      const dbFilePath = DB_FILE_PATH;
+      try {
+          await fs.unlink(dbFilePath);
+      } catch (error) {
+          // ignore if file does not exist
+      }
+      const loadedData = await loadDatabase();
+      expect(loadedData).toEqual({ issues: [], issueKeyCounter: 0 });
+    });
+
+    it('should initialize the database if the file is invalid', async () => {
+        // Create an invalid json file
+        const dbFilePath = DB_FILE_PATH;
+        const dataDir = path.dirname(dbFilePath);
+        await fs.mkdir(dataDir, { recursive: true });
+
+        await fs.writeFile(dbFilePath, '{"invalid":');
+
+        const loadedData = await loadDatabase();
+        expect(loadedData).toEqual({ issues: [], issueKeyCounter: 0 });
+
+        // Clean up the test file
+        await fs.unlink(dbFilePath);
+    });
+  });
+
+  describe('saveDatabase', () => {
+    it('should save the database to the file', async () => {
+      const testData: DbSchema = { issues: [{ id: uuidv4(), key: 'TEST-1', issueType: 'Task', summary: 'Test', status: 'Todo', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }], issueKeyCounter: 1 };
+      const dbFilePath = DB_FILE_PATH;
+
+      await saveDatabase(testData);
+
+      const savedDataString = await fs.readFile(dbFilePath, 'utf8');
+      const savedData = JSON.parse(savedDataString) as DbSchema;
+      expect(savedData).toEqual(testData);
+
+      // Clean up the test file
+      await fs.unlink(dbFilePath);
+    });
   });
 });
