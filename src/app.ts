@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { AnyIssue, DbSchema } from './models';
+import issueRoutes from './api/routes/issueRoutes';
 
 const app = express();
 const port = 3000;
@@ -26,5 +27,7 @@ app.get('/', (req: Request, res: Response) => {
   };
   res.json(exampleIssue);
 });
+
+app.use('/api', issueRoutes);
 
 export default app;

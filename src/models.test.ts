@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AnyIssue, Task, Story, Epic, Bug, Subtask, DbSchema, loadDatabase, saveDatabase, DB_FILE_PATH } from './models';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { startServer } from '../server';
 
 describe('models', () => {
   it('AnyIssue type should accept all concrete issue types (Task, Story, Epic, Bug, Subtask)', () => {
@@ -158,6 +159,53 @@ describe('models', () => {
 
       // Clean up the test file
       await fs.unlink(dbFilePath);
+    });
+  });
+
+  describe('POST /rest/api/2/issue', () => {
+    let server: any;
+    let originalEnv: any;
+
+    beforeAll(async () => {
+      // Dynamically import the server start function
+      originalEnv = process.env;
+      process.env = { ...process.env, PORT: '3000' };
+      const { startServer } = await import('../server');
+      server = await startServer(); // Assuming your server listens on port 3000
+    });
+
+    afterAll(async () => {
+      process.env = originalEnv;
+      if (server) {
+        await server.close();
+      }
+    });
+
+    it('should return 201 when creating an issue', async () => {
+      const issue = {
+        issueType: 'Task',
+        summary: 'Test issue',
+        description: 'This is a test issue',
+        status: 'Todo',
+      };
+
+      const response = await fetch('http://localhost:3000/rest/api/2/issue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(issue),
+      });
+
+      expect(response.status).toBe(201);
+      const createdIssue = await response.json();
+      expect(createdIssue).toBeDefined();
+      expect(createdIssue.issueType).toBe('Task');
+      expect(createdIssue.summary).toBe('Test issue');
+      expect(createdIssue.description).toBe('This is a test issue');
+      expect(createdIssue.status).toBe('Todo');
+      expect(createdIssue.id).toBeDefined();
+      expect(createdIssue.key).toBeDefined();
     });
   });
 });
