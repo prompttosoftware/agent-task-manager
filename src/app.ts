@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { AnyIssue, BaseIssue, Epic, Subtask, Task, Story, Bug, EpicSpecifics, SubtaskSpecifics, DbSchema } from './models.ts';
+import { AnyIssue, BaseIssue, Epic, Subtask, Task, Story, Bug, EpicSpecifics, SubtaskSpecifics, DbSchema } from './models.js';
 import { createIssue } from './api/controllers/issueController.ts';
 
 const app = express();
