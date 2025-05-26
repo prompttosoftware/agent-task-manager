@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { AnyIssue } from '../../models';
-import { addIssue, getNextIssueKey } from '../../dataStore';
+import { AnyIssue, DbSchema } from '../../models';
+import { loadDatabase, saveDatabase } from '../../dataStore';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -55,9 +55,16 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
       return; // Stop execution here
     }
 
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
     // Generate required fields
     const id = uuidv4();
-    const key = getNextIssueKey();
+    const key = (db.issueKeyCounter + 1).toString();
     const now = new Date().toISOString();
 
     // Create the new issue object with base properties
@@ -102,14 +109,205 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
     // TypeScript will verify that the structure assigned to `newIssue` is compatible with `AnyIssue`.
 
     // Add to data store
-    addIssue(newIssue);
+    db.issues.push(newIssue);
+    db.issueKeyCounter++;
 
-    // Respond with the created issue object
+    try {
+      await saveDatabase(db);
+    } catch (error) {
+      console.error('Error saving database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+
     res.status(201).json(newIssue);
 
   } catch (error) {
-    console.error('Error creating issue:', error); // Log the error for debugging
-    // This catch block handles potential errors from uuidv4(), getNextIssueKey(), addIssue()
+    console.error('Error creating issue:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Retrieves all issues.
+ * @param {Request} req - The Express request object.
+ * @param {Response} res - The Express response object.
+ * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
+ * Responses:
+ * - 200 OK: Successfully retrieved all issues. Returns an array of issue objects in the response body.
+ * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
+ */
+export const getIssues = async (req: Request, res: Response): Promise<void> => {
+  try {
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    res.status(200).json(db.issues);
+  } catch (error) {
+    console.error('Error getting issues:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Retrieves an issue by its ID.
+ * @param {Request} req - The Express request object.  The request must include the issue ID as a route parameter.
+ * @param {Response} res - The Express response object.
+ * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
+ * Responses:
+ * - 200 OK: Successfully retrieved the issue. Returns the issue object in the response body.
+ * - 404 Not Found: Issue not found. Returns `{ message: 'Issue not found' }`.
+ * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
+ */
+export const getIssue = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    const issue = db.issues.find(issue => issue.id === id);
+    if (issue) {
+      res.status(200).json(issue);
+    } else {
+      res.status(404).json({ message: 'Issue not found' });
+    }
+  } catch (error) {
+    console.error('Error getting issue by ID:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Retrieves an issue by its key.
+ * @param {Request} req - The Express request object. The request must include the issue key as a route parameter.
+ * @param {Response} res - The Express response object.
+ * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
+ * Responses:
+ * - 200 OK: Successfully retrieved the issue. Returns the issue object in the response body.
+ * - 404 Not Found: Issue not found. Returns `{ message: 'Issue not found' }`.
+ * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
+ */
+export const getIssueByKeyEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { key } = req.params;
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    const issue = db.issues.find(issue => issue.key === key);
+    if (issue) {
+      res.status(200).json(issue);
+    } else {
+      res.status(404).json({ message: 'Issue not found' });
+    }
+  } catch (error) {
+    console.error('Error getting issue by key:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Updates an existing issue.
+ * @param {Request} req - The Express request object.  The request body should contain the updated issue data.
+ * @param {Response} res - The Express response object.
+ * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
+ * Responses:
+ * - 200 OK: Successfully updated the issue. Returns the updated issue object.
+ * - 400 Bad Request: If the request body is invalid or missing required fields. Returns an appropriate error message.
+ * - 404 Not Found: If the issue to update is not found. Returns `{ message: 'Issue not found' }`.
+ * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
+ */
+export const updateIssueEndpoint = async (req: Request, res: Response): Promise<void> => {
+  const allowedStatuses = ["Todo", "In Progress", "Done"];
+  try {
+    const { id } = req.params; // Assuming the ID is passed as a route parameter
+    const updateData = req.body;
+
+    // Basic validation for existence and non-empty strings
+    if (updateData.status && !allowedStatuses.includes(updateData.status)) {
+         res.status(400).json({ message: `Invalid status: "${updateData.status}". Must be one of ${allowedStatuses.join(', ')}.` });
+         return;
+    }
+
+    // Fetch the existing issue
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+
+    const issueIndex = db.issues.findIndex(issue => issue.id === id);
+    if (issueIndex === -1) {
+      return res.status(404).json({ message: 'Issue not found' });
+    }
+
+    // Ensure that key and id are not updated.
+    if (updateData.key !== undefined || updateData.id !== undefined) {
+      return res.status(400).json({ message: 'Cannot update issue key or id' });
+    }
+
+    // Perform the update
+    db.issues[issueIndex] = { ...db.issues[issueIndex], ...updateData, updatedAt: new Date().toISOString() };
+    try {
+      await saveDatabase(db);
+    } catch (error) {
+      console.error('Error saving database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    res.status(200).json(db.issues[issueIndex]);
+
+  } catch (error) {
+    console.error('Error updating issue:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Deletes an issue.
+ * @param {Request} req - The Express request object. The request must include the issue ID as a route parameter.
+ * @param {Response} res - The Express response object.
+ * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
+ * Responses:
+ * - 204 No Content: Successfully deleted the issue.
+ * - 404 Not Found: Issue not found. Returns `{ message: 'Issue not found' }`.
+ * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
+ */
+export const deleteIssueEndpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    let db: DbSchema;
+    try {
+      db = await loadDatabase();
+    } catch (error) {
+      console.error('Error loading database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    const issueIndex = db.issues.findIndex(issue => issue.id === id);
+    if (issueIndex === -1) {
+      return res.status(404).json({ message: 'Issue not found' });
+    }
+    db.issues.splice(issueIndex, 1);
+    try {
+      await saveDatabase(db);
+    } catch (error) {
+      console.error('Error saving database:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+    res.status(204).send(); // No content on success
+  } catch (error) {
+    console.error('Error deleting issue:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
