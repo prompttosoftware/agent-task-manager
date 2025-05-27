@@ -317,8 +317,8 @@ export const deleteIssueEndpoint = async (req: Request, res: Response): Promise<
  * @returns {Promise<AnyIssue[]>} - A Promise that resolves with an array of all issues.
  */
 export const getAllIssues = async (): Promise<AnyIssue[]> => {
-  // Implementation not within scope
-  throw new Error('getAllIssues not implemented');
+  const db = await loadDatabase();
+  return db.issues;
 };
 
 /**
@@ -327,8 +327,8 @@ export const getAllIssues = async (): Promise<AnyIssue[]> => {
  * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
  */
 export const getIssueById = async (id: string): Promise<AnyIssue | undefined> => {
-  // Implementation not within scope
-  throw new Error('getIssueById not implemented');
+  const db = await loadDatabase();
+  return db.issues.find(issue => issue.id === id);
 };
 
 /**
@@ -337,8 +337,8 @@ export const getIssueById = async (id: string): Promise<AnyIssue | undefined> =>
  * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
  */
 export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
-  // Implementation not within scope
-  throw new Error('getIssueByKey not implemented');
+  const db = await loadDatabase();
+  return db.issues.find(issue => issue.key === key);
 };
 
 /**
@@ -353,8 +353,58 @@ export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> 
  * @returns {Promise<AnyIssue>} - A Promise that resolves with the created issue object.
  */
 export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; summary: string; description?: string; status: AnyIssue['status']; parentIssueKey?: string; }): Promise<AnyIssue> => {
-  // Implementation not within scope
-  throw new Error('addIssue not implemented');
+  const db = await loadDatabase();
+
+  // Generate required fields
+  const id = uuidv4();
+  const key = (db.issueKeyCounter + 1).toString();
+  const now = new Date().toISOString();
+
+  // Create the new issue object with base properties
+  const baseIssue = {
+    id: id,
+    key: key,
+    issueType: issueData.issueType,
+    summary: issueData.summary,
+    description: issueData.description || '', // Use provided description or default to empty string
+    status: issueData.status,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  let newIssue: AnyIssue;
+
+  // Handle specific properties based on issueType
+  switch (issueData.issueType) {
+    case "Epic":
+      newIssue = {
+        ...baseIssue,
+        childIssueKeys: [], // Requirement 1: Epics must have childIssueKeys: []
+      };
+      break;
+    case "Subtask":
+      // parentIssueKey is required for Subtask based on the type definition
+      // Assuming issueData provides it, although validation isn't done here
+      newIssue = {
+        ...baseIssue,
+        parentIssueKey: issueData.parentIssueKey!, // Add parentIssueKey (non-null assertion assuming input type is correct)
+      };
+      break;
+    case "Task":
+    case "Story":
+    case "Bug":
+    default: // Should cover other types if any, though type system limits it
+      newIssue = baseIssue;
+      break;
+  }
+
+  // Add to data store
+  db.issues.push(newIssue);
+  db.issueKeyCounter++;
+
+  await saveDatabase(db);
+
+  return newIssue;
 };
 
 
@@ -365,8 +415,48 @@ export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; su
  * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the updated issue object if found, otherwise undefined.
  */
 export const updateIssue = async (id: string, updateData: Partial<AnyIssue>): Promise<AnyIssue | undefined> => {
-  // Implementation not within scope
-  throw new Error('updateIssue not implemented');
+  const db = await loadDatabase();
+
+  const issueIndex = db.issues.findIndex(issue => issue.id === id);
+
+  if (issueIndex === -1) {
+    return undefined; // Issue not found
+  }
+
+  // Prevent updating immutable fields (key, id, createdAt)
+  const allowedUpdates = { ...updateData };
+  delete allowedUpdates.id;
+  delete allowedUpdates.key;
+  delete allowedUpdates.createdAt;
+  // Ensure issueType and parentIssueKey are also not updated via update (typically they are immutable)
+  delete allowedUpdates.issueType;
+  if (db.issues[issueIndex].issueType === 'Subtask') {
+      delete allowedUpdates.parentIssueKey;
+  }
+   // childIssueKeys for Epics is also typically managed separately or not allowed to be overwritten directly
+  if (db.issues[issueIndex].issueType === 'Epic') {
+      // You might want to handle adding/removing child keys specifically,
+      // but preventing direct overwrite of the array via Partial<AnyIssue> is safer.
+      delete allowedUpdates.childIssueKeys;
+  }
+
+
+  // Merge updates, preserving original object identity where possible or creating new one
+  const updatedIssue = {
+    ...db.issues[issueIndex],
+    ...allowedUpdates, // Apply allowed updates
+    updatedAt: new Date().toISOString(), // Update timestamp
+  };
+
+  // Ensure the updated object conforms to the specific issue type if necessary
+  // Although the spread operator usually handles this, it's good to be aware.
+  // If specific type properties were passed in allowedUpdates they will be merged.
+
+  db.issues[issueIndex] = updatedIssue as AnyIssue; // Cast back to AnyIssue type
+
+  await saveDatabase(db);
+
+  return db.issues[issueIndex]; // Return the updated issue from the array
 };
 
 /**
@@ -375,6 +465,17 @@ export const updateIssue = async (id: string, updateData: Partial<AnyIssue>): Pr
  * @returns {Promise<boolean>} - A Promise that resolves with true if the issue was found and deleted, otherwise false.
  */
 export const deleteIssue = async (id: string): Promise<boolean> => {
-  // Implementation not within scope
-  throw new Error('deleteIssue not implemented');
+  const db = await loadDatabase();
+
+  const issueIndex = db.issues.findIndex(issue => issue.id === id);
+
+  if (issueIndex === -1) {
+    return false; // Issue not found
+  }
+
+  db.issues.splice(issueIndex, 1);
+
+  await saveDatabase(db);
+
+  return true; // Issue found and deleted
 };

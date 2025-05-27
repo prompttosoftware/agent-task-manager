@@ -11,7 +11,7 @@ const DB_FILE_PATH = '/usr/src/agent-task-manager/.data/db.json';
  * @param db The database schema to save.
  */
 async function saveDatabase(db: DbSchema): Promise<void> {
-  const jsonData = JSON.stringify(db);
+  const jsonData = JSON.stringify(db, null, 2);
   await fs.mkdir(path.dirname(DB_FILE_PATH), { recursive: true }); // Ensure directory exists
   await fs.writeFile(DB_FILE_PATH, jsonData, 'utf8');
 }
