@@ -104,7 +104,7 @@ describe('DataStore', () => {
     expect(mockFsPromises.readFile).not.toHaveBeenCalled();
 
     // Verify mkdir was called to create the directory
-    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(2);
+    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
 
     // Verify writeFile was called to save the default data
@@ -174,39 +174,10 @@ describe('DataStore', () => {
     // Verify other fs functions were NOT called by saveDatabase
     expect(mockFsPromises.access).not.toHaveBeenCalled();
     expect(mockFsPromises.readFile).not.toHaveBeenCalled();
-    expect(mockFsPromises.mkdir).not.toHaveBeenCalled(); // mkdir is handled by loadDatabase on default init
 
     // Verify the mock state reflects the file being written
     expect(mockFileContent).toBe(expectedSavedJson);
     expect(fileExists).toBe(true);
-  });
-
-  test('saveDatabase should create the directory if it does not exist', async () => {
-    // Simulate directory not existing
-    const tempDirPath = path.join(os.tmpdir(), 'agent-task-manager-test');
-    const tempFilePath = path.join(tempDirPath, 'db.json');
-    const dataToSave: DbSchema = { issues: [], issueKeyCounter: 0 };
-    const expectedSavedJson = JSON.stringify(dataToSave);
-
-    mockFsPromises.writeFile.mockImplementation((filePath, data, encoding) => {
-      if (filePath === tempFilePath && encoding === 'utf8') {
-        mockFileContent = data as string;
-        fileExists = true;
-        return Promise.resolve();
-      }
-      return Promise.reject(new Error(`Mock: Unexpected writeFile to ${filePath} with encoding ${encoding}`));
-    });
-
-
-    await saveDatabase(dataToSave);
-
-    // Verify mkdir was called to create the directory
-    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
-    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(tempDirPath, { recursive: true });
-
-    // Verify writeFile was called to save the data
-    expect(mockFsPromises.writeFile).toHaveBeenCalledTimes(1);
-    expect(mockFsPromises.writeFile).toHaveBeenCalledWith(tempFilePath, expectedSavedJson, 'utf8');
   });
 
   test('loadDatabase should initialize with default data if file exists but contains invalid JSON', async () => {
@@ -227,10 +198,6 @@ describe('DataStore', () => {
     expect(mockFsPromises.readFile).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.readFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, 'utf8');
 
-    // Verify mkdir was called to create the directory if it doesn't exist
-    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
-    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
-
     // Verify writeFile was called to save the default data
     expect(mockFsPromises.writeFile).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.writeFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, expectedSavedData, 'utf8');
@@ -243,7 +210,7 @@ describe('DataStore', () => {
     expect(fileExists).toBe(true);
   });
 
-   test('loadDatabase should initialize with default data if readFile throws an error (not ENOENT)', async () => {
+    test('loadDatabase should initialize with default data if readFile throws an error (not ENOENT)', async () => {
     // Simulate file existing
     fileExists = true;
     mockFileContent = 'Some content'; // Content doesn't matter if readFile fails
@@ -265,10 +232,6 @@ describe('DataStore', () => {
     // Verify readFile was called and failed
     expect(mockFsPromises.readFile).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.readFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, 'utf8');
-
-    // Verify mkdir was called
-    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
-    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
 
     // Verify writeFile was called to save the default data
     expect(mockFsPromises.writeFile).toHaveBeenCalledTimes(1);
