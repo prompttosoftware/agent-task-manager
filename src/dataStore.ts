@@ -39,4 +39,4 @@ async function loadDatabase(): Promise<DbSchema> {
   }
 }
 
-export { loadDatabase, saveDatabase };
+export { loadDatabase, saveDatabase, DB_FILE_PATH };

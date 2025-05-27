@@ -311,3 +311,70 @@ export const deleteIssueEndpoint = async (req: Request, res: Response): Promise<
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * Helper function to retrieve all issues directly from the database.
+ * @returns {Promise<AnyIssue[]>} - A Promise that resolves with an array of all issues.
+ */
+export const getAllIssues = async (): Promise<AnyIssue[]> => {
+  // Implementation not within scope
+  throw new Error('getAllIssues not implemented');
+};
+
+/**
+ * Helper function to retrieve an issue by its ID directly from the database.
+ * @param {string} id - The ID of the issue to retrieve.
+ * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
+ */
+export const getIssueById = async (id: string): Promise<AnyIssue | undefined> => {
+  // Implementation not within scope
+  throw new Error('getIssueById not implemented');
+};
+
+/**
+ * Helper function to retrieve an issue by its key directly from the database.
+ * @param {string} key - The key of the issue to retrieve.
+ * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
+ */
+export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
+  // Implementation not within scope
+  throw new Error('getIssueByKey not implemented');
+};
+
+/**
+ * Helper function to add a new issue directly to the database.
+ * Handles ID, key, and timestamp generation.
+ * @param {object} issueData - The data for the new issue (excluding generated fields).
+ * @param {"Task" | "Story" | "Epic" | "Bug" | "Subtask"} issueData.issueType - The type of the issue.
+ * @param {string} issueData.summary - The summary of the issue.
+ * @param {string} [issueData.description] - The description of the issue.
+ * @param {"Todo" | "In Progress" | "Done"} issueData.status - The status of the issue.
+ * @param {string} [issueData.parentIssueKey] - The parent issue key (required for Subtask).
+ * @returns {Promise<AnyIssue>} - A Promise that resolves with the created issue object.
+ */
+export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; summary: string; description?: string; status: AnyIssue['status']; parentIssueKey?: string; }): Promise<AnyIssue> => {
+  // Implementation not within scope
+  throw new Error('addIssue not implemented');
+};
+
+
+/**
+ * Helper function to update an existing issue by its ID directly in the database.
+ * @param {string} id - The ID of the issue to update.
+ * @param {Partial<AnyIssue>} updateData - The partial issue data to update.
+ * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the updated issue object if found, otherwise undefined.
+ */
+export const updateIssue = async (id: string, updateData: Partial<AnyIssue>): Promise<AnyIssue | undefined> => {
+  // Implementation not within scope
+  throw new Error('updateIssue not implemented');
+};
+
+/**
+ * Helper function to delete an issue by its ID directly from the database.
+ * @param {string} id - The ID of the issue to delete.
+ * @returns {Promise<boolean>} - A Promise that resolves with true if the issue was found and deleted, otherwise false.
+ */
+export const deleteIssue = async (id: string): Promise<boolean> => {
+  // Implementation not within scope
+  throw new Error('deleteIssue not implemented');
+};

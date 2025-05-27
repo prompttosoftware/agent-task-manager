@@ -172,6 +172,11 @@ describe('DataStore', () => {
     expect(mockFsPromises.writeFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, expectedSavedJson, 'utf8');
 
     // Verify other fs functions were NOT called by saveDatabase
+    // Verify mkdir was called to ensure the directory exists
+    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
+    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
+
+    // Verify other fs functions were NOT called by saveDatabase (except mkdir and writeFile)
     expect(mockFsPromises.access).not.toHaveBeenCalled();
     expect(mockFsPromises.readFile).not.toHaveBeenCalled();
 
