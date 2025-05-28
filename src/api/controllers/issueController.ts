@@ -3,6 +3,43 @@ import { AnyIssue, DbSchema } from '../../models';
 import { loadDatabase, saveDatabase } from '../../dataStore';
 import { v4 as uuidv4 } from 'uuid';
 
+// Define allowed values for issue types and statuses
+const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"];
+const allowedStatuses = ["Todo", "In Progress", "Done"];
+
+// Define the map for issue type prefixes
+const issueTypePrefixMap: { [key: string]: string } = {
+  "Task": "TASK",
+  "Story": "STOR",
+  "Epic": "EPIC",
+  "Bug": "BUG",
+  "Subtask": "SUBT",
+};
+
+/**
+ * Helper function to retrieve the key prefix for a given issue type.
+ * Defaults to "GEN" if the type is not recognized.
+ * @param issueType The type of the issue (e.g., "Task", "Story").
+ * @returns The corresponding issue key prefix.
+ */
+const getIssueKeyPrefix = (issueType: string): string => {
+  // Get the prefix from the map, default to "GEN" if not found
+  return issueTypePrefixMap[issueType] || "GEN";
+};
+
+/**
+ * Generates an issue key in the format [ISSUE_TYPE_PREFIX]-<counter>.
+ * Uses prefixes TASK, STOR, EPIC, BUG, SUBT or defaults to GEN.
+ * @param issueType The type of the issue (e.g., "Task", "Story").
+ * @param counter The counter value to use in the key.
+ * @returns The generated issue key string.
+ */
+const generateIssueKey = (issueType: string, counter: number): string => {
+  const prefix = getIssueKeyPrefix(issueType);
+  return `${prefix}-${counter}`;
+};
+
+
 /**
  * Creates a new issue based on the provided request body.
  *
@@ -25,8 +62,9 @@ import { v4 as uuidv4 } from 'uuid';
  * - 500 Internal Server Error: An error occurred on the server side, likely related to data store operations (getting key, adding issue). Returns `{ message: 'Internal server error' }`.
  */
 export const createIssue = async (req: Request, res: Response): Promise<void> => {
-  const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"];
-  const allowedStatuses = ["Todo", "In Progress", "Done"];
+  // Use top-level constants for allowed types and statuses
+  // const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"]; // Removed duplicate definition
+  // const allowedStatuses = ["Todo", "In Progress", "Done"]; // Removed duplicate definition
 
   try {
     const { issueType, summary, status, description } = req.body;
@@ -37,7 +75,8 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Validate issueType and status against allowed values from models.ts
+    // Validate issueType and status against allowed values
+    // The following checks already ensure issueType and status are valid before proceeding.
     if (!allowedIssueTypes.includes(issueType)) {
          res.status(400).json({ message: `Invalid issueType: "${issueType}". Must be one of ${allowedIssueTypes.join(', ')}.` });
          return;
@@ -64,7 +103,8 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
     }
     // Generate required fields
     const id = uuidv4();
-    const key = (db.issueKeyCounter + 1).toString();
+    const nextCounter = db.issueKeyCounter + 1; // Calculate the next counter value
+    const key = generateIssueKey(issueType, nextCounter); // Use the new function
     const now = new Date().toISOString();
 
     // Create the new issue object with base properties
@@ -99,9 +139,13 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
       case "Task":
       case "Story":
       case "Bug":
-      default: // Should not happen due to validation, but handles simple types
+        // These types do not require additional properties beyond baseIssue
         newIssue = baseIssue;
         break;
+      default: // Handle unknown issue types by throwing an error
+        // This case should theoretically not be reached if the validation above is correct,
+        // but it's a good safety net.
+        throw new Error(`Internal Error: Unhandled issue type "${issueType}" encountered.`);
     }
 
     // Requirement 4: Ensure the created issue object correctly matches the type definition.
@@ -110,7 +154,7 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
 
     // Add to data store
     db.issues.push(newIssue);
-    db.issueKeyCounter++;
+    db.issueKeyCounter = nextCounter; // Update the counter to the value used for the key
 
     try {
       await saveDatabase(db);
@@ -228,7 +272,8 @@ export const getIssueByKeyEndpoint = async (req: Request, res: Response): Promis
  * - 500 Internal Server Error: An error occurred on the server side. Returns `{ message: 'Internal server error' }`.
  */
 export const updateIssueEndpoint = async (req: Request, res: Response): Promise<void> => {
-  const allowedStatuses = ["Todo", "In Progress", "Done"];
+  // Use top-level constant for allowed statuses
+  // const allowedStatuses = ["Todo", "In Progress", "Done"]; // Removed duplicate definition
   try {
     const { id } = req.params; // Assuming the ID is passed as a route parameter
     const updateData = req.body;
@@ -353,11 +398,33 @@ export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> 
  * @returns {Promise<AnyIssue>} - A Promise that resolves with the created issue object.
  */
 export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; summary: string; description?: string; status: AnyIssue['status']; parentIssueKey?: string; }): Promise<AnyIssue> => {
+  // Add validation for required fields: issueType, summary, and status
+  if (!issueData.issueType || issueData.issueType.trim() === '' || !issueData.summary || issueData.summary.trim() === '' || !issueData.status || issueData.status.trim() === '') {
+    throw new Error('Missing required fields: issueType, summary, and status are required.');
+  }
+
+  // Add validation for issueType against allowed values
+  if (!allowedIssueTypes.includes(issueData.issueType)) {
+      throw new Error(`Invalid issueType: "${issueData.issueType}". Must be one of ${allowedIssueTypes.join(', ')}.`);
+  }
+
+  // Add validation for status against allowed values
+   if (!allowedStatuses.includes(issueData.status)) {
+      throw new Error(`Invalid status: "${issueData.status}". Must be one of ${allowedStatuses.join(', ')}.`);
+  }
+
+  // Add validation for parentIssueKey if issueType is Subtask
+  if (issueData.issueType === 'Subtask' && (!issueData.parentIssueKey || typeof issueData.parentIssueKey !== 'string' || issueData.parentIssueKey.trim() === '')) {
+       throw new Error('Missing required field: parentIssueKey is required for Subtasks.');
+  }
+
+
   const db = await loadDatabase();
 
   // Generate required fields
   const id = uuidv4();
-  const key = (db.issueKeyCounter + 1).toString();
+  const nextCounter = db.issueKeyCounter + 1; // Calculate the next counter value
+  const key = generateIssueKey(issueData.issueType, nextCounter); // Use the new function
   const now = new Date().toISOString();
 
   // Create the new issue object with base properties
@@ -393,14 +460,19 @@ export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; su
     case "Task":
     case "Story":
     case "Bug":
-    default: // Should cover other types if any, though type system limits it
       newIssue = baseIssue;
       break;
+    default: // Handle unknown issue types by throwing an error
+       // This case should theoretically not be reached if the validation above is correct,
+       // but it's a good safety net.
+       // The default case already handles throwing an error for an unknown issue type,
+       // indicating the type in the message.
+       throw new Error(`Internal Error: Unhandled issue type "${issueData.issueType}" encountered in addIssue.`);
   }
 
   // Add to data store
   db.issues.push(newIssue);
-  db.issueKeyCounter++;
+  db.issueKeyCounter = nextCounter; // Update the counter to the value used for the key
 
   await saveDatabase(db);
 
@@ -429,7 +501,7 @@ export const updateIssue = async (id: string, updateData: Partial<AnyIssue>): Pr
   delete allowedUpdates.key;
   delete allowedUpdates.createdAt;
   // Ensure issueType and parentIssueKey are also not updated via update (typically they are immutable)
-  delete allowedUpdates.issueType;
+  delete allowedUpdates.issueType; // Prevent issueType update
   if (db.issues[issueIndex].issueType === 'Subtask') {
       delete allowedUpdates.parentIssueKey;
   }
