@@ -67,32 +67,35 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
   // const allowedStatuses = ["Todo", "In Progress", "Done"]; // Removed duplicate definition
 
   try {
-    const { issueType, summary, status, description } = req.body;
+    // Access fields based on the requested structure
+    const { fields, parentIssueKey, status, description } = req.body;
+    const summary = fields?.summary;
+    const issueTypeName = fields?.issuetype?.name;
 
-    // Basic validation for existence and non-empty strings
-    if (!issueType || !summary || !status || issueType.trim() === '' || summary.trim() === '' || status.trim() === '') {
-      res.status(400).json({ message: 'Missing required fields: issueType, summary, and status are required.' });
-      return;
+    // Validation 1: Required fields presence and non-empty
+    if (!summary || typeof summary !== 'string' || summary.trim() === '' ||
+        !issueTypeName || typeof issueTypeName !== 'string' || issueTypeName.trim() === '') {
+        res.status(400).json({ message: 'Missing required fields: fields.summary and fields.issuetype.name are required and cannot be empty.' });
+        return;
     }
 
-    // Validate issueType and status against allowed values
-    // The following checks already ensure issueType and status are valid before proceeding.
-    if (!allowedIssueTypes.includes(issueType)) {
-         res.status(400).json({ message: `Invalid issueType: "${issueType}". Must be one of ${allowedIssueTypes.join(', ')}.` });
-         return;
+    // Validation 2: issueTypeName must be one of allowed types
+    if (!allowedIssueTypes.includes(issueTypeName)) {
+        res.status(400).json({ message: `Invalid issue type: "${issueTypeName}". Must be one of ${allowedIssueTypes.join(', ')}.` });
+        return;
     }
 
-    if (!allowedStatuses.includes(status)) {
-         res.status(400).json({ message: `Invalid status: "${status}". Must be one of ${allowedStatuses.join(', ')}.` });
-         return;
+    // Validation 3: parentIssueKey required for Subtask
+    if (issueTypeName === 'Subtask') {
+        if (!parentIssueKey || typeof parentIssueKey !== 'string' || parentIssueKey.trim() === '') {
+            res.status(400).json({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
+            return;
+        }
     }
 
-    const { parentIssueKey } = req.body;
-    // Validate parentIssueKey for Subtasks if issueType is Subtask
-    if (issueType === 'Subtask' && (!parentIssueKey || typeof parentIssueKey !== 'string' || parentIssueKey.trim() === '')) {
-      res.status(400).json({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
-      return; // Stop execution here
-    }
+    // Prepare variables for issue creation based on validated input
+    const issueType = issueTypeName; // Align variable name for subsequent code
+    // status and description are taken directly from req.body if present, no specific validation required per prompt.
 
     let db: DbSchema;
     try {
@@ -130,7 +133,7 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
         };
         break;
       case "Subtask":
-        const { parentIssueKey } = req.body; // parentIssueKey was already validated before generating ID/Key
+        // parentIssueKey was already validated and extracted at the beginning
         newIssue = {
           ...baseIssue,
           parentIssueKey: parentIssueKey.trim(), // Add parentIssueKey
