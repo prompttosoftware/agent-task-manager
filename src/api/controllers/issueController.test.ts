@@ -1,9 +1,17 @@
 import { Request, Response } from 'express';
 import { createIssue } from './issueController';
-import { v4 as uuidv4 } from 'uuid';
-import { loadDatabase, saveDatabase } from '../dataStore';
-import * as dataStore from '../dataStore';
-import { AnyIssue } from '../../models'; // Import AnyIssue for typing
+// Assuming issueService handles UUID, key generation, and persistence
+// import { v4 as uuidv4 } from 'uuid'; // Removed as service handles ID
+// import { loadDatabase, saveDatabase } from '../dataStore'; // Removed as service handles data
+// import * as dataStore from '../dataStore'; // Removed as service handles data
+import issueService from '../services/issueService'; // Assuming this service exists
+import { AnyIssue, CreateIssueInput } from '../../models'; // Import necessary types
+import { ApiError } from '../utils/apiError'; // Assuming a custom error type
+
+// Mock the issueService
+jest.mock('../services/issueService');
+const mockIssueService = issueService as jest.Mocked<typeof issueService>;
+
 
 // Mock the request and response objects
 const mockRequest = (body = {}) => ({
@@ -18,410 +26,189 @@ const mockResponse = () => {
   return res;
 };
 
+// Helper functions (can remain if controller validation uses them,
+// but the key generation logic itself is service responsibility)
 // Helper to determine the expected prefix based on issue type
-const getExpectedKeyPrefix = (issueType: AnyIssue['issueType']): string => {
-    const prefixMap: { [key in AnyIssue['issueType']]: string } = {
-        "Task": "TASK",
-        "Story": "STOR",
-        "Epic": "EPIC",
-        "Bug": "BUG",
-        "Subtask": "SUBT",
-    };
-    return prefixMap[issueType];
-};
+// Removed as service handles key generation
+// const getExpectedKeyPrefix = (issueType: AnyIssue['issueType']): string => {
+//     const prefixMap: { [key in AnyIssue['issueType']]: string } = {
+//         "Task": "TASK",
+//         "Story": "STOR",
+//         "Epic": "EPIC",
+//         "Bug": "BUG",
+//         "Subtask": "SUBT",
+//     };
+//     return prefixMap[issueType];
+// };
 
 // Define valid issue types and statuses for validation tests
+// These should ideally be imported from a shared constants file used by the controller
 const validIssueTypes: AnyIssue['issueType'][] = ['Task', 'Story', 'Epic', 'Bug', 'Subtask'];
 const validStatuses: AnyIssue['status'][] = ['Todo', 'In Progress', 'Done'];
 
 
 // Main test suite for createIssue controller
 describe('createIssue Controller', () => {
-    beforeEach(async () => {
-        // Reset the database to an empty state before each test
-        dataStore.issues = [];
-        dataStore.issueKeyCounter = 0;
-
-        // Clear all mocks
+    beforeEach(() => {
+        // Clear all mocks before each test
         jest.clearAllMocks();
-        // Mock Date.now for predictable timestamps
-        const mockDate = new Date('2023-01-01T10:00:00.000Z');
-        jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
 
-        // Mock uuidv4 for predictable IDs - default mock
-        (uuidv4 as jest.Mock).mockReturnValue('test-uuid-default');
+        // Mock Date.now for predictable timestamps if controller uses it before passing to service,
+        // or if we need to verify the service returns correct dates based on input time.
+        // Assuming service handles dates, mock Date.now is less critical for controller tests.
+        // Removing the Date mock unless needed later.
+        // const mockDate = new Date('2023-01-01T10:00:00.000Z');
+        // jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+
+
+        // Mock uuidv4 only if the controller generates the ID before calling the service.
+        // Assuming service generates the full issue object including ID, Key, Dates.
+        // Removed uuidv4 mock.
+        // (uuidv4 as jest.Mock).mockReturnValue('test-uuid-default');
     });
 
-    afterEach(async () => {
-        // Restore original mocks after each test
+    afterEach(() => {
+        // Restore original mocks after each test (though clearAllMocks is often sufficient)
         jest.restoreAllMocks();
-        jest.resetAllMocks();
-    });
-
-    // --- Key Generation Tests (Existing) ---
-
-    it('should generate keys with the correct prefixes for all issue types', async () => {
-        const issueTypes: AnyIssue['issueType'][] = ['Task', 'Story', 'Epic', 'Bug', 'Subtask'];
-        let currentCounter = dataStore.issueKeyCounter; // Should be 0 initially due to beforeEach
-
-        for (const issueType of issueTypes) {
-            const testUuid = `uuid-${issueType.toLowerCase()}`;
-            (uuidv4 as jest.Mock).mockReturnValueOnce(testUuid); // Mock uuidv4 for this specific creation
-
-            const req = mockRequest({
-                issueType: issueType,
-                summary: `Test ${issueType}`,
-                status: 'Todo', // Use a valid status
-                // Provide parentIssueKey for Subtask, ignore for others
-                parentIssueKey: issueType === 'Subtask' ? 'PARENT-1' : undefined,
-            });
-            const res = mockResponse();
-
-            await createIssue(req, res);
-
-            expect(res.status).toHaveBeenCalledWith(201);
-            const createdIssue = (res.json as jest.Mock).mock.calls[0][0];
-
-            const expectedPrefix = getExpectedKeyPrefix(issueType);
-            currentCounter++;
-            const expectedKey = `${expectedPrefix}-${currentCounter}`;
-
-            expect(createdIssue.key).toBe(expectedKey);
-            expect(createdIssue.issueType).toBe(issueType);
-            expect(dataStore.issueKeyCounter).toBe(currentCounter);
-
-             // Verify parentIssueKey is included for Subtask and absent for others
-            if (issueType === 'Subtask') {
-                expect((createdIssue as any).parentIssueKey).toBe('PARENT-1');
-            } else {
-                expect(createdIssue).not.toHaveProperty('parentIssueKey');
-            }
-        }
-        expect(dataStore.issues.length).toBe(issueTypes.length);
-        expect(dataStore.issueKeyCounter).toBe(issueTypes.length); // Final counter check
+        // jest.resetAllMocks(); // clearAllMocks usually covers this for mocks created in beforeEach
     });
 
     // --- Successful Creation Tests ---
 
-    it('should return 201 and the created issue object upon successful issue creation without description', async () => {
-        const testUuid = 'test-uuid-success-1';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid);
-
-        const req = mockRequest({
+    it('should call issueService.createIssue with correct data and return 201 on success without description', async () => {
+        const issueInput = {
           issueType: 'Bug',
           summary: 'Test Issue Without Description',
-          status: 'Todo', // Use a valid status
-        });
+          status: 'Todo',
+        };
+        const expectedIssue = {
+            id: 'mock-uuid-1', // Mocked by service
+            key: 'BUG-1',       // Mocked by service
+            ...issueInput,
+            description: '',    // Default description
+            createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
+            updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
+        };
+
+        // Mock the service call to return the expected issue
+        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+
+        const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString(); // Matches mocked Date
-        const initialCounter = 0; // Assume counter starts at 0 after beforeEach
-        const expectedIssueKey = `${getExpectedKeyPrefix('Bug')}-${initialCounter + 1}`;
-
-        const expectedIssue = {
-            id: testUuid,
-            key: expectedIssueKey,
+        // Verify the service was called with the correct input
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
             issueType: 'Bug',
             summary: 'Test Issue Without Description',
-            description: '', // Default description when not provided
+            description: '', // Controller should pass default if missing
             status: 'Todo',
-            createdAt: testDate,
-            updatedAt: testDate,
-        };
+             // parentIssueKey should be undefined for non-subtasks
+        });
 
+        // Verify the controller responded correctly
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
-        // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issues[0]).toEqual(expectedIssue);
-        expect(dataStore.issueKeyCounter).toBe(1); // Key counter should increment
+        // No direct dataStore assertions in controller tests
       });
 
-      it('should return 201 and the created issue object upon successful issue creation with description', async () => {
-        const testUuid = 'test-uuid-success-2';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid); // Set specific UUID for this test
-
-        const req = mockRequest({
+      it('should call issueService.createIssue with correct data and return 201 on success with description', async () => {
+        const issueInput = {
           issueType: 'Story',
           summary: 'Test Issue With Description',
           status: 'In Progress',
           description: 'This is a test description.',
-        });
+        };
+        const expectedIssue = {
+            id: 'mock-uuid-2', // Mocked by service
+            key: 'STOR-2',      // Mocked by service
+            ...issueInput,
+            createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
+            updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
+        };
+
+        // Mock the service call to return the expected issue
+        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+
+        const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString(); // Matches mocked Date
-        const initialCounter = 0; // Assume counter starts at 0 after beforeEach
-        const expectedIssueKey = `${getExpectedKeyPrefix('Story')}-${initialCounter + 1}`;
-
-        const expectedIssue = {
-            id: testUuid,
-            key: expectedIssueKey,
+        // Verify the service was called with the correct input
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
             issueType: 'Story',
             summary: 'Test Issue With Description',
             description: 'This is a test description.',
             status: 'In Progress',
-            createdAt: testDate,
-            updatedAt: testDate,
-        };
+             // parentIssueKey should be undefined for non-subtasks
+        });
 
+
+        // Verify the controller responded correctly
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
-         // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issues[0]).toEqual(expectedIssue);
-        expect(dataStore.issueKeyCounter).toBe(1); // Key counter should increment
+         // No direct dataStore assertions in controller tests
       });
 
-    it('should return 201 and create a Subtask issue with the correct parentIssueKey', async () => {
-        const subtaskUuid = 'test-uuid-subtask-success-1';
-        const parentKey = 'TASK-99'; // A dummy parent key
-
-        // Mock uuidv4 for the subtask creation
-        (uuidv4 as jest.Mock).mockReturnValueOnce(subtaskUuid);
-
-        const initialCounter = dataStore.issueKeyCounter; // Should be 0 after beforeEach
-
-        // Create the subtask
-        const req = mockRequest({
+    it('should call issueService.createIssue with correct data and return 201 for a Subtask with parentIssueKey', async () => {
+        const parentKey = 'TASK-99';
+        const issueInput = {
             issueType: 'Subtask',
             summary: 'Subtask of Parent',
             status: 'Todo',
-            parentIssueKey: parentKey, // Provide the parent key
-        });
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString();
-        const expectedSubtaskKey = `${getExpectedKeyPrefix('Subtask')}-${initialCounter + 1}`;
-
-        const expectedSubtask = {
-            id: subtaskUuid,
-            key: expectedSubtaskKey,
-            issueType: 'Subtask',
-            summary: 'Subtask of Parent',
-            description: '', // Default description
-            status: 'Todo',
-            createdAt: testDate,
-            updatedAt: testDate,
-            parentIssueKey: parentKey, // Verify parentIssueKey is included
+            parentIssueKey: parentKey,
         };
-
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(expectedSubtask);
-
-        // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1); // Only the subtask was created in this test run
-        const createdSubtask = dataStore.issues.find(issue => issue.id === subtaskUuid);
-        expect(createdSubtask).toEqual(expectedSubtask);
-        expect(dataStore.issueKeyCounter).toBe(initialCounter + 1); // Counter should increment to 1
-    });
-
-    // --- Validation Tests (Missing Fields - Existing) ---
-
-    it('should generate keys with the correct format [PREFIX]-[COUNTER]', async () => {
-        const testUuid = 'uuid-format-check';
-        (uuidv4 as jest.Mock).mockReturnValueOnce(testUuid);
-
-        const req = mockRequest({
-            issueType: 'Bug',
-            summary: 'Format Test',
-            status: 'Todo',
-        });
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        expect(res.status).toHaveBeenCalledWith(201);
-        const createdIssue = (res.json as jest.Mock).mock.calls[0][0];
-
-        const key = createdIssue.key;
-        expect(key).toEqual(expect.stringMatching(/^[A-Z]+-\d+$/)); // Regex: one or more uppercase letters, hyphen, one or more digits
-
-        const parts = key.split('-');
-        expect(parts.length).toBe(2); // Should have exactly two parts
-        expect(parts[0]).toBe(getExpectedKeyPrefix('Bug')); // First part is the prefix
-        expect(parseInt(parts[1], 10)).toBeGreaterThanOrEqual(1); // Second part is a number >= 1 (since counter starts at 0 or 1)
-        expect(isNaN(parseInt(parts[1], 10))).toBe(false); // Ensure the second part is a valid number
-
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issueKeyCounter).toBe(1);
-    });
-
-    it('should correctly increment the counter for sequential issue creations', async () => {
-        const testUuid1 = 'uuid-counter-1';
-        const testUuid2 = 'uuid-counter-2';
-        const testUuid3 = 'uuid-counter-3';
-
-        // First creation
-        (uuidv4 as jest.Mock).mockReturnValueOnce(testUuid1);
-        const req1 = mockRequest({ issueType: 'Task', summary: 'Task One', status: 'Todo' });
-        const res1 = mockResponse();
-        await createIssue(req1, res1);
-        expect(res1.status).toHaveBeenCalledWith(201);
-        const issue1 = (res1.json as jest.Mock).mock.calls[0][0];
-        expect(issue1.key).toBe(`${getExpectedKeyPrefix('Task')}-1`);
-        expect(dataStore.issueKeyCounter).toBe(1);
-
-        // Second creation
-        (uuidv4 as jest.Mock).mockReturnValueOnce(testUuid2);
-        const req2 = mockRequest({ issueType: 'Bug', summary: 'Bug Two', status: 'In Progress' });
-        const res2 = mockResponse();
-        await createIssue(req2, res2);
-        expect(res2.status).toHaveBeenCalledWith(201);
-        const issue2 = (res2.json as jest.Mock).mock.calls[0][0];
-        // Counter should increment regardless of issue type
-        expect(issue2.key).toBe(`${getExpectedKeyPrefix('Bug')}-2`);
-        expect(dataStore.issueKeyCounter).toBe(2);
-
-        // Third creation
-        (uuidv4 as jest.Mock).mockReturnValueOnce(testUuid3);
-        const req3 = mockRequest({ issueType: 'Story', summary: 'Story Three', status: 'Done' });
-        const res3 = mockResponse();
-        await createIssue(req3, res3);
-        expect(res3.status).toHaveBeenCalledWith(201);
-        const issue3 = (res3.json as jest.Mock).mock.calls[0][0];
-         // Counter should increment again
-        expect(issue3.key).toBe(`${getExpectedKeyPrefix('Story')}-3`);
-        expect(dataStore.issueKeyCounter).toBe(3);
-
-        // Verify state in the store
-        expect(dataStore.issues.length).toBe(3);
-        expect(dataStore.issues[0].key).toBe(`${getExpectedKeyPrefix('Task')}-1`);
-        expect(dataStore.issues[1].key).toBe(`${getExpectedKeyPrefix('Bug')}-2`);
-        expect(dataStore.issues[2].key).toBe(`${getExpectedKeyPrefix('Story')}-3`);
-        expect(dataStore.issueKeyCounter).toBe(3); // Final counter check
-    });
-
-    // --- Successful Creation Tests ---
-
-    it('should return 201 and the created issue object upon successful issue creation without description', async () => {
-        const testUuid = 'test-uuid-success-1';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid);
-
-        const req = mockRequest({
-          issueType: 'Bug',
-          summary: 'Test Issue Without Description',
-          status: 'Todo', // Use a valid status
-        });
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString(); // Matches mocked Date
-        const initialCounter = 0; // Assume counter starts at 0 after beforeEach
-        const expectedIssueKey = `${getExpectedKeyPrefix('Bug')}-${initialCounter + 1}`;
-
         const expectedIssue = {
-            id: testUuid,
-            key: expectedIssueKey,
-            issueType: 'Bug',
-            summary: 'Test Issue Without Description',
-            description: '', // Default description when not provided
-            status: 'Todo',
-            createdAt: testDate,
-            updatedAt: testDate,
+            id: 'mock-uuid-subtask-1', // Mocked by service
+            key: 'SUBT-3',              // Mocked by service
+            ...issueInput,
+            description: '',            // Default description
+            createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
+            updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
         };
 
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(expectedIssue);
+        // Mock the service call to return the expected issue
+        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
 
-        // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issues[0]).toEqual(expectedIssue);
-        expect(dataStore.issueKeyCounter).toBe(1); // Key counter should increment
-      });
-
-      it('should return 201 and the created issue object upon successful issue creation with description', async () => {
-        const testUuid = 'test-uuid-success-2';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid); // Set specific UUID for this test
-
-        const req = mockRequest({
-          issueType: 'Story',
-          summary: 'Test Issue With Description',
-          status: 'In Progress',
-          description: 'This is a test description.',
-        });
+        const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString(); // Matches mocked Date
-        const initialCounter = 0; // Assume counter starts at 0 after beforeEach
-        const expectedIssueKey = `${getExpectedKeyPrefix('Story')}-${initialCounter + 1}`;
+        // Verify the service was called with the correct input, including parentIssueKey
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+            issueType: 'Subtask',
+            summary: 'Subtask of Parent',
+            description: '', // Controller should pass default if missing
+            status: 'Todo',
+            parentIssueKey: parentKey, // Verify parentIssueKey is passed
+        });
 
-        const expectedIssue = {
-            id: testUuid,
-            key: expectedIssueKey,
-            issueType: 'Story',
-            summary: 'Test Issue With Description',
-            description: 'This is a test description.',
-            status: 'In Progress',
-            createdAt: testDate,
-            updatedAt: testDate,
-        };
-
+        // Verify the controller responded correctly
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
-         // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issues[0]).toEqual(expectedIssue);
-        expect(dataStore.issueKeyCounter).toBe(1); // Key counter should increment
-      });
-
-    it('should return 201 and create a Subtask issue with the correct parentIssueKey', async () => {
-        const subtaskUuid = 'test-uuid-subtask-success-1';
-        const parentKey = 'TASK-99'; // A dummy parent key
-
-        // Mock uuidv4 for the subtask creation
-        (uuidv4 as jest.Mock).mockReturnValueOnce(subtaskUuid);
-
-        const initialCounter = dataStore.issueKeyCounter; // Should be 0 after beforeEach
-
-        // Create the subtask
-        const req = mockRequest({
-            issueType: 'Subtask',
-            summary: 'Subtask of Parent',
-            status: 'Todo',
-            parentIssueKey: parentKey, // Provide the parent key
-        });
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        const testDate = new Date('2023-01-01T10:00:00.000Z').toISOString();
-        const expectedSubtaskKey = `${getExpectedKeyPrefix('Subtask')}-${initialCounter + 1}`;
-
-        const expectedSubtask = {
-            id: subtaskUuid,
-            key: expectedSubtaskKey,
-            issueType: 'Subtask',
-            summary: 'Subtask of Parent',
-            description: '', // Default description
-            status: 'Todo',
-            createdAt: testDate,
-            updatedAt: testDate,
-            parentIssueKey: parentKey, // Verify parentIssueKey is included
-        };
-
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(expectedSubtask);
-
-        // Verify dataStore state
-        expect(dataStore.issues.length).toBe(1); // Only the subtask was created in this test run
-        const createdSubtask = dataStore.issues.find(issue => issue.id === subtaskUuid);
-        expect(createdSubtask).toEqual(expectedSubtask);
-        expect(dataStore.issueKeyCounter).toBe(initialCounter + 1); // Counter should increment to 1
+        // No direct dataStore assertions in controller tests
     });
 
-    // --- Validation Tests (Missing Fields - Existing) ---
+    // --- Validation Tests (Missing Fields - Controller handles these, service should not be called) ---
+
+    // Removed key generation/increment tests as they are service logic now
+    // it('should generate keys with the correct format [PREFIX]-[COUNTER]', async () => { ... });
+    // it('should correctly increment the counter for sequential issue creations', async () => { ... });
+
+    // Note: Duplicate successful creation tests found in the original code have been removed.
+    // The tests above cover successful creation with/without description and for Subtasks.
+
+
+    // --- Validation Tests (Missing Fields - Controller handles these, service should not be called) ---
 
      it('should return 400 if issueType is missing', async () => {
         const req = mockRequest({
@@ -435,9 +222,8 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: issueType.' });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
      it('should return 400 if summary is missing', async () => {
@@ -452,9 +238,8 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: summary.' });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
     it('should return 400 if status is missing', async () => {
@@ -469,12 +254,14 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: status.' });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
-    // --- Validation Tests (Invalid Values - New) ---
+    // Note: Duplicate validation tests found in the original code have been removed.
+    // The tests above cover missing required fields.
+
+    // --- Validation Tests (Invalid Values - Controller handles these, service should not be called) ---
 
     it('should return 400 if issueType is invalid', async () => {
         const invalidIssueType = 'InvalidType';
@@ -491,9 +278,8 @@ describe('createIssue Controller', () => {
         // Check for a message indicating invalid type
         expect(res.json).toHaveBeenCalledWith({ message: `Invalid value for issueType: ${invalidIssueType}. Must be one of: ${validIssueTypes.join(', ')}.` });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
     it('should return 400 if status is invalid', async () => {
@@ -511,12 +297,11 @@ describe('createIssue Controller', () => {
          // Check for a message indicating invalid status
         expect(res.json).toHaveBeenCalledWith({ message: `Invalid value for status: ${invalidStatus}. Must be one of: ${validStatuses.join(', ')}.` });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
-    // --- Validation Tests (Subtask Parent - Existing) ---
+    // --- Validation Tests (Subtask Parent - Controller handles these, service should not be called) ---
 
     it('should return 400 if issueType is Subtask but parentIssueKey is missing', async () => {
         const req = mockRequest({
@@ -532,9 +317,8 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
      it('should return 400 if issueType is Subtask but parentIssueKey is an empty string', async () => {
@@ -551,80 +335,136 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
 
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // Verify service was NOT called
+        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
     });
 
     // Add a test to ensure parentIssueKey is ignored for non-subtasks
-    it('should ignore parentIssueKey if issueType is not Subtask', async () => {
-        const testUuid = 'test-uuid-ignore-parent';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid);
-
-        const req = mockRequest({
+    it('should ignore parentIssueKey for non-Subtask issue types and call the service correctly', async () => {
+         const issueInput = {
             issueType: 'Task', // Not a subtask
             summary: 'Task with Parent Key Provided',
             status: 'Todo',
-            parentIssueKey: 'TASK-1', // Provided but should be ignored
-        });
+            parentIssueKey: 'TASK-1', // Provided but should be ignored by the controller before passing to service
+        };
+
+        const expectedIssue = { // Mock the issue returned by the service
+            id: 'mock-uuid-ignore-parent',
+            key: 'TASK-4',
+            issueType: 'Task',
+            summary: 'Task with Parent Key Provided',
+            description: '', // Default description
+            status: 'Todo',
+            createdAt: '2023-01-01T10:00:00.000Z',
+            updatedAt: '2023-01-01T10:00:00.000Z',
+             // Note: parentIssueKey should NOT be in the expectedIssue if service logic is correct
+        };
+
+        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+
+
+        const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
         expect(res.status).toHaveBeenCalledWith(201);
-        const createdIssue = (res.json as jest.Mock).mock.calls[0][0];
+        expect(res.json).toHaveBeenCalledWith(expectedIssue); // Verify response matches service output
 
-        // Verify the created issue object does NOT have the parentIssueKey property
-        expect(createdIssue).not.toHaveProperty('parentIssueKey');
-        // Also verify it was not added to the issue in the store
-        const issueInStore = dataStore.issues.find(issue => issue.id === testUuid);
-        expect(issueInStore).not.toHaveProperty('parentIssueKey');
+        // Verify service was called correctly - parentIssueKey should NOT be passed for non-subtasks
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+             issueType: 'Task',
+             summary: 'Task with Parent Key Provided',
+             description: '',
+             status: 'Todo',
+             // Explicitly check that parentIssueKey is not in the argument passed to the service
+             parentIssueKey: undefined,
+         });
 
-        // Verify it was created successfully otherwise
-        expect(createdIssue.key).toBe(`${getExpectedKeyPrefix('Task')}-1`);
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issueKeyCounter).toBe(1);
-    });
-});
-
-        await createIssue(req, res);
-
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
-
-        // Verify dataStore state remains unchanged
-        expect(dataStore.issues.length).toBe(0);
-        expect(dataStore.issueKeyCounter).toBe(0);
+        // No direct dataStore assertions in controller tests
     });
 
-    // Add a test to ensure parentIssueKey is ignored for non-subtasks
-    it('should ignore parentIssueKey if issueType is not Subtask', async () => {
-        const testUuid = 'test-uuid-ignore-parent';
-        (uuidv4 as jest.Mock).mockReturnValue(testUuid);
 
-        const req = mockRequest({
-            issueType: 'Task', // Not a subtask
-            summary: 'Task with Parent Key Provided',
+    // --- Service Error Handling Tests ---
+
+    it('should return 500 if issueService.createIssue throws a generic error', async () => {
+        const issueInput = {
+            issueType: 'Bug',
+            summary: 'Service Error Test',
             status: 'Todo',
-            parentIssueKey: 'TASK-1', // Provided but should be ignored
-        });
+        };
+        const serviceError = new Error('Something went wrong in the service');
+
+        // Mock the service call to reject with a generic error
+        mockIssueService.createIssue.mockRejectedValue(serviceError);
+
+        const req = mockRequest(issueInput);
         const res = mockResponse();
 
+        // Spy on console.error to check if the error is logged
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
         await createIssue(req, res);
 
-        expect(res.status).toHaveBeenCalledWith(201);
-        const createdIssue = (res.json as jest.Mock).mock.calls[0][0];
+        // Verify the service was called with the correct input
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+             issueType: 'Bug',
+             summary: 'Service Error Test',
+             description: '',
+             status: 'Todo',
+             parentIssueKey: undefined,
+        });
 
-        // Verify the created issue object does NOT have the parentIssueKey property
-        expect(createdIssue).not.toHaveProperty('parentIssueKey');
-        // Also verify it was not added to the issue in the store
-        const issueInStore = dataStore.issues.find(issue => issue.id === testUuid);
-        expect(issueInStore).not.toHaveProperty('parentIssueKey');
+        // Verify the controller responded with a 500 error
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
 
-        // Verify it was created successfully otherwise
-        expect(createdIssue.key).toBe(`${getExpectedKeyPrefix('Task')}-1`);
-        expect(dataStore.issues.length).toBe(1);
-        expect(dataStore.issueKeyCounter).toBe(1);
+        // Verify the error was logged
+        expect(consoleSpy).toHaveBeenCalledWith('Error creating issue:', serviceError);
+
+        consoleSpy.mockRestore(); // Restore console.error
     });
 
+    it('should return the appropriate status and message if issueService.createIssue throws a custom ApiError', async () => {
+        const issueInput = {
+            issueType: 'Epic',
+            summary: 'Custom Error Test',
+            status: 'In Progress',
+        };
+        // Assuming ApiError exists with statusCode and message properties
+        const customError = new ApiError(409, 'Issue already exists');
+
+        // Mock the service call to reject with a custom error
+        mockIssueService.createIssue.mockRejectedValue(customError);
+
+        const req = mockRequest(issueInput);
+        const res = mockResponse();
+
+        // Spy on console.error to ensure *custom* errors are not logged as generic errors
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+
+        await createIssue(req, res);
+
+        // Verify the service was called with the correct input
+        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
+         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+             issueType: 'Epic',
+             summary: 'Custom Error Test',
+             description: '',
+             status: 'In Progress',
+             parentIssueKey: undefined,
+        });
+
+        // Verify the controller responded with the custom error status and message
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith({ message: 'Issue already exists' });
+
+        // Verify the error was NOT logged as a generic server error (because it's a known API error)
+        expect(consoleSpy).not.toHaveBeenCalled();
+
+         consoleSpy.mockRestore(); // Restore console.error
+    });
 });

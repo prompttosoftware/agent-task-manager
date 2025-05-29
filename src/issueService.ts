@@ -1,6 +1,20 @@
 import { loadDatabase, saveDatabase, DbSchema, AnyIssue } from './dataStore';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 
+// Define a custom error class for issue creation errors
+class IssueCreationError extends Error {
+  errorCode?: string;
+
+  constructor(message: string, errorCode?: string) {
+    super(message);
+    this.name = 'IssueCreationError';
+    this.errorCode = errorCode;
+    // Set the prototype explicitly. See https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes#extending-built-ins-like-error-array-and-map-may-no-longer-work
+    Object.setPrototypeOf(this, IssueCreationError.prototype);
+  }
+}
+
+
 // Define the input type for creating an issue.
 // This specifies the data required from the caller to create a new issue.
 interface IssueInput {
@@ -22,6 +36,11 @@ interface IssueInput {
  * @throws {Error} If any database operation fails during the process.
  */
 export async function createIssue(input: IssueInput): Promise<AnyIssue> {
+  // Validate required input fields
+  if (!input.title || input.title.trim().length === 0) {
+    throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE');
+  }
+
   try {
     // 1. Load the database
     const db: DbSchema = await loadDatabase();
@@ -94,7 +113,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     } else if (issueType === 'Subtask') {
       // Subtasks require a parentIssueKey which must come from input.parentKey
       if (!input.parentKey) {
-        throw new Error('Subtask creation requires a parentKey.');
+        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY');
       }
       newIssue = {
         ...baseIssue,
