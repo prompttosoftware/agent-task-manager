@@ -4,13 +4,22 @@ import { createIssue } from './issueController';
 // import { v4 as uuidv4 } from 'uuid'; // Removed as service handles ID
 // import { loadDatabase, saveDatabase } from '../dataStore'; // Removed as service handles data
 // import * as dataStore from '../dataStore'; // Removed as service handles data
-import issueService from '../services/issueService'; // Assuming this service exists
+// import issueService from '../services/issueService'; // REMOVED: Old import, path incorrect and targets non-existent default export.
 import { AnyIssue, CreateIssueInput } from '../../models'; // Import necessary types
 import { ApiError } from '../utils/apiError'; // Assuming a custom error type
 
-// Mock the issueService
-jest.mock('../services/issueService');
-const mockIssueService = issueService as jest.Mocked<typeof issueService>;
+// Mock the issueService module and its named export 'createIssue'.
+// The path '../../issueService.ts' correctly targets 'src/issueService.ts'
+// from 'src/api/controllers/issueController.test.ts'.
+jest.mock('../../issueService', () => ({
+  createIssue: jest.fn(),
+}));
+
+// Import the mocked createIssue function. This must be done after jest.mock.
+// eslint-disable-next-line import/first
+import { createIssue as mockedCreateIssueService } from '../../issueService';
+
+// const mockIssueService = issueService as jest.Mocked<typeof issueService>; // REMOVED: Old mock variable setup.
 
 
 // Mock the request and response objects
@@ -79,36 +88,40 @@ describe('createIssue Controller', () => {
         const issueInput = {
           issueType: 'Bug',
           summary: 'Test Issue Without Description',
-          status: 'Todo',
+          status: 'Todo', // Status is validated by controller but not passed to service
         };
         const expectedIssue = {
             id: 'mock-uuid-1', // Mocked by service
             key: 'BUG-1',       // Mocked by service
-            ...issueInput,
+            ...issueInput, // Includes status for the *return* value from service, but not the *input* to service
             description: '',    // Default description
             createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
             updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
         };
 
         // Mock the service call to return the expected issue
-        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+        // The service is expected to receive input *without* status
+        const serviceInputWithoutStatus = { ...issueInput };
+        delete (serviceInputWithoutStatus as any).status; // Explicitly remove status for the service input expectation
+
+        mockedCreateIssueService.mockResolvedValue(expectedIssue as AnyIssue);
 
         const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        // Verify the service was called with the correct input
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify the service was called with the correct input *excluding* status
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        expect(mockedCreateIssueService).toHaveBeenCalledWith({
             issueType: 'Bug',
             summary: 'Test Issue Without Description',
             description: '', // Controller should pass default if missing
-            status: 'Todo',
              // parentIssueKey should be undefined for non-subtasks
+            // Status should NOT be passed to the service as it determines it
         });
 
-        // Verify the controller responded correctly
+        // Verify the controller responded correctly (with the issue returned by the service, which includes status)
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
@@ -119,37 +132,37 @@ describe('createIssue Controller', () => {
         const issueInput = {
           issueType: 'Story',
           summary: 'Test Issue With Description',
-          status: 'In Progress',
+          status: 'In Progress', // Status is validated by controller but not passed to service
           description: 'This is a test description.',
         };
         const expectedIssue = {
             id: 'mock-uuid-2', // Mocked by service
             key: 'STOR-2',      // Mocked by service
-            ...issueInput,
+            ...issueInput, // Includes status for the *return* value from service, but not the *input* to service
             createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
             updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
         };
 
         // Mock the service call to return the expected issue
-        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+        mockedCreateIssueService.mockResolvedValue(expectedIssue as AnyIssue);
 
         const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        // Verify the service was called with the correct input
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify the service was called with the correct input *excluding* status
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        expect(mockedCreateIssueService).toHaveBeenCalledWith({
             issueType: 'Story',
             summary: 'Test Issue With Description',
             description: 'This is a test description.',
-            status: 'In Progress',
              // parentIssueKey should be undefined for non-subtasks
+            // Status should NOT be passed to the service as it determines it
         });
 
 
-        // Verify the controller responded correctly
+        // Verify the controller responded correctly (with the issue returned by the service, which includes status)
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
@@ -161,37 +174,37 @@ describe('createIssue Controller', () => {
         const issueInput = {
             issueType: 'Subtask',
             summary: 'Subtask of Parent',
-            status: 'Todo',
+            status: 'Todo', // Status is validated by controller but not passed to service
             parentIssueKey: parentKey,
         };
         const expectedIssue = {
             id: 'mock-uuid-subtask-1', // Mocked by service
             key: 'SUBT-3',              // Mocked by service
-            ...issueInput,
+            ...issueInput, // Includes status for the *return* value from service, but not the *input* to service
             description: '',            // Default description
             createdAt: '2023-01-01T10:00:00.000Z', // Mocked by service
             updatedAt: '2023-01-01T10:00:00.000Z', // Mocked by service
         };
 
         // Mock the service call to return the expected issue
-        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+        mockedCreateIssueService.mockResolvedValue(expectedIssue as AnyIssue);
 
         const req = mockRequest(issueInput);
         const res = mockResponse();
 
         await createIssue(req, res);
 
-        // Verify the service was called with the correct input, including parentIssueKey
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify the service was called with the correct input *excluding* status*, including parentIssueKey
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+         expect(mockedCreateIssueService).toHaveBeenCalledWith({
             issueType: 'Subtask',
             summary: 'Subtask of Parent',
             description: '', // Controller should pass default if missing
-            status: 'Todo',
             parentIssueKey: parentKey, // Verify parentIssueKey is passed
+             // Status should NOT be passed to the service as it determines it
         });
 
-        // Verify the controller responded correctly
+        // Verify the controller responded correctly (with the issue returned by the service, which includes status)
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
 
@@ -223,7 +236,7 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: issueType.' });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
      it('should return 400 if summary is missing', async () => {
@@ -239,9 +252,10 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: summary.' });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
+    // Validation test for missing status remains valid as controller validates input
     it('should return 400 if status is missing', async () => {
         const req = mockRequest({
             issueType: 'Task',
@@ -255,7 +269,7 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: status.' });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
     // Note: Duplicate validation tests found in the original code have been removed.
@@ -279,9 +293,10 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: `Invalid value for issueType: ${invalidIssueType}. Must be one of: ${validIssueTypes.join(', ')}.` });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
+    // Validation test for invalid status remains valid as controller validates input
     it('should return 400 if status is invalid', async () => {
         const invalidStatus = 'InvalidStatus';
         const req = mockRequest({
@@ -298,7 +313,7 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: `Invalid value for status: ${invalidStatus}. Must be one of: ${validStatuses.join(', ')}.` });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
     // --- Validation Tests (Subtask Parent - Controller handles these, service should not be called) ---
@@ -318,7 +333,7 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
      it('should return 400 if issueType is Subtask but parentIssueKey is an empty string', async () => {
@@ -336,7 +351,7 @@ describe('createIssue Controller', () => {
         expect(res.json).toHaveBeenCalledWith({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
 
         // Verify service was NOT called
-        expect(mockIssueService.createIssue).not.toHaveBeenCalled();
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
     });
 
     // Add a test to ensure parentIssueKey is ignored for non-subtasks
@@ -344,7 +359,7 @@ describe('createIssue Controller', () => {
          const issueInput = {
             issueType: 'Task', // Not a subtask
             summary: 'Task with Parent Key Provided',
-            status: 'Todo',
+            status: 'Todo', // Status is validated but not passed to service
             parentIssueKey: 'TASK-1', // Provided but should be ignored by the controller before passing to service
         };
 
@@ -354,13 +369,13 @@ describe('createIssue Controller', () => {
             issueType: 'Task',
             summary: 'Task with Parent Key Provided',
             description: '', // Default description
-            status: 'Todo',
+            status: 'Todo', // Service sets the status, included in the returned object
             createdAt: '2023-01-01T10:00:00.000Z',
             updatedAt: '2023-01-01T10:00:00.000Z',
              // Note: parentIssueKey should NOT be in the expectedIssue if service logic is correct
         };
 
-        mockIssueService.createIssue.mockResolvedValue(expectedIssue as AnyIssue);
+        mockedCreateIssueService.mockResolvedValue(expectedIssue as AnyIssue);
 
 
         const req = mockRequest(issueInput);
@@ -371,15 +386,15 @@ describe('createIssue Controller', () => {
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(expectedIssue); // Verify response matches service output
 
-        // Verify service was called correctly - parentIssueKey should NOT be passed for non-subtasks
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify service was called correctly - parentIssueKey and status should NOT be passed for non-subtasks
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+         expect(mockedCreateIssueService).toHaveBeenCalledWith({
              issueType: 'Task',
              summary: 'Task with Parent Key Provided',
              description: '',
-             status: 'Todo',
              // Explicitly check that parentIssueKey is not in the argument passed to the service
              parentIssueKey: undefined,
+             // Status should NOT be passed to the service
          });
 
         // No direct dataStore assertions in controller tests
@@ -392,12 +407,12 @@ describe('createIssue Controller', () => {
         const issueInput = {
             issueType: 'Bug',
             summary: 'Service Error Test',
-            status: 'Todo',
+            status: 'Todo', // Status is validated by controller but not passed to service
         };
         const serviceError = new Error('Something went wrong in the service');
 
         // Mock the service call to reject with a generic error
-        mockIssueService.createIssue.mockRejectedValue(serviceError);
+        mockedCreateIssueService.mockRejectedValue(serviceError);
 
         const req = mockRequest(issueInput);
         const res = mockResponse();
@@ -407,14 +422,14 @@ describe('createIssue Controller', () => {
 
         await createIssue(req, res);
 
-        // Verify the service was called with the correct input
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-        expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify the service was called with the correct input *excluding* status
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        expect(mockedCreateIssueService).toHaveBeenCalledWith({
              issueType: 'Bug',
              summary: 'Service Error Test',
              description: '',
-             status: 'Todo',
              parentIssueKey: undefined,
+             // Status should NOT be passed to the service
         });
 
         // Verify the controller responded with a 500 error
@@ -431,13 +446,13 @@ describe('createIssue Controller', () => {
         const issueInput = {
             issueType: 'Epic',
             summary: 'Custom Error Test',
-            status: 'In Progress',
+            status: 'In Progress', // Status is validated by controller but not passed to service
         };
         // Assuming ApiError exists with statusCode and message properties
         const customError = new ApiError(409, 'Issue already exists');
 
         // Mock the service call to reject with a custom error
-        mockIssueService.createIssue.mockRejectedValue(customError);
+        mockedCreateIssueService.mockRejectedValue(customError);
 
         const req = mockRequest(issueInput);
         const res = mockResponse();
@@ -448,14 +463,14 @@ describe('createIssue Controller', () => {
 
         await createIssue(req, res);
 
-        // Verify the service was called with the correct input
-        expect(mockIssueService.createIssue).toHaveBeenCalledTimes(1);
-         expect(mockIssueService.createIssue).toHaveBeenCalledWith({
+        // Verify the service was called with the correct input *excluding* status
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+         expect(mockedCreateIssueService).toHaveBeenCalledWith({
              issueType: 'Epic',
              summary: 'Custom Error Test',
              description: '',
-             status: 'In Progress',
              parentIssueKey: undefined,
+             // Status should NOT be passed to the service
         });
 
         // Verify the controller responded with the custom error status and message

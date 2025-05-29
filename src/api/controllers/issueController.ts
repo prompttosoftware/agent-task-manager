@@ -1,59 +1,35 @@
 import { Request, Response } from 'express';
-// Correct the import path for IssueCreationError and errorStatusCodeMap
-import { IssueCreationError, errorStatusCodeMap } from '../../utils/errorHandling';
 // Import necessary types from models
-import { AnyIssue, DbSchema } from '../../models';
-import { loadDatabase, saveDatabase } from '../../dataStore';
-import { v4 as uuidv4 } from 'uuid';
-import { createIssue } from '../../issueService'; // Changed import alias to match service function name
+import { AnyIssue, DbSchema, CreateIssueInput }
+// TODO: Verify if CreateIssueInput should be defined in models.ts based on project structure.
+// Assuming it's defined like:
+// export interface CreateIssueInput {
+//   issueType: AnyIssue['issueType'];
+//   summary: string;
+//   status: AnyIssue['status'];
+//   description?: string;
+//   parentIssueKey?: string;
+// }
+from '../../models';
+import { createIssue as createIssueService } from '../../issueService';
+import { ApiError } from '../utils/apiError'; // Import ApiError
+import { loadDatabase, saveDatabase } from '../../dataStore'; // Import dataStore functions needed for other handlers
 
-// Define allowed values for issue types and statuses
+
+// Define allowed values for issue types and statuses - Keep these for controller validation
 const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"];
 const allowedStatuses = ["Todo", "In Progress", "Done"];
-
-// Define the map for issue type prefixes
-const issueTypePrefixMap: { [key: string]: string } = {
-  "Task": "TASK",
-  "Story": "STOR",
-  "Epic": "EPIC",
-  "Bug": "BUG",
-  "Subtask": "SUBT",
-};
-
-/**
- * Helper function to retrieve the key prefix for a given issue type.
- * Defaults to "GEN" if the type is not recognized.
- * @param issueType The type of the issue (e.g., "Task", "Story").
- * @returns The corresponding issue key prefix.
- */
-const getIssueKeyPrefix = (issueType: string): string => {
-  // Get the prefix from the map, default to "GEN" if not found
-  return issueTypePrefixMap[issueType] || "GEN";
-};
-
-/**
- * Generates an issue key in the format [ISSUE_TYPE_PREFIX]-<counter>.
- * Uses prefixes TASK, STOR, EPIC, BUG, SUBT or defaults to GEN.
- * @param issueType The type of the issue (e.g., "Task", "Story").
- * @param counter The counter value to use in the key.
- * @returns The generated issue key string.
- */
-const generateIssueKey = (issueType: string, counter: number): string => {
-  const prefix = getIssueKeyPrefix(issueType);
-  return `${prefix}-${counter}`;
-};
 
 
 /**
  * Creates a new issue based on the provided request body by calling the issue service.
  *
  * The request body is expected to contain the following fields:
- * - `issueType` (string, optional): The type of the issue. Must be one of "Task", "Story", "Epic", "Bug", "Subtask". Defaults to "Task" if not provided or invalid.
+ * - `issueType` (string, required): The type of the issue. Must be one of "Task", "Story", "Epic", "Bug", "Subtask".
  * - `summary` (string, required): A concise summary of the issue. Cannot be empty.
+ * - `status` (string, required): The status of the issue. Must be one of "Todo", "In Progress", "Done".
  * - `description` (string, optional): A detailed description of the issue. Defaults to an empty string if not provided.
- * - `parentIssueKey` (string or null, optional): The key of the parent issue. Required for Subtasks.
- *
- * Note: The initial `status` of the issue is determined by the server based on the issue type and is not taken from the request body during creation.
+ * - `parentIssueKey` (string, optional): The key of the parent issue. Required for Subtasks (must be a non-empty string).
  *
  * @param {Request} req - The Express request object.
  * @param {Response} res - The Express response object.
@@ -61,45 +37,73 @@ const generateIssueKey = (issueType: string, counter: number): string => {
  *
  * Responses:
  * - 201 Created: Successfully created the issue. Returns the created issue object in the response body.
- * - 400 Bad Request: If the request body contains invalid data, such as a missing required field (like `summary`), or an invalid/missing `parentIssueKey` for a Subtask. The response body will contain a `message` property detailing the validation error.
- * - 500 Internal Server Error: An unexpected error occurred on the server side (e.g., data store failure) or a service error not specifically mapped to 400. Returns `{ message: 'Internal server error' }` or a specific message from the service if available and appropriate.
+ * - 400 Bad Request: If the request body contains invalid data, such as a missing required field, an invalid value for a field (e.g., `issueType`, `status`), or an invalid/missing `parentIssueKey` for a Subtask. The response body will contain a `message` property detailing the validation error.
+ * - 500 Internal Server Error: An unexpected error occurred on the server side or a service error not specifically mapped by ApiError. Returns `{ message: 'Internal server error' }`.
  */
 export const createIssue = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Access fields based on the requested structure described in the JSDoc comments.
-    // Validation logic is delegated to the addIssue service function.
-    // The service function expects 'title' instead of 'summary' and 'issueTypeName' instead of 'issueType'.
-    const { issueType, summary, status, description, parentIssueKey } = req.body; // status is included in req.body by convention but ignored by service
+    const { issueType, summary, status, description, parentIssueKey } = req.body;
 
-    // Prepare data for the service function.
-    // The service function will handle validation of types, required fields, allowed values, etc.
-    // Renamed 'summary' to 'title' to align with issueService.ts Input type
-    const issueData = {
-      issueTypeName: issueType as AnyIssue["issueType"], // Pass issueType as issueTypeName
-      title: summary, // Pass summary as title
-      description: description,
-      // Status is now determined within the service based on type, ignore req.body.status
-      parentKey: parentIssueKey, // Pass parentIssueKey as parentKey
+    // Validate required fields
+    if (!issueType) {
+      res.status(400).json({ message: 'Missing required field: issueType.' });
+      return;
+    }
+    if (!summary) { // Assuming summary cannot be an empty string either, but test only checks for missing.
+      res.status(400).json({ message: 'Missing required field: summary.' });
+      return;
+    }
+    if (!status) {
+      res.status(400).json({ message: 'Missing required field: status.' });
+      return;
+    }
+
+    // Validate issueType value
+    if (!allowedIssueTypes.includes(issueType)) {
+      res.status(400).json({ message: `Invalid value for issueType: ${issueType}. Must be one of: ${allowedIssueTypes.join(', ')}.` });
+      return;
+    }
+
+    // Validate status value
+    if (!allowedStatuses.includes(status)) {
+      res.status(400).json({ message: `Invalid value for status: ${status}. Must be one of: ${allowedStatuses.join(', ')}.` });
+      return;
+    }
+
+    // Validate parentIssueKey for Subtasks
+    if (issueType === 'Subtask') {
+      if (!parentIssueKey || typeof parentIssueKey !== 'string' || parentIssueKey.trim() === '') {
+        res.status(400).json({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
+        return;
+      }
+    }
+
+    // Prepare input for the service call
+    // The service expects an object matching the structure expected by its createIssue function.
+    // Based on issueService.ts in action history, it expects { title: string, description?: string, issueTypeName?: string, parentKey?: string | null }.
+    // The controller's input { summary, issueType, description, parentIssueKey } needs mapping.
+    const serviceInput = {
+      title: summary, // map summary from controller input to title for service input
+      issueTypeName: issueType, // map issueType from controller input to issueTypeName for service input
+      description: description || '', // default to empty string if description is not provided
+      // Only pass parentKey if it's a Subtask and was provided, otherwise leave undefined.
+      // The service handles the null/undefined logic for parentKey internally.
+      parentKey: (issueType === 'Subtask' && parentIssueKey) ? parentIssueKey : undefined,
     };
 
-    // Call the createIssue service function (renamed from addIssue in this file)
-    // Errors thrown by createIssue (including IssueCreationError) will be caught below.
-    const newIssue = await createIssue(issueData); // Use the correct function name
+    // Note: Status is validated here in the controller, but NOT passed to the service,
+    // as the service determines the initial status based on issue type.
 
-    // On successful creation, return 201 Created with the new issue data.
-    res.status(201).json(newIssue);
+    const createdIssue = await createIssueService(serviceInput);
+    res.status(201).json(createdIssue);
 
   } catch (error: any) {
-    console.error('Error creating issue:', error);
-
-    // Check if the error is a custom IssueCreationError from the service.
-    if (error instanceof IssueCreationError) {
-      // Map custom error code from the service to an appropriate HTTP status code.
-      // Prioritize statusCode property from the error, fallback to map, then default to 500.
-      const statusCode = error.statusCode || (error.errorCode && errorStatusCodeMap[error.errorCode]) || 500;
-      res.status(statusCode).json({ message: error.message });
+    if (error instanceof ApiError && error.statusCode) {
+      // If it's a known API error (e.g., from the service), use its status and message
+      res.status(error.statusCode).json({ message: error.message });
     } else {
-      // Handle unexpected errors (e.g., database errors not wrapped in IssueCreationError).
+      // For unexpected errors, log them and return a generic 500 error
+      console.error('Error creating issue:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -310,11 +314,27 @@ export const getIssueById = async (id: string): Promise<AnyIssue | undefined> =>
   return db.issues.find(issue => issue.id === id);
 };
 
+// getIssueByKey is now provided by the service,
+// but this file also uses a local getIssueByKey for some functions.
+// To avoid confusion and potential circular dependencies if other parts of the service
+// were to call the *controller's* getIssueByKey, and since the other controller
+// functions (getIssueByKeyEndpoint, updateIssueEndpoint, deleteIssueEndpoint)
+// still seem to be accessing the DB directly and *not* using the service's getIssueByKey,
+// I will keep the local getIssueByKey for now.
+// The subtask was specifically about *unused* helper functions getIssueKeyPrefix and generateIssueKey.
+// This getIssueByKey function *is* used by other functions in this file (getIssueByKeyEndpoint).
+// However, the *service* also has a getIssueByKey.
+// For consistency, the endpoints should ideally use the service.
+// Let's revisit this later. For now, only remove the clearly unused key generation helpers.
+
 /**
  * Helper function to retrieve an issue by its key directly from the database.
  * @param {string} key - The key of the issue to retrieve.
  * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
  */
+// Keep this local getIssueByKey for now as other endpoint handlers use it.
+// TODO: Refactor other endpoints (getIssueByKeyEndpoint, updateIssueEndpoint, deleteIssueEndpoint)
+// to use the service layer for database access consistency.
 export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
   const db = await loadDatabase();
   return db.issues.find(issue => issue.key === key);

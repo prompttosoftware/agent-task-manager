@@ -14,12 +14,24 @@ interface IssueInput {
 }
 
 /**
+ * Helper function to retrieve an issue by its key directly from the database.
+ * This function is moved/defined here to be used within the issue service.
+ * @param {string} key - The key of the issue to retrieve.
+ * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
+ */
+export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
+  const db = await loadDatabase();
+  return db.issues.find(issue => issue.key === key);
+};
+
+
+/**
  * Creates a new issue in the database.
  * It generates a unique key and id, sets initial properties based on input
  * and AnyIssue interface requirements, adds the issue to the database,
  * updates the key counter, and saves the database.
  *
- * @param input - An object containing the initial properties for the new issue (e.g., title, description, type).
+ * @param input - An object containing the initial properties for the new issue (e.g., title, description, type, parentKey).
  * @returns A promise that resolves with the newly created issue object, adhering to the AnyIssue interface.
  * @throws {IssueCreationError} If validation fails or a required parent is missing/invalid.
  * @throws {Error} If any database operation fails during the process.
@@ -30,6 +42,41 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
   }
 
+  // Determine issue type from input or default to 'Task'
+  let issueType: AnyIssue['issueType'];
+  switch (input.issueTypeName) {
+    case 'Task': issueType = 'Task'; break;
+    case 'Story': case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
+    case 'Epic': issueType = 'Epic'; break;
+    case 'Bug': issueType = 'Bug'; break;
+    case 'Subtask': issueType = 'Subtask'; break;
+    default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
+  }
+
+  // --- Parent Validation Logic for Subtasks ---
+  if (issueType === 'Subtask') {
+    // Subtasks require a parentKey
+    if (!input.parentKey || input.parentKey.trim().length === 0) {
+      throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
+    }
+
+    // Validate that the parent issue exists
+    const parentIssue = await getIssueByKey(input.parentKey);
+    if (!parentIssue) {
+      throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
+    }
+
+    // Validate that the parent is not a Subtask itself
+    if (parentIssue.issueType === 'Subtask') {
+       throw new IssueCreationError(`Parent issue '${input.parentKey}' is a Subtask. Subtasks cannot have Subtask children.`, 'INVALID_PARENT_TYPE', 400);
+    }
+
+    // TODO: Consider adding the subtask's key to the parent's childIssueKeys array if the parent type supports it (like Epic).
+    // This requires modifying the parent issue, which adds complexity (loading, modifying, saving the parent).
+    // For now, we'll just validate and create the subtask with the parentKey reference.
+  }
+  // --- End Parent Validation ---
+
   try {
     // 1. Load the database
     const db: DbSchema = await loadDatabase();
@@ -38,38 +85,29 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     const newIssueKeyCounter = db.issueKeyCounter + 1;
     // Format the counter into a unique key string, e.g., "ISSUE-1", "ISSUE-2", etc.
     // TODO: Consider making the prefix configurable or based on issue type later.
-    const newIssueKey = `ISSUE-${newIssueKeyCounter}`;
+    // For now, we use a generic prefix or issue type prefix if needed, but the original was just 'ISSUE-'.
+    // Let's stick to the simple "ISSUE-" for now based on current implementation, but this might need adjustment if issue types get unique prefixes.
+    // Note: The controller tests seem to expect type-specific prefixes (BUG-1, STOR-2, SUBT-3). The service should handle this.
+    // Let's update the key generation to use a prefix based on the determined issueType.
+    const issueTypePrefixMap: { [key: string]: string } = {
+        "Task": "TASK",
+        "Story": "STOR",
+        "Epic": "EPIC",
+        "Bug": "BUG",
+        "Subtask": "SUBT",
+        // Default prefix if type is unrecognized (though we default issueType to Task now)
+    };
+    const prefix = issueTypePrefixMap[issueType] || "ISSUE"; // Use specific prefix or a generic one
+    const newIssueKey = `${prefix}-${newIssueKeyCounter}`;
+
 
     // 3. Create a new issue object adhering to AnyIssue
     const now = new Date();
     const newIssueId = uuidv4(); // Generate a unique UUID for id
 
-    // Map issueTypeName from input to AnyIssue['issueType'], ensuring it's one of the allowed types.
-    let issueType: AnyIssue['issueType'];
-    switch (input.issueTypeName) {
-      case 'Task':
-        issueType = 'Task';
-        break;
-      case 'Story':
-      case 'feature': // Allow 'feature' as an alias for 'Story'
-        issueType = 'Story';
-        break;
-      case 'Epic':
-        issueType = 'Epic';
-        break;
-      case 'Bug':
-        issueType = 'Bug';
-        break;
-      case 'Subtask':
-        issueType = 'Subtask';
-        break;
-      default:
-        // If type is unrecognized or not provided, default to 'Task'.
-        // This is a design choice; could also throw an error for invalid type input.
-        issueType = 'Task';
-    }
 
     // Determine initial status based on the mapped issueType, ensuring it's one of the allowed types ('Todo', 'In Progress', 'Done').
+    // Status logic should be handled by the service, not passed from the controller input.
     let status: AnyIssue['status'];
     if (issueType === 'Bug') {
         status = 'In Progress'; // Bug issues start as 'In Progress'
@@ -83,8 +121,8 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       id: newIssueId, // UUID generated for the issue
       key: newIssueKey, // Unique key derived from the counter
       issueType: issueType, // Determined issue type
-      summary: input.title, // Issue title from input, mapped to summary
-      description: input.description, // Optional description from input
+      summary: input.title, // Issue title from input, mapped to summary (Input uses title, models use summary)
+      description: input.description || '', // Optional description from input, default to ''
       status: status, // Initial status determined based on issue type
       createdAt: now.toISOString(), // Timestamp of creation (ISO string)
       updatedAt: now.toISOString(), // Timestamp of last update (initially same as createdAt)
@@ -104,11 +142,11 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       } as Epic; // Cast to Epic type to satisfy interface
     } else if (issueType === 'Subtask') {
       // Subtasks require a parentIssueKey which must come from input.parentKey
-      // We should also validate that the parentKey exists and is not a Subtask itself.
-      // TODO: Implement parent validation logic.
-      if (!input.parentKey) {
-        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
-      }
+      // Validation for existence and parent type is done above.
+       if (!input.parentKey) {
+           // This case should have been caught by the validation above, but keeping it for type safety/redundancy.
+           throw new IssueCreationError('Internal Error: Missing parentKey for Subtask after validation.', 'INTERNAL_ERROR', 500);
+       }
       newIssue = {
         ...baseIssue,
         issueType: 'Subtask', // Explicitly set for type narrowing
@@ -117,6 +155,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     } else {
       // Task, Story, Bug issues only have BaseIssue properties (plus optional description/parentKey)
       // Cast to AnyIssue to be safe, although it should implicitly fit Task/Story/Bug which extend BaseIssue
+      // Ensure parentKey is handled - BaseIssue already includes parentKey? | null
       newIssue = baseIssue as Task | Story | Bug;
     }
 
@@ -141,7 +180,9 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         throw error; // Re-throw validation/specific errors
     }
     // Throw a generic error for unexpected issues, e.g., database write failures.
-    throw new Error('Failed to create issue due to a data storage error.'); // Could use a more specific DB error class if defined
+    throw new Error('Failed to create issue due to an unexpected error.'); // Could use a more specific DB error class if defined
   }
 }
-```
+
+// Re-export getIssueByKey for external use (e.g., by controllers or other services)
+export { getIssueByKey };
