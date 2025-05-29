@@ -1,6 +1,7 @@
 import { createIssue } from './issueService';
 import { loadDatabase, saveDatabase } from './dataStore';
-import { DbSchema, AnyIssue } from './models'; // Assuming AnyIssue and DbSchema are exported from models
+import { DbSchema, AnyIssue, IssueType, IssueStatus } from './models'; // Assuming AnyIssue, DbSchema, IssueType, IssueStatus are exported from models
+import { IssueCreationError } from './utils/errorHandling'; // Import custom error
 
 // Mock the dataStore module to control database interactions
 jest.mock('./dataStore');
@@ -42,7 +43,7 @@ describe('issueService', () => {
     jest.restoreAllMocks();
   });
 
-  it('should create an issue with default status and properties', async () => {
+  it('should create a Task issue with default status Todo and properties', async () => {
     const input = {
       title: 'Test Issue Title',
       description: 'This is a test description.',
@@ -63,22 +64,26 @@ describe('issueService', () => {
     // Verify the returned issue object
     expect(createdIssue).toBeDefined();
     expect(createdIssue.key).toBe('ISSUE-1');
-    expect(createdIssue.title).toBe(input.title);
+    // Updated check: service maps input.title to issue.summary
+    expect(createdIssue.summary).toBe(input.title);
     expect(createdIssue.description).toBe(input.description);
-    expect(createdIssue.status).toBe('Open'); // Default status
-    expect(createdIssue.createdAt).toEqual(mockDate);
-    expect(createdIssue.updatedAt).toEqual(mockDate);
-    expect(createdIssue.parentKey).toBeUndefined(); // Should not have parentKey
+    // Updated expected status for default/Task
+    expect(createdIssue.status).toBe('Todo');
+    // Check default issue type
+    expect(createdIssue.issueType).toBe('Task');
+    expect(createdIssue.createdAt).toEqual(mockDate.toISOString()); // Expect ISO string
+    expect(createdIssue.updatedAt).toEqual(mockDate.toISOString()); // Expect ISO string
+    expect(createdIssue.parentKey).toBeNull(); // Should be null if not provided
 
     // Verify the returned object matches the saved object (reference might differ, but properties should match)
     expect(createdIssue).toEqual(savedIssue);
   });
 
-  it('should create an issue with status Backlog when issueTypeName is feature', async () => {
+  it('should create a Story issue with status Todo when issueTypeName is feature', async () => {
     const input = {
       title: 'Feature Title',
       description: 'This is a feature request.',
-      issueTypeName: 'feature',
+      issueTypeName: 'feature', // alias for Story
     };
 
     const createdIssue = await createIssue(input);
@@ -92,12 +97,37 @@ describe('issueService', () => {
     const savedIssue = savedDbState!.issues[0];
 
     expect(createdIssue.key).toBe('ISSUE-1');
-    expect(createdIssue.status).toBe('Backlog'); // Status should be Backlog
+    // Updated check: service maps input.title to issue.summary
+    expect(createdIssue.summary).toBe(input.title);
+    // Check mapped issue type
+    expect(createdIssue.issueType).toBe('Story');
+    // Updated expected status for Story
+    expect(createdIssue.status).toBe('Todo');
 
     expect(createdIssue).toEqual(savedIssue);
   });
 
-  it('should create an issue with status Open when issueTypeName is bug', async () => {
+    it('should create a Story issue with status Todo when issueTypeName is Story', async () => {
+      const input = {
+        title: 'Story Title',
+        description: 'This is a story.',
+        issueTypeName: 'Story',
+      };
+
+      const createdIssue = await createIssue(input);
+
+      expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
+      expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+      expect(savedDbState).not.toBeNull();
+
+      expect(createdIssue.key).toBe('ISSUE-1');
+      expect(createdIssue.summary).toBe(input.title);
+      expect(createdIssue.issueType).toBe('Story');
+      expect(createdIssue.status).toBe('Todo');
+    });
+
+
+  it('should create a Bug issue with status In Progress when issueTypeName is bug', async () => {
     const input = {
       title: 'Bug Title',
       description: 'This is a bug report.',
@@ -115,16 +145,48 @@ describe('issueService', () => {
     const savedIssue = savedDbState!.issues[0];
 
     expect(createdIssue.key).toBe('ISSUE-1');
-    expect(createdIssue.status).toBe('Open'); // Status should be Open (explicitly set for bug)
+    // Updated check: service maps input.title to issue.summary
+    expect(createdIssue.summary).toBe(input.title);
+    // Check issue type
+    expect(createdIssue.issueType).toBe('Bug');
+    // Updated expected status for Bug
+    expect(createdIssue.status).toBe('In Progress');
 
     expect(createdIssue).toEqual(savedIssue);
   });
 
-  it('should create an issue with a parentKey if provided', async () => {
+  it('should create an Epic issue with status Todo and empty childIssueKeys', async () => {
+    const input = {
+      title: 'Epic Title',
+      description: 'This is an epic.',
+      issueTypeName: 'Epic',
+    };
+
+    const createdIssue = await createIssue(input);
+
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(savedDbState).not.toBeNull();
+
+    const savedIssue = savedDbState!.issues[0];
+
+    expect(createdIssue.key).toBe('ISSUE-1');
+    expect(createdIssue.summary).toBe(input.title);
+    expect(createdIssue.issueType).toBe('Epic');
+    expect(createdIssue.status).toBe('Todo');
+    // Check Epic specific property
+    expect((createdIssue as any).childIssueKeys).toEqual([]);
+
+    expect(createdIssue).toEqual(savedIssue);
+  });
+
+
+  it('should create a Subtask issue with status Todo and a parentKey if provided', async () => {
     const input = {
       title: 'Subtask Title',
       description: 'This is a subtask.',
-      parentKey: 'EPIC-123',
+      issueTypeName: 'Subtask',
+      parentKey: 'EPIC-123', // Providing parent key
     };
 
     const createdIssue = await createIssue(input);
@@ -138,25 +200,51 @@ describe('issueService', () => {
     const savedIssue = savedDbState!.issues[0];
 
     expect(createdIssue.key).toBe('ISSUE-1');
-    expect(createdIssue.title).toBe(input.title);
+    // Updated check: service maps input.title to issue.summary
+    expect(createdIssue.summary).toBe(input.title);
     expect(createdIssue.description).toBe(input.description);
-    expect(createdIssue.parentKey).toBe('EPIC-123'); // Parent key should be present
+    // Check issue type
+    expect(createdIssue.issueType).toBe('Subtask');
+    // Check expected status for Subtask
+    expect(createdIssue.status).toBe('Todo');
+    // Check parent key
+    expect(createdIssue.parentKey).toBe('EPIC-123');
 
     expect(createdIssue).toEqual(savedIssue);
   });
+
+  it('should create a Task issue with status Todo when issueTypeName is unrecognized', async () => {
+    const input = {
+      title: 'Unrecognized Type Test',
+      description: 'Should default to Task.',
+      issueTypeName: 'UnknownType', // Unrecognized type
+    };
+
+    const createdIssue = await createIssue(input);
+
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(savedDbState).not.toBeNull();
+
+    expect(createdIssue.issueType).toBe('Task'); // Should default to Task
+    expect(createdIssue.status).toBe('Todo'); // Task status is Todo
+  });
+
 
   it('should generate the next key correctly when counter is not zero', async () => {
     const dbWithExistingIssues: DbSchema = {
       issues: [
         // Mock existing issues
         {
+          id: 'uuid1',
           key: 'ISSUE-10',
-          title: 'Existing Issue',
+          issueType: 'Task',
+          summary: 'Existing Issue',
           description: '...',
           status: 'Done',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          id: 'uuid1', issueType: 'Task', summary: '...',
+          parentKey: null,
         },
       ],
       issueKeyCounter: 10, // Start counter from 10
@@ -182,21 +270,119 @@ describe('issueService', () => {
     // Check the newly added issue in saved state
     const newSavedIssue = savedDbState!.issues.find(issue => issue.key === 'ISSUE-11');
     expect(newSavedIssue).toBeDefined();
-    expect(newSavedIssue!.title).toBe(input.title);
+    // Updated check: service maps input.title to issue.summary
+    expect(newSavedIssue!.summary).toBe(input.title);
     expect(newSavedIssue!.description).toBe(input.description);
+    // Default type and status checks
+    expect(newSavedIssue!.issueType).toBe('Task');
+    expect(newSavedIssue!.status).toBe('Todo');
+
 
     expect(createdIssue).toEqual(newSavedIssue);
   });
+
+  // --- New Validation Tests ---
+
+  it('should throw IssueCreationError with MISSING_TITLE code if title is missing', async () => {
+    const input = {
+      // title is missing
+      description: '...',
+    };
+
+    await expect(createIssue(input as any)).rejects.toThrow(IssueCreationError); // Expect the specific error type
+    await expect(createIssue(input as any)).rejects.toThrow('Issue title is required.'); // Expect the specific message
+
+    try {
+        await createIssue(input as any);
+    } catch (error: any) {
+        expect(error).toBeInstanceOf(IssueCreationError);
+        expect(error.errorCode).toBe('MISSING_TITLE');
+        expect(error.statusCode).toBe(400);
+    }
+
+    expect(mockLoadDatabase).not.toHaveBeenCalled(); // Validation happens before loading
+    expect(mockSaveDatabase).not.toHaveBeenCalled(); // Save should not be called
+  });
+
+    it('should throw IssueCreationError with MISSING_TITLE code if title is empty', async () => {
+      const input = {
+        title: '', // empty title
+        description: '...',
+      };
+
+      await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
+      await expect(createIssue(input)).rejects.toThrow('Issue title is required.'); // Expect the specific message
+
+      try {
+          await createIssue(input);
+      } catch (error: any) {
+          expect(error).toBeInstanceOf(IssueCreationError);
+          expect(error.errorCode).toBe('MISSING_TITLE');
+          expect(error.statusCode).toBe(400);
+      }
+
+      expect(mockLoadDatabase).not.toHaveBeenCalled(); // Validation happens before loading
+      expect(mockSaveDatabase).not.toHaveBeenCalled(); // Save should not be called
+    });
+
+      it('should throw IssueCreationError with MISSING_TITLE code if title is only whitespace', async () => {
+        const input = {
+          title: '   ', // whitespace title
+          description: '...',
+        };
+
+        await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
+        await expect(createIssue(input)).rejects.toThrow('Issue title is required.'); // Expect the specific message
+
+        try {
+            await createIssue(input);
+        } catch (error: any) {
+            expect(error).toBeInstanceOf(IssueCreationError);
+            expect(error.errorCode).toBe('MISSING_TITLE');
+            expect(error.statusCode).toBe(400);
+        }
+
+        expect(mockLoadDatabase).not.toHaveBeenCalled(); // Validation happens before loading
+        expect(mockSaveDatabase).not.toHaveBeenCalled(); // Save should not be called
+      });
+
+
+  it('should throw IssueCreationError with INVALID_PARENT_KEY code if Subtask is created without parentKey', async () => {
+    const input = {
+      title: 'Subtask without parent',
+      issueTypeName: 'Subtask',
+      description: '...',
+      // parentKey is missing
+    };
+
+    await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
+    await expect(createIssue(input)).rejects.toThrow('Subtask creation requires a parentKey.'); // Expect the specific message
+
+    try {
+        await createIssue(input);
+    } catch (error: any) {
+        expect(error).toBeInstanceOf(IssueCreationError);
+        expect(error.errorCode).toBe('INVALID_PARENT_KEY');
+        expect(error.statusCode).toBe(400);
+    }
+
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1); // Load happens before this validation
+    expect(mockSaveDatabase).not.toHaveBeenCalled(); // Save should not be called
+  });
+
+
+  // --- Existing Error Handling Tests (modified to match service error messages) ---
 
   it('should throw an error if database loading fails', async () => {
     const mockError = new Error('Failed to load database');
     mockLoadDatabase.mockRejectedValue(mockError);
 
     const input = {
-      title: 'Issue to Fail',
+      title: 'Issue to Fail Load',
       description: '...',
     };
 
+    // Service now wraps this in a generic Error
     await expect(createIssue(input)).rejects.toThrow('Failed to create issue due to a data storage error.');
 
     expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
@@ -212,13 +398,14 @@ describe('issueService', () => {
       description: '...',
     };
 
+    // Service now wraps this in a generic Error
     await expect(createIssue(input)).rejects.toThrow('Failed to create issue due to a data storage error.');
 
     expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1); // Save should be attempted
   });
 
-  it('should include createdAt and updatedAt timestamps', async () => {
+  it('should include createdAt and updatedAt timestamps as ISO strings', async () => {
     const input = {
       title: 'Timestamp Test',
       description: 'Checking timestamps',
@@ -226,13 +413,15 @@ describe('issueService', () => {
 
     const createdIssue = await createIssue(input);
 
-    expect(createdIssue.createdAt).toEqual(mockDate);
-    expect(createdIssue.updatedAt).toEqual(mockDate);
+    // Expect ISO string format
+    expect(createdIssue.createdAt).toEqual(mockDate.toISOString());
+    expect(createdIssue.updatedAt).toEqual(mockDate.toISOString());
 
     // Check saved state too
     expect(savedDbState).not.toBeNull();
     const savedIssue = savedDbState!.issues[0];
-    expect(savedIssue.createdAt).toEqual(mockDate);
-    expect(savedIssue.updatedAt).toEqual(mockDate);
+    // Expect ISO string format
+    expect(savedIssue.createdAt).toEqual(mockDate.toISOString());
+    expect(savedIssue.updatedAt).toEqual(mockDate.toISOString());
   });
 });

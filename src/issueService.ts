@@ -1,19 +1,7 @@
 import { loadDatabase, saveDatabase, DbSchema, AnyIssue } from './dataStore';
+import { BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import necessary interfaces
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
-
-// Define a custom error class for issue creation errors
-class IssueCreationError extends Error {
-  errorCode?: string;
-
-  constructor(message: string, errorCode?: string) {
-    super(message);
-    this.name = 'IssueCreationError';
-    this.errorCode = errorCode;
-    // Set the prototype explicitly. See https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes#extending-built-ins-like-error-array-and-map-may-no-longer-work
-    Object.setPrototypeOf(this, IssueCreationError.prototype);
-  }
-}
-
+import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
 
 // Define the input type for creating an issue.
 // This specifies the data required from the caller to create a new issue.
@@ -33,12 +21,13 @@ interface IssueInput {
  *
  * @param input - An object containing the initial properties for the new issue (e.g., title, description, type).
  * @returns A promise that resolves with the newly created issue object, adhering to the AnyIssue interface.
+ * @throws {IssueCreationError} If validation fails or a required parent is missing/invalid.
  * @throws {Error} If any database operation fails during the process.
  */
 export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   // Validate required input fields
   if (!input.title || input.title.trim().length === 0) {
-    throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE');
+    throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
   }
 
   try {
@@ -48,6 +37,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // 2. Generate a new issue key by incrementing issueKeyCounter
     const newIssueKeyCounter = db.issueKeyCounter + 1;
     // Format the counter into a unique key string, e.g., "ISSUE-1", "ISSUE-2", etc.
+    // TODO: Consider making the prefix configurable or based on issue type later.
     const newIssueKey = `ISSUE-${newIssueKeyCounter}`;
 
     // 3. Create a new issue object adhering to AnyIssue
@@ -74,7 +64,9 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         issueType = 'Subtask';
         break;
       default:
-        issueType = 'Task'; // Default to 'Task' if input type is unrecognized or not provided
+        // If type is unrecognized or not provided, default to 'Task'.
+        // This is a design choice; could also throw an error for invalid type input.
+        issueType = 'Task';
     }
 
     // Determine initial status based on the mapped issueType, ensuring it's one of the allowed types ('Todo', 'In Progress', 'Done').
@@ -112,8 +104,10 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       } as Epic; // Cast to Epic type to satisfy interface
     } else if (issueType === 'Subtask') {
       // Subtasks require a parentIssueKey which must come from input.parentKey
+      // We should also validate that the parentKey exists and is not a Subtask itself.
+      // TODO: Implement parent validation logic.
       if (!input.parentKey) {
-        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY');
+        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
       }
       newIssue = {
         ...baseIssue,
@@ -141,7 +135,13 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   } catch (error) {
     // Log the error internally for debugging purposes
     console.error('Error creating issue:', error);
-    // Re-throw a standardized error message or the original error
-    throw new Error('Failed to create issue due to a data storage error.');
+    // Re-throw the specific error if it's an IssueCreationError,
+    // otherwise wrap unexpected errors in a generic Error or specific database error.
+    if (error instanceof IssueCreationError) {
+        throw error; // Re-throw validation/specific errors
+    }
+    // Throw a generic error for unexpected issues, e.g., database write failures.
+    throw new Error('Failed to create issue due to a data storage error.'); // Could use a more specific DB error class if defined
   }
 }
+```
