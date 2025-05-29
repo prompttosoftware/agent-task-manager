@@ -1,5 +1,6 @@
-import { Router } from 'express';
-import { createIssue } from '../controllers/issueController.ts';
+import { Router, Request, Response, RequestHandler } from 'express'; // Import Request, Response, RequestHandler
+// Removed .ts extension from import path, as is standard practice
+import { createIssue } from '../controllers/issueController'; // This is currently the *simulated* controller
 
 const router = Router();
 
@@ -111,6 +112,15 @@ const router = Router();
  *                   description: A description of the server error.
  *                   example: Internal server error
  */
-router.post('/rest/api/2/issue', createIssue);
+// Corrected route path to be just /issue, as it will be mounted under /rest/api/2 in the app/tests.
+router.post('/issue', createIssue);
+
+// Add a simple GET route for testing routing setup
+// Explicitly type the handler function using RequestHandler
+const statusHandler: RequestHandler = (req, res) => {
+  res.send('OK');
+};
+router.get('/status', statusHandler);
+
 
 export default router;

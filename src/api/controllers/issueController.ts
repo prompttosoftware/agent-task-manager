@@ -1,18 +1,10 @@
 import { Request, Response } from 'express';
 // Import necessary types from models
-import { AnyIssue, DbSchema, CreateIssueInput }
-// TODO: Verify if CreateIssueInput should be defined in models.ts based on project structure.
-// Assuming it's defined like:
-// export interface CreateIssueInput {
-//   issueType: AnyIssue['issueType'];
-//   summary: string;
-//   status: AnyIssue['status'];
-//   description?: string;
-//   parentIssueKey?: string;
-// }
-from '../../models';
+// Remove CreateIssueInput import as it's not used here and wasn't exported from models.ts
+import { AnyIssue, DbSchema } from '../../models';
 import { createIssue as createIssueService } from '../../issueService';
-import { ApiError } from '../utils/apiError'; // Import ApiError
+// Correct import for the error handling class and error code map
+import { IssueCreationError, errorStatusCodeMap } from '../../utils/errorHandling';
 import { loadDatabase, saveDatabase } from '../../dataStore'; // Import dataStore functions needed for other handlers
 
 
@@ -49,8 +41,8 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
       res.status(400).json({ message: 'Missing required field: issueType.' });
       return;
     }
-    if (!summary) { // Assuming summary cannot be an empty string either, but test only checks for missing.
-      res.status(400).json({ message: 'Missing required field: summary.' });
+    if (!summary || typeof summary !== 'string' || summary.trim() === '') { // Added check for empty/whitespace summary
+      res.status(400).json({ message: 'Missing or empty required field: summary.' });
       return;
     }
     if (!status) {
@@ -60,13 +52,13 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
 
     // Validate issueType value
     if (!allowedIssueTypes.includes(issueType)) {
-      res.status(400).json({ message: `Invalid value for issueType: ${issueType}. Must be one of: ${allowedIssueTypes.join(', ')}.` });
+      res.status(400).json({ message: `Invalid value for issueType: "${issueType}". Must be one of: ${allowedIssueTypes.join(', ')}.` });
       return;
     }
 
     // Validate status value
     if (!allowedStatuses.includes(status)) {
-      res.status(400).json({ message: `Invalid value for status: ${status}. Must be one of: ${allowedStatuses.join(', ')}.` });
+      res.status(400).json({ message: `Invalid value for status: "${status}". Must be one of: ${allowedStatuses.join(', ')}.` });
       return;
     }
 
@@ -76,7 +68,12 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
         res.status(400).json({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
         return;
       }
+    } else if (parentIssueKey !== undefined && parentIssueKey !== null && parentIssueKey !== '') {
+        // Disallow parentKey for non-Subtasks if provided
+         res.status(400).json({ message: `Invalid field: parentIssueKey is only allowed for Subtask issue types.` });
+         return;
     }
+
 
     // Prepare input for the service call
     // The service expects an object matching the structure expected by its createIssue function.
@@ -86,20 +83,22 @@ export const createIssue = async (req: Request, res: Response): Promise<void> =>
       title: summary, // map summary from controller input to title for service input
       issueTypeName: issueType, // map issueType from controller input to issueTypeName for service input
       description: description || '', // default to empty string if description is not provided
-      // Only pass parentKey if it's a Subtask and was provided, otherwise leave undefined.
+      // Only pass parentKey if it's a Subtask and was provided, otherwise pass null or undefined.
       // The service handles the null/undefined logic for parentKey internally.
-      parentKey: (issueType === 'Subtask' && parentIssueKey) ? parentIssueKey : undefined,
+      parentKey: (issueType === 'Subtask' && parentIssueKey) ? parentIssueKey : null, // Pass null if not a subtask or parentKey is empty
     };
 
     // Note: Status is validated here in the controller, but NOT passed to the service,
     // as the service determines the initial status based on issue type.
 
     const createdIssue = await createIssueService(serviceInput);
+    // The service returns the full created issue object
     res.status(201).json(createdIssue);
 
   } catch (error: any) {
-    if (error instanceof ApiError && error.statusCode) {
-      // If it's a known API error (e.g., from the service), use its status and message
+    // Use the correct error handling class
+    if (error instanceof IssueCreationError && error.statusCode) {
+      // If it's a known API error from the service, use its status and message
       res.status(error.statusCode).json({ message: error.message });
     } else {
       // For unexpected errors, log them and return a generic 500 error
@@ -125,7 +124,9 @@ export const getIssues = async (req: Request, res: Response): Promise<void> => {
       db = await loadDatabase();
     } catch (error) {
       console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     res.status(200).json(db.issues);
   } catch (error) {
@@ -152,13 +153,17 @@ export const getIssue = async (req: Request, res: Response): Promise<void> => {
       db = await loadDatabase();
     } catch (error) {
       console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     const issue = db.issues.find(issue => issue.id === id);
     if (issue) {
       res.status(200).json(issue);
     } else {
+      // Remove 'return' before res.status for void return type
       res.status(404).json({ message: 'Issue not found' });
+      return; // Explicitly return after sending response
     }
   } catch (error) {
     console.error('Error getting issue by ID:', error);
@@ -184,13 +189,17 @@ export const getIssueByKeyEndpoint = async (req: Request, res: Response): Promis
       db = await loadDatabase();
     } catch (error) {
       console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     const issue = db.issues.find(issue => issue.key === key);
     if (issue) {
       res.status(200).json(issue);
     } else {
+      // Remove 'return' before res.status for void return type
       res.status(404).json({ message: 'Issue not found' });
+      return; // Explicitly return after sending response
     }
   } catch (error) {
     console.error('Error getting issue by key:', error);
@@ -218,8 +227,9 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
 
     // Basic validation for existence and non-empty strings
     if (updateData.status !== undefined && !allowedStatuses.includes(updateData.status)) {
+         // Remove 'return' before res.status for void return type
          res.status(400).json({ message: `Invalid status: "${updateData.status}". Must be one of ${allowedStatuses.join(', ')}.` });
-         return;
+         return; // Explicitly return after sending response
     }
 
     // Fetch the existing issue
@@ -228,17 +238,23 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
       db = await loadDatabase();
     } catch (error) {
       console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
 
     const issueIndex = db.issues.findIndex(issue => issue.id === id);
     if (issueIndex === -1) {
-      return res.status(404).json({ message: 'Issue not found' });
+      // Remove 'return' before res.status for void return type
+      res.status(404).json({ message: 'Issue not found' });
+      return; // Explicitly return after sending response
     }
 
     // Ensure that key and id are not updated.
     if (updateData.key !== undefined || updateData.id !== undefined) {
-      return res.status(400).json({ message: 'Cannot update issue key or id' });
+      // Remove 'return' before res.status for void return type
+      res.status(400).json({ message: 'Cannot update issue key or id' });
+      return; // Explicitly return after sending response
     }
 
     // Perform the update
@@ -247,7 +263,9 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
       await saveDatabase(db);
     } catch (error) {
       console.error('Error saving database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     res.status(200).json(db.issues[issueIndex]);
 
@@ -275,18 +293,24 @@ export const deleteIssueEndpoint = async (req: Request, res: Response): Promise<
       db = await loadDatabase();
     } catch (error) {
       console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     const issueIndex = db.issues.findIndex(issue => issue.id === id);
     if (issueIndex === -1) {
-      return res.status(404).json({ message: 'Issue not found' });
+      // Remove 'return' before res.status for void return type
+      res.status(404).json({ message: 'Issue not found' });
+      return; // Explicitly return after sending response
     }
     db.issues.splice(issueIndex, 1);
     try {
       await saveDatabase(db);
     } catch (error) {
       console.error('Error saving database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
+      // Remove 'return' before res.status for void return type
+      res.status(500).json({ message: 'Internal server error' });
+      return; // Explicitly return after sending response
     }
     res.status(204).send(); // No content on success
   } catch (error) {

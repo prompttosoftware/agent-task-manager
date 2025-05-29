@@ -41,4 +41,12 @@ interface DbSchema {
   issueKeyCounter: number;
 }
 
-export { BaseIssue, EpicSpecifics, SubtaskSpecifics, Task, Story, Bug, Epic, Subtask, AnyIssue, DbSchema };
+// Input type for creating a new issue via the service
+interface CreateIssueInput {
+  issueTypeName: AnyIssue['issueType']; // Use the specific union type
+  title: string;
+  description?: string;
+  parentKey?: string | null;
+}
+
+export { BaseIssue, EpicSpecifics, SubtaskSpecifics, Task, Story, Bug, Epic, Subtask, AnyIssue, DbSchema, CreateIssueInput };

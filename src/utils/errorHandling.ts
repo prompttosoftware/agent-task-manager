@@ -27,11 +27,12 @@ export const errorStatusCodeMap: { [errorCode: string]: number } = {
   'MISSING_TITLE': 400,         // Required title is missing or empty
   'INVALID_ISSUE_TYPE': 400,    // Provided issue type is not allowed
   'INVALID_STATUS': 400,        // Provided status is not allowed
-  'INVALID_PARENT_KEY': 400,    // Invalid or missing parent key (e.g., for Subtasks)
+  'INVALID_PARENT_KEY': 400,    // Invalid or missing parent key (e.g., for Subtasks) or parent key provided for non-subtask
   'PARENT_NOT_FOUND': 404,      // Parent issue specified by key not found
   'PARENT_IS_SUBTASK': 400,     // Cannot parent a Subtask under another Subtask
   'EPIC_HAS_SUBTASK_PARENT': 400, // Epic cannot have a Subtask parent
   // Data access or internal errors
   'DATABASE_ERROR': 500,        // General database/data store error
+  'CONFLICT': 409,              // Resource conflict (e.g., issue already exists - though less likely with key generation)
   // Add other specific error codes and their corresponding status codes as needed
 };
