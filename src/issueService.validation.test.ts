@@ -1,7 +1,7 @@
 import { createIssue } from './issueService';
 import { loadDatabase, saveDatabase } from './dataStore';
 import { DbSchema } from './models';
-import { IssueCreationError } from './utils/errorHandling';
+import { IssueCreationError } from './utils/errorHandling'; // Corrected import path
 
 // Mock the dataStore module to control database interactions
 jest.mock('./dataStore');
@@ -25,7 +25,7 @@ describe('issueService - Input Validation', () => {
     savedDbState = null;
 
     // Mock loadDatabase to return a copy of the initial state
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(initialDb))); // Deep copy to avoid mutation issues
+    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(initialDb))); // Deep copy
 
     // Mock saveDatabase to capture the state it was called with
     mockSaveDatabase.mockImplementation(async (db: DbSchema) => {
@@ -49,13 +49,14 @@ describe('issueService - Input Validation', () => {
       description: '...',
     };
 
-    await expect(createIssue(input as any)).rejects.toThrow(IssueCreationError); // Expect the specific error type
-    await expect(createIssue(input as any)).rejects.toThrow('Issue title is required.'); // Expect the specific message
-
+    // Use a single try/catch block for all assertions on the thrown error
     try {
         await createIssue(input as any);
+        // If we reach here, the promise didn't reject, which is an error
+        fail('createIssue should have thrown an error');
     } catch (error: any) {
         expect(error).toBeInstanceOf(IssueCreationError);
+        expect(error.message).toBe('Issue title is required.');
         expect(error.errorCode).toBe('MISSING_TITLE');
         expect(error.statusCode).toBe(400);
     }
@@ -70,13 +71,13 @@ describe('issueService - Input Validation', () => {
       description: '...',
     };
 
-    await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
-    await expect(createIssue(input)).rejects.toThrow('Issue title is required.'); // Expect the specific message
-
-    try {
+     // Use a single try/catch block for all assertions on the thrown error
+     try {
         await createIssue(input);
+        fail('createIssue should have thrown an error');
     } catch (error: any) {
         expect(error).toBeInstanceOf(IssueCreationError);
+        expect(error.message).toBe('Issue title is required.');
         expect(error.errorCode).toBe('MISSING_TITLE');
         expect(error.statusCode).toBe(400);
     }
@@ -91,13 +92,13 @@ describe('issueService - Input Validation', () => {
       description: '...',
     };
 
-    await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
-    await expect(createIssue(input)).rejects.toThrow('Issue title is required.'); // Expect the specific message
-
-    try {
+     // Use a single try/catch block for all assertions on the thrown error
+     try {
         await createIssue(input);
+        fail('createIssue should have thrown an error');
     } catch (error: any) {
         expect(error).toBeInstanceOf(IssueCreationError);
+        expect(error.message).toBe('Issue title is required.');
         expect(error.errorCode).toBe('MISSING_TITLE');
         expect(error.statusCode).toBe(400);
     }
@@ -115,18 +116,19 @@ describe('issueService - Input Validation', () => {
       // parentKey is missing
     };
 
-    await expect(createIssue(input)).rejects.toThrow(IssueCreationError); // Expect the specific error type
-    await expect(createIssue(input)).rejects.toThrow('Subtask creation requires a parentKey.'); // Expect the specific message
-
+    // Use a single try/catch block for all assertions on the thrown error
     try {
         await createIssue(input);
+        fail('createIssue should have thrown an error');
     } catch (error: any) {
         expect(error).toBeInstanceOf(IssueCreationError);
-        expect(error.errorCode).toBe('INVALID_PARENT_KEY');
+        expect(error.message).toBe('Subtask creation requires a parentKey.');
+        expect(error.errorCode).toBe('INVALID_PARENT_KEY'); // Corrected errorCode expectation
         expect(error.statusCode).toBe(400);
     }
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1); // Load happens before this validation
+    // Load happens *before* parent validation for Subtasks, so loadDatabase should be called once.
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
     expect(mockSaveDatabase).not.toHaveBeenCalled(); // Save should not be called
   });
 });
