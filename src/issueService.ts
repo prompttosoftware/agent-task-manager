@@ -18,15 +18,22 @@ interface IssueInput {
 
 
 /**
- * Helper function to retrieve an issue by its key directly from the database.
- * This function is moved/defined here to be used within the issue service.
+ * Helper function to retrieve an issue by its key from a *provided* database object.
+ * This function is internal to issueService to avoid repeated database loads.
+ * @param {DbSchema} db - The database object.
  * @param {string} key - The key of the issue to retrieve.
- * @returns {Promise<AnyIssue | undefined>} - A Promise that resolves with the issue object if found, otherwise undefined.
+ * @returns {AnyIssue | undefined} - The issue object if found, otherwise undefined.
  */
-export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
-  const db = await loadDatabase();
+const getIssueByKeyInternal = (db: DbSchema, key: string): AnyIssue | undefined => {
   return db.issues.find(issue => issue.key === key);
 };
+
+// Export a function to get an issue by key for external use, which handles loading the database.
+// Note: This is a separate function from the internal helper used during creation.
+export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
+    const db = await loadDatabase();
+    return getIssueByKeyInternal(db, key);
+}
 
 
 /**
@@ -61,33 +68,38 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
   }
 
-  // --- Parent Validation Logic for Subtasks ---
-  if (issueType === 'Subtask') {
-    // Subtasks require a parentKey
-    if (!input.parentKey || input.parentKey.trim().length === 0) {
-      throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
-    }
-
-    // Validate that the parent issue exists
-    const parentIssue = await getIssueByKey(input.parentKey);
-    if (!parentIssue) {
-      throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
-    }
-
-    // Validate that the parent is not a Subtask itself
-    if (parentIssue.issueType === 'Subtask') {
-       throw new IssueCreationError(`Parent issue '${input.parentKey}' is a Subtask. Subtasks cannot have Subtask children.`, 'INVALID_PARENT_TYPE', 400);
-    }
-
-    // TODO: Consider adding the subtask's key to the parent's childIssueKeys array if the parent type supports it (like Epic).
-    // This requires modifying the parent issue, which adds complexity (loading, modifying, saving the parent).
-    // For now, we'll just validate and create the subtask with the parentKey reference.
-  }
-  // --- End Parent Validation ---
+  let db: DbSchema;
 
   try {
-    // 1. Load the database
-    const db: DbSchema = await loadDatabase();
+    // Load the database *once* at the beginning if any operation requires it (like parent validation or saving).
+    // We must load it if issueType is Subtask to validate parent, or always if we plan to save.
+    // Since successful creation *always* saves, we can load it unconditionally here.
+    db = await loadDatabase();
+
+    // --- Parent Validation Logic for Subtasks ---
+    if (issueType === 'Subtask') {
+      // Subtasks require a parentKey
+      if (!input.parentKey || input.parentKey.trim().length === 0) {
+        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
+      }
+
+      // Validate that the parent issue exists using the already loaded database
+      const parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper
+      if (!parentIssue) {
+        throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
+      }
+
+      // Validate that the parent is not a Subtask itself
+      if (parentIssue.issueType === 'Subtask') {
+         throw new IssueCreationError(`Parent issue '${input.parentKey}' is a Subtask. Subtasks cannot have Subtask children.`, 'INVALID_PARENT_TYPE', 400);
+      }
+
+      // TODO: Consider adding the subtask's key to the parent's childIssueKeys array if the parent type supports it (like Epic).
+      // This requires modifying the parent issue, which adds complexity (loading, modifying, saving the parent).
+      // For now, we'll just validate and create the subtask with the parentKey reference.
+    }
+    // --- End Parent Validation ---
+
 
     // 2. Generate a new issue key by incrementing issueKeyCounter
     const newIssueKeyCounter = db.issueKeyCounter + 1;
@@ -189,6 +201,3 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     throw new Error('Failed to create issue due to an unexpected error.'); // Could use a more specific DB error class if defined
   }
 }
-
-// Re-export getIssueByKey for external use (e.g., by controllers or other services)
-// Removed duplicate export { getIssueByKey };
