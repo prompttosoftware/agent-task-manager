@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AnyIssue, DbSchema } from '../../models';
 import { loadDatabase, saveDatabase } from '../../dataStore';
 import { v4 as uuidv4 } from 'uuid';
+import { addIssue } from '../../issueService';
 
 // Define allowed values for issue types and statuses
 const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"];
@@ -62,115 +63,41 @@ const generateIssueKey = (issueType: string, counter: number): string => {
  * - 500 Internal Server Error: An error occurred on the server side, likely related to data store operations (getting key, adding issue). Returns `{ message: 'Internal server error' }`.
  */
 export const createIssue = async (req: Request, res: Response): Promise<void> => {
-  // Use top-level constants for allowed types and statuses
-  // const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"]; // Removed duplicate definition
-  // const allowedStatuses = ["Todo", "In Progress", "Done"]; // Removed duplicate definition
-
   try {
-    // Access fields based on the requested structure
-    const { fields, parentIssueKey, status, description } = req.body;
-    const summary = fields?.summary;
-    const issueTypeName = fields?.issuetype?.name;
+    // Access fields based on the requested structure described in the JSDoc comments.
+    // Validation logic is delegated to the addIssue service function.
+    const { issueType, summary, status, description, parentIssueKey } = req.body;
 
-    // Validation 1: Required fields presence and non-empty
-    if (!summary || typeof summary !== 'string' || summary.trim() === '' ||
-        !issueTypeName || typeof issueTypeName !== 'string' || issueTypeName.trim() === '') {
-        res.status(400).json({ message: 'Missing required fields: fields.summary and fields.issuetype.name are required and cannot be empty.' });
-        return;
-    }
-
-    // Validation 2: issueTypeName must be one of allowed types
-    if (!allowedIssueTypes.includes(issueTypeName)) {
-        res.status(400).json({ message: `Invalid issue type: "${issueTypeName}". Must be one of ${allowedIssueTypes.join(', ')}.` });
-        return;
-    }
-
-    // Validation 3: parentIssueKey required for Subtask
-    if (issueTypeName === 'Subtask') {
-        if (!parentIssueKey || typeof parentIssueKey !== 'string' || parentIssueKey.trim() === '') {
-            res.status(400).json({ message: 'Missing required field: parentIssueKey is required for Subtasks.' });
-            return;
-        }
-    }
-
-    // Prepare variables for issue creation based on validated input
-    const issueType = issueTypeName; // Align variable name for subsequent code
-    // status and description are taken directly from req.body if present, no specific validation required per prompt.
-
-    let db: DbSchema;
-    try {
-      db = await loadDatabase();
-    } catch (error) {
-      console.error('Error loading database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
-    }
-    // Generate required fields
-    const id = uuidv4();
-    const nextCounter = db.issueKeyCounter + 1; // Calculate the next counter value
-    const key = generateIssueKey(issueType, nextCounter); // Use the new function
-    const now = new Date().toISOString();
-
-    // Create the new issue object with base properties
-    const baseIssue = {
-      id: id,
-      key: key,
-      issueType: issueType as AnyIssue["issueType"], // Cast validated string to union type
+    // Prepare data for the service function.
+    // The service function will handle validation of types, required fields, allowed values, etc.
+    const issueData = {
+      issueType: issueType as AnyIssue["issueType"], // Type assertion might still be useful for stricter typing
       summary: summary,
-      description: description || '', // Use provided description or default to empty string
-      status: status as AnyIssue["status"], // Cast validated string to union type
-      createdAt: now,
-      updatedAt: now,
+      description: description,
+      status: status as AnyIssue["status"], // Type assertion might still be useful for stricter typing
+      parentIssueKey: parentIssueKey,
     };
 
-    let newIssue: AnyIssue;
+    // Call the addIssue service function.
+    // Errors thrown by addIssue (including IssueCreationError) will be caught below.
+    const newIssue = await addIssue(issueData);
 
-    // Handle specific properties based on issueType
-    switch (issueType) {
-      case "Epic":
-        newIssue = {
-          ...baseIssue,
-          childIssueKeys: [], // Requirement 1: Epics must have childIssueKeys: []
-        };
-        break;
-      case "Subtask":
-        // parentIssueKey was already validated and extracted at the beginning
-        newIssue = {
-          ...baseIssue,
-          parentIssueKey: parentIssueKey.trim(), // Add parentIssueKey
-        };
-        break;
-      case "Task":
-      case "Story":
-      case "Bug":
-        // These types do not require additional properties beyond baseIssue
-        newIssue = baseIssue;
-        break;
-      default: // Handle unknown issue types by throwing an error
-        // This case should theoretically not be reached if the validation above is correct,
-        // but it's a good safety net.
-        throw new Error(`Internal Error: Unhandled issue type "${issueType}" encountered.`);
-    }
-
-    // Requirement 4: Ensure the created issue object correctly matches the type definition.
-    // The switch statement above constructs the object based on the specific type.
-    // TypeScript will verify that the structure assigned to `newIssue` is compatible with `AnyIssue`.
-
-    // Add to data store
-    db.issues.push(newIssue);
-    db.issueKeyCounter = nextCounter; // Update the counter to the value used for the key
-
-    try {
-      await saveDatabase(db);
-    } catch (error) {
-      console.error('Error saving database:', error);
-      return res.status(500).json({ message: 'Internal server error' });
-    }
-
+    // On successful creation, return 201 Created with the new issue data.
     res.status(201).json(newIssue);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating issue:', error);
-    res.status(500).json({ message: 'Internal server error' });
+
+    // Check if the error is a custom IssueCreationError from the service.
+    if (error instanceof IssueCreationError) {
+      // Map custom error code from the service to an appropriate HTTP status code.
+      // Default to 500 for any unmapped custom error codes.
+      const statusCode = errorStatusCodeMap[error.code] || 500;
+      res.status(statusCode).json({ message: error.message });
+    } else {
+      // Handle unexpected errors (e.g., database errors not wrapped in IssueCreationError).
+      res.status(500).json({ message: 'Internal server error' });
+    }
   }
 };
 
@@ -402,23 +329,33 @@ export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> 
  */
 export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; summary: string; description?: string; status: AnyIssue['status']; parentIssueKey?: string; }): Promise<AnyIssue> => {
   // Add validation for required fields: issueType, summary, and status
+  // Note: issueType and summary are also validated in the controller for early exit,
+  // but status might not be in the request body (default assumed "Todo"?), so validate here.
+  // However, the controller expects status in the body based on the structure. Let's align.
+  // The controller now throws for missing summary, issueTypeName, parentIssueKey (for Subtask).
+  // This addIssue function will throw for invalid issueType, invalid status,
+  // and also re-checks for missing/empty summary, issueType, status for robustness
+  // if addIssue were called directly without the controller's initial checks.
+  // Let's keep the robust checks here but use the custom error.
+
   if (!issueData.issueType || issueData.issueType.trim() === '' || !issueData.summary || issueData.summary.trim() === '' || !issueData.status || issueData.status.trim() === '') {
-    throw new Error('Missing required fields: issueType, summary, and status are required.');
+    throw new IssueCreationError('Missing required fields: issueType, summary, and status are required.', 'MISSING_REQUIRED');
   }
 
   // Add validation for issueType against allowed values
   if (!allowedIssueTypes.includes(issueData.issueType)) {
-      throw new Error(`Invalid issueType: "${issueData.issueType}". Must be one of ${allowedIssueTypes.join(', ')}.`);
+      throw new IssueCreationError(`Invalid issueType: "${issueData.issueType}". Must be one of ${allowedIssueTypes.join(', ')}.`, 'INVALID_ISSUE_TYPE');
   }
 
   // Add validation for status against allowed values
    if (!allowedStatuses.includes(issueData.status)) {
-      throw new Error(`Invalid status: "${issueData.status}". Must be one of ${allowedStatuses.join(', ')}.`);
+      throw new IssueCreationError(`Invalid status: "${issueData.status}". Must be one of ${allowedStatuses.join(', ')}.`, 'INVALID_STATUS');
   }
 
   // Add validation for parentIssueKey if issueType is Subtask
+  // Note: Controller also validates this. This is a redundant but safe check.
   if (issueData.issueType === 'Subtask' && (!issueData.parentIssueKey || typeof issueData.parentIssueKey !== 'string' || issueData.parentIssueKey.trim() === '')) {
-       throw new Error('Missing required field: parentIssueKey is required for Subtasks.');
+       throw new IssueCreationError('Missing required field: parentIssueKey is required for Subtasks.', 'MISSING_PARENT_KEY');
   }
 
 
@@ -482,6 +419,28 @@ export const addIssue = async (issueData: { issueType: AnyIssue['issueType']; su
   return newIssue;
 };
 
+
+// Define custom error class for issue creation failures
+class IssueCreationError extends Error {
+  code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = 'IssueCreationError';
+    this.code = code;
+    // Set prototype explicitly
+    Object.setPrototypeOf(this, IssueCreationError.prototype);
+  }
+}
+
+// Map IssueCreationError codes to HTTP status codes
+const errorStatusCodeMap: { [key: string]: number } = {
+  'MISSING_REQUIRED': 400,
+  'INVALID_ISSUE_TYPE': 400,
+  'INVALID_STATUS': 400,
+  'MISSING_PARENT_KEY': 400,
+  // Add other potential codes if needed, though for now they map to 400
+  // Any other code or non-IssueCreationError will fall through to 500
+};
 
 /**
  * Helper function to update an existing issue by its ID directly in the database.
