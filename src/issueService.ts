@@ -47,13 +47,17 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   }
 
   // Determine issue type from input or default to 'Task'
+  // Handle both capitalized and lowercase inputs, including 'feature' alias
   let issueType: AnyIssue['issueType'];
-  switch (input.issueTypeName) {
-    case 'Task': issueType = 'Task'; break;
-    case 'Story': case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
-    case 'Epic': issueType = 'Epic'; break;
-    case 'Bug': issueType = 'Bug'; break;
-    case 'Subtask': issueType = 'Subtask'; break;
+  const normalizedIssueTypeName = input.issueTypeName?.toLowerCase(); // Normalize input for matching
+
+  switch (normalizedIssueTypeName) {
+    case 'task': issueType = 'Task'; break;
+    case 'story':
+    case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
+    case 'epic': issueType = 'Epic'; break;
+    case 'bug': issueType = 'Bug'; break;
+    case 'subtask': issueType = 'Subtask'; break;
     default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
   }
 
@@ -88,9 +92,6 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // 2. Generate a new issue key by incrementing issueKeyCounter
     const newIssueKeyCounter = db.issueKeyCounter + 1;
     // Format the counter into a unique key string, e.g., "ISSUE-1", "ISSUE-2", etc.
-    // TODO: Consider making the prefix configurable or based on issue type later.
-    // For now, we use a generic prefix or issue type prefix if needed, but the original was just 'ISSUE-'.
-    // Let's stick to the simple "ISSUE-" for now based on current implementation, but this might need adjustment if issue types get unique prefixes.
     // Note: The controller tests seem to expect type-specific prefixes (BUG-1, STOR-2, SUBT-3). The service should handle this.
     // Let's update the key generation to use a prefix based on the determined issueType.
     const issueTypePrefixMap: { [key: string]: string } = {
@@ -101,7 +102,8 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         "Subtask": "SUBT",
         // Default prefix if type is unrecognized (though we default issueType to Task now)
     };
-    const prefix = issueTypePrefixMap[issueType] || "ISSUE"; // Use specific prefix or a generic one
+    // Use the determined capitalized issueType to get the prefix
+    const prefix = issueTypePrefixMap[issueType] || "ISSUE";
     const newIssueKey = `${prefix}-${newIssueKeyCounter}`;
 
 

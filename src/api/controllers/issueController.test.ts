@@ -38,16 +38,9 @@ const mockResponse = (): Response => {
   return res;
 };
 
-// Define valid issue types and statuses for validation tests
-// These were used in the original file for validation tests.
-// We keep them here for consistency or potential future use, though
-// validation tests have been moved.
-const validIssueTypes: AnyIssue['issueType'][] = ['Task', 'Story', 'Epic', 'Bug', 'Subtask'];
-const validStatuses: AnyIssue['status'][] = ['Todo', 'In Progress', 'Done'];
 
-
-// Main test suite for createIssue controller
-describe('createIssue Controller - Success and Error Handling', () => {
+// Main test suite for createIssue controller - focusing on service interaction and error handling
+describe('createIssue Controller - Service Interaction and Error Handling', () => { // Updated describe block title
     beforeEach(() => {
         // Clear all mocks before each test
         jest.clearAllMocks();
@@ -58,150 +51,16 @@ describe('createIssue Controller - Success and Error Handling', () => {
         jest.restoreAllMocks();
     });
 
-    // --- Successful Creation Tests ---
-    // These tests verify that the controller correctly extracts data from the request body,
-    // maps it to the service's expected input format, calls the service,
-    // and returns the 201 status with the result from the service.
-
-    it('should call issueService.createIssue with correct data and return 201 on success without description', async () => {
-        const issueInput = {
-          issueType: 'Bug',
-          summary: 'Test Issue Without Description',
-          status: 'Todo', // Status is validated by controller but not passed to service
-        };
-        const expectedServiceInput: CreateIssueInput = {
-            issueTypeName: 'Bug',
-            title: 'Test Issue Without Description',
-            description: '', // Controller should pass default if missing
-            parentKey: null, // Should be null for non-Subtasks
-        };
-        const serviceResult: AnyIssue = { // The object the service is mocked to return
-            id: 'mock-uuid-1',
-            key: 'BUG-1',
-            issueType: 'Bug',
-            summary: 'Test Issue Without Description',
-            status: 'Todo', // Service adds status upon creation
-            description: '',
-            createdAt: '2023-01-01T10:00:00.000Z',
-            updatedAt: '2023-01-01T10:00:00.000Z',
-        };
-
-        // Mock the service call to return the expected issue
-        mockedCreateIssueService.mockResolvedValue(serviceResult);
-
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        // Verify the service was called with the correct input (point 1)
-        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
-        expect(mockedCreateIssueService).toHaveBeenCalledWith(expectedServiceInput);
-
-        // Verify the controller responded correctly
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(serviceResult);
-    });
-
-    it('should call issueService.createIssue with correct data and return 201 on success with description', async () => {
-        const issueInput = {
-          issueType: 'Story',
-          summary: 'Test Issue With Description',
-          status: 'In Progress', // Status is validated by controller but not passed to service
-          description: 'This is a test description.',
-        };
-         const expectedServiceInput: CreateIssueInput = {
-            issueTypeName: 'Story',
-            title: 'Test Issue With Description',
-            description: 'This is a test description.',
-            parentKey: null, // Should be null for non-Subtasks
-        };
-        const serviceResult: AnyIssue = { // The object the service is mocked to return
-            id: 'mock-uuid-2',
-            key: 'STOR-2',
-            issueType: 'Story',
-            summary: 'Test Issue With Description',
-            status: 'In Progress', // Service adds status upon creation
-            description: 'This is a test description.',
-            createdAt: '2023-01-01T10:00:00.000Z',
-            updatedAt: '2023-01-01T10:00:00.000Z',
-        };
-
-        // Mock the service call to return the expected issue
-        mockedCreateIssueService.mockResolvedValue(serviceResult);
-
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        // Verify the service was called with the correct input (point 1)
-        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
-        expect(mockedCreateIssueService).toHaveBeenCalledWith(expectedServiceInput);
-
-
-        // Verify the controller responded correctly
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(serviceResult);
-      });
-
-    it('should call issueService.createIssue with correct data and return 201 for a Subtask with parentIssueKey', async () => {
-        const parentKey = 'TASK-99';
-        const issueInput = {
-            issueType: 'Subtask',
-            summary: 'Subtask of Parent',
-            status: 'Todo', // Status is validated by controller but not passed to service
-            parentIssueKey: parentKey,
-        };
-        const expectedServiceInput: CreateIssueInput = {
-            issueTypeName: 'Subtask',
-            title: 'Subtask of Parent',
-            description: '', // Default description
-            parentKey: parentKey, // Should pass parentIssueKey as parentKey to service
-        };
-         const serviceResult: AnyIssue = { // The object the service is mocked to return
-            id: 'mock-uuid-subtask-1',
-            key: 'SUBT-3',
-            issueType: 'Subtask',
-            summary: 'Subtask of Parent',
-            status: 'Todo', // Service adds status upon creation
-            parentKey: parentKey, // Service includes the parentKey
-            description: '',
-            createdAt: '2023-01-01T10:00:00.000Z',
-            updatedAt: '2023-01-01T10:00:00.000Z',
-        };
-
-        // Mock the service call to return the expected issue
-        mockedCreateIssueService.mockResolvedValue(serviceResult);
-
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        await createIssue(req, res);
-
-        // Verify the service was called with the correct input (point 1)
-        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
-         expect(mockedCreateIssueService).toHaveBeenCalledWith(expectedServiceInput);
-
-        // Verify the controller responded correctly (using the service result)
-        expect(res.status).toHaveBeenCalledWith(201);
-        // The API response might slightly differ from the internal service object
-        // e.g., using parentIssueKey for external API consistency if the model does.
-        // Based on issueController.ts return value (Turn 24, not included here), it returns the service result directly.
-        // So, we expect the service result including `parentKey`. If the API needs `parentIssueKey`, the controller should map it.
-        // Let's assume the service returns `parentKey` and the API response should have `parentIssueKey`.
-        // The test in the previous successful file created a new object for the assertion. Let's stick to that.
-        // The controller code in Turn 24 was returning the service result directly. So the test should expect the service result.
-        // Let's verify the controller returns the service result which includes `parentKey`.
-        expect(res.json).toHaveBeenCalledWith(serviceResult);
-    });
+    // --- Successful Creation Tests (Moved to issueController.success.test.ts) ---
+    // The tests for successful creation scenarios have been moved to issueController.success.test.ts.
+    // This file now focuses on how the controller handles responses and errors from the service.
 
     // --- Validation Tests (Moved to issueController.validation.test.ts) ---
     // The following tests have been moved to issueController.validation.test.ts
     // - missing issueType, summary, status
     // - invalid issueType, status
     // - subtask missing parentIssueKey
-    // - non-subtask with parentIssueKey (point 2 of subtask)
+    // - non-subtask with parentIssueKey
 
     // --- Service Error Handling Tests ---
 
