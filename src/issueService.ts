@@ -1,10 +1,13 @@
-import { loadDatabase, saveDatabase, DbSchema, AnyIssue } from './dataStore';
-import { BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import necessary interfaces
+import { loadDatabase, saveDatabase } from './dataStore'; // Import only functions from dataStore
+import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
 
-// Define the input type for creating an issue.
-// This specifies the data required from the caller to create a new issue.
+/**
+ * Define the input type for creating an issue.
+ * This specifies the data required from the caller to create a new issue.
+ * Moved outside the function to be accessible in the function signature.
+ */
 interface IssueInput {
   title: string;
   description?: string; // Description is optional based on AnyIssue
@@ -12,6 +15,7 @@ interface IssueInput {
   parentKey?: string | null; // Optional reference to a parent issue key
   // Add other properties required for issue creation, excluding internal ones like key or fixed initial status.
 }
+
 
 /**
  * Helper function to retrieve an issue by its key directly from the database.
@@ -185,4 +189,4 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
 }
 
 // Re-export getIssueByKey for external use (e.g., by controllers or other services)
-export { getIssueByKey };
+// Removed duplicate export { getIssueByKey };
