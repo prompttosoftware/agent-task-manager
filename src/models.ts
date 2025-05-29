@@ -12,6 +12,7 @@ interface BaseIssue {
   status: "Todo" | "In Progress" | "Done";
   createdAt: string; // ISO8601
   updatedAt: string; // ISO8601
+  parentKey?: string | null; // Optional reference to a parent issue key
 }
 
 // EpicSpecifics
