@@ -5,10 +5,10 @@
  * Includes an optional error code for more specific handling in the consumer.
  */
 export class IssueCreationError extends Error {
-  errorCode?: string;
+  errorCode?: IssueErrorCodes | string; // Allow string in case service sends an unknown code
   statusCode?: number; // Add statusCode for direct HTTP response mapping
 
-  constructor(message: string, errorCode?: string, statusCode?: number) {
+  constructor(message: string, errorCode?: IssueErrorCodes | string, statusCode?: number) {
     super(message);
     this.name = 'IssueCreationError';
     this.errorCode = errorCode;
@@ -19,20 +19,35 @@ export class IssueCreationError extends Error {
 }
 
 /**
+ * Defines specific error codes that can be used with IssueCreationError.
+ */
+export enum IssueErrorCodes {
+  // Validation errors
+  MISSING_TITLE = 'MISSING_TITLE', // Required title is missing or empty
+  INVALID_ISSUE_TYPE = 'INVALID_ISSUE_TYPE', // Provided issue type is not allowed
+  INVALID_STATUS = 'INVALID_STATUS', // Provided status is not allowed
+  INVALID_PARENT_KEY = 'INVALID_PARENT_KEY', // Invalid or missing parent key (e.g., for Subtasks) or parent key provided for non-subtask
+  PARENT_ISSUE_NOT_FOUND = 'PARENT_ISSUE_NOT_FOUND', // Parent issue specified by key not found
+  INVALID_PARENT_TYPE = 'INVALID_PARENT_TYPE', // Cannot parent a Subtask under another Subtask, or an Epic/Bug under anything
+  // Data access or internal errors
+  DATABASE_ERROR = 'DATABASE_ERROR', // General database/data store error
+  CONFLICT = 'CONFLICT', // Resource conflict (e.g., issue already exists - though less likely with key generation)
+  // Add other specific error codes as needed
+  INVALID_INPUT = 'INVALID_INPUT', // Generic service-side input validation failure
+}
+
+/**
  * Maps IssueCreationError error codes to HTTP status codes.
  * This map is used by the controller to determine the appropriate HTTP response status.
  */
-export const errorStatusCodeMap: { [errorCode: string]: number } = {
-  // Validation errors
-  'MISSING_TITLE': 400,         // Required title is missing or empty
-  'INVALID_ISSUE_TYPE': 400,    // Provided issue type is not allowed
-  'INVALID_STATUS': 400,        // Provided status is not allowed
-  'INVALID_PARENT_KEY': 400,    // Invalid or missing parent key (e.g., for Subtasks) or parent key provided for non-subtask
-  'PARENT_NOT_FOUND': 404,      // Parent issue specified by key not found
-  'PARENT_IS_SUBTASK': 400,     // Cannot parent a Subtask under another Subtask
-  'EPIC_HAS_SUBTASK_PARENT': 400, // Epic cannot have a Subtask parent
-  // Data access or internal errors
-  'DATABASE_ERROR': 500,        // General database/data store error
-  'CONFLICT': 409,              // Resource conflict (e.g., issue already exists - though less likely with key generation)
-  // Add other specific error codes and their corresponding status codes as needed
+export const errorStatusCodeMap: { [key in IssueErrorCodes]: number } = {
+  [IssueErrorCodes.MISSING_TITLE]: 400,
+  [IssueErrorCodes.INVALID_ISSUE_TYPE]: 400,
+  [IssueErrorCodes.INVALID_STATUS]: 400,
+  [IssueErrorCodes.INVALID_PARENT_KEY]: 400,
+  [IssueErrorCodes.PARENT_ISSUE_NOT_FOUND]: 404,
+  [IssueErrorCodes.INVALID_PARENT_TYPE]: 400,
+  [IssueErrorCodes.DATABASE_ERROR]: 500,
+  [IssueErrorCodes.CONFLICT]: 409,
+  [IssueErrorCodes.INVALID_INPUT]: 400,
 };
