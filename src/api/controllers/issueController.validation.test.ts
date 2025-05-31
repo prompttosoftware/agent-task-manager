@@ -281,4 +281,20 @@ describe('createIssue Controller - Validation Scenarios', () => {
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalled();
     });
+
+    it('should return 400 with error messages if fields.issuetype.name is invalid', async () => {
+        const invalidIssueTypeName = 'InvalidType';
+        const req = mockRequest({
+            issueType: invalidIssueTypeName,
+            summary: 'Invalid IssueType Name',
+            status: 'Todo',
+        });
+        const res = mockResponse();
+
+        await createIssue(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ errorMessages: [`Invalid value for issueType: ${invalidIssueTypeName}. Must be one of: ${validIssueTypes.join(', ')}.`] , errors: {} });
+        expect(mockedCreateIssueService).not.toHaveBeenCalled();
+    });
 });
