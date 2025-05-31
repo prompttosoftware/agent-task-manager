@@ -2,6 +2,7 @@ import { loadDatabase, saveDatabase } from './dataStore'; // Import only functio
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
+import * as keyGenerator from './keyGenerator'; // Import keyGenerator service
 
 /**
  * Define the input type for creating an issue.
@@ -100,23 +101,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     }
     // --- End Parent Validation ---
 
-
-    // 2. Generate a new issue key by incrementing issueKeyCounter
-    const newIssueKeyCounter = db.issueKeyCounter + 1;
-    // Format the counter into a unique key string, e.g., "ISSUE-1", "ISSUE-2", etc.
-    // Note: The controller tests seem to expect type-specific prefixes (BUG-1, STOR-2, SUBT-3). The service should handle this.
-    // Let's update the key generation to use a prefix based on the determined issueType.
-    const issueTypePrefixMap: { [key: string]: string } = {
-        "Task": "TASK",
-        "Story": "STOR",
-        "Epic": "EPIC",
-        "Bug": "BUG",
-        "Subtask": "SUBT",
-        // Default prefix if type is unrecognized (though we default issueType to Task now)
-    };
-    // Use the determined capitalized issueType to get the prefix
-    const prefix = issueTypePrefixMap[issueType] || "ISSUE";
-    const newIssueKey = `${prefix}-${newIssueKeyCounter}`;
+    const newIssueKey = await keyGenerator.generateIssueKey(issueType);
 
 
     // 3. Create a new issue object adhering to AnyIssue
@@ -181,7 +166,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     db.issues.push(newIssue);
 
     // 5. Increment issueKeyCounter in the database
-    db.issueKeyCounter = newIssueKeyCounter;
+    // This logic has been moved to the keyGenerator.generateIssueKey function.
 
     // 6. Save the updated database
     await saveDatabase(db);

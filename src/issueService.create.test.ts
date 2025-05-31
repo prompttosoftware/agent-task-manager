@@ -2,12 +2,16 @@ import { createIssue } from './issueService';
 import { loadDatabase, saveDatabase } from './dataStore';
 import { DbSchema, AnyIssue, Task, Story, Bug, Epic, Subtask } from './models';
 import { IssueCreationError } from './utils/errorHandling';
+import { v4 as uuidv4 } from 'uuid';
+import * as keyGenerator from '../src/utils/keyGenerator';
 
 // Mock the dataStore module to control database interactions
 jest.mock('./dataStore');
+jest.mock('../src/utils/keyGenerator'); // Mock the keyGenerator
 
 const mockLoadDatabase = loadDatabase as jest.Mock;
 const mockSaveDatabase = saveDatabase as jest.Mock;
+const mockKeyGenerator = keyGenerator as jest.Mocked<typeof keyGenerator>;
 
 describe('issueService - Create Operations', () => {
   // This initialDb is the default state returned by mockLoadDatabase
@@ -24,6 +28,7 @@ describe('issueService - Create Operations', () => {
     // Reset mocks and mock data before each test
     mockLoadDatabase.mockClear();
     mockSaveDatabase.mockClear();
+    mockKeyGenerator.generateIssueKey.mockClear(); // Clear the mock
     savedDbState = null;
 
     // Mock loadDatabase to return a copy of the initial state by default
@@ -38,10 +43,18 @@ describe('issueService - Create Operations', () => {
     // Mock Date to get predictable timestamps
     mockDate = new Date('2023-10-27T10:00:00.000Z');
     jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+
+    // Mock UUID to ensure predictable IDs in tests.
+    jest.mock('uuid');
+    const mockUuid = require('uuid');
+    mockUuid.v4.mockReturnValue('test-uuid');
+
+     // Mock keyGenerator to return deterministic values.
+    mockKeyGenerator.generateIssueKey.mockImplementation(() => 'TASK-1'); // Default for now.
   });
 
   afterEach(() => {
-    // Restore Date mock
+    // Restore mocks
     jest.restoreAllMocks();
   });
 
@@ -371,5 +384,30 @@ describe('issueService - Create Operations', () => {
     // Expect ISO string format
     expect(savedIssue.createdAt).toEqual(mockDate.toISOString());
     expect(savedIssue.updatedAt).toEqual(mockDate.toISOString());
+  });
+
+  it('should generate a unique id using uuidv4', async () => {
+      const input = {
+          title: 'UUID Test',
+          description: 'Checking UUID',
+      };
+
+      const createdIssue = await createIssue(input);
+
+      expect(createdIssue.id).toBe('test-uuid'); // Check if the uuid mock is used
+  });
+
+  it('should generate a unique key using keyGenerator', async () => {
+      const input = {
+          title: 'Key Generation Test',
+          description: 'Checking key generation',
+          issueTypeName: 'Task',
+      };
+
+      mockKeyGenerator.generateIssueKey.mockReturnValue('TEST-KEY');
+      const createdIssue = await createIssue(input);
+
+      expect(mockKeyGenerator.generateIssueKey).toHaveBeenCalledWith(1, 'Task');
+      expect(createdIssue.key).toBe('TEST-KEY');
   });
 });
