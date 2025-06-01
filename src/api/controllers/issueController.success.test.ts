@@ -55,6 +55,7 @@ describe('createIssue Controller - Success Scenarios', () => {
             summary: 'Test Issue Without Description',
             status: 'Todo',
             description: '',
+            parentKey: null, // Add parentKey property
             createdAt: '2023-01-01T10:00:00.000Z',
             updatedAt: '2023-01-01T10:00:00.000Z',
         };
@@ -92,6 +93,7 @@ describe('createIssue Controller - Success Scenarios', () => {
             summary: 'Test Issue With Description',
             status: 'In Progress',
             description: 'This is a test description.',
+            parentKey: null, // Add parentKey property
             createdAt: '2023-01-01T10:00:00.000Z',
             updatedAt: '2023-01-01T10:00:00.000Z',
         };
@@ -129,8 +131,8 @@ describe('createIssue Controller - Success Scenarios', () => {
             issueType: 'Subtask',
             summary: 'Subtask of Parent',
             status: 'Todo',
-            parentIssueKey: parentKey, // Controller does not set this on the object sent to service, but service returns it
-            parentKey: parentKey, // This is what service actually handles
+            // Removed redundant parentIssueKey - AnyIssue likely uses parentKey
+            parentKey: parentKey,
             description: '',
             createdAt: '2023-01-01T10:00:00.000Z',
             updatedAt: '2023-01-01T10:00:00.000Z',

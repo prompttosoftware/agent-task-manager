@@ -1,24 +1,9 @@
-// src/issueService.ts
-```typescript
 import { loadDatabase, saveDatabase, DB_FILE_PATH } from './database/database'; // Import database functions and constant
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
+import logger from './utils/logger'; // Import shared logger
 import * as keyGenerator from './utils/keyGenerator'; // Import keyGenerator service
-import * as winston from 'winston';
-
-// Configure Winston logger
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(), // Log to the console
-    // Add other transports like file, etc., as needed
-  ],
-});
 
 /**
  * Define the input type for creating an issue.
@@ -48,6 +33,7 @@ const getIssueByKeyInternal = (db: DbSchema, key: string): AnyIssue | undefined 
 // Export a function to get an issue by key for external use, which handles loading the database.
 // Note: This is a separate function from the internal helper used during creation.
 export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
+    logger.info('getIssueByKey: Loading database...'); // Add logging before load
     const db = await loadDatabase();
     return getIssueByKeyInternal(db, key);
 }
@@ -99,7 +85,13 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // Load the database *once* at the beginning if any operation requires it (like parent validation or saving).
     // We must load it if issueType is Subtask to validate parent, or always if we plan to save.
     // Since successful creation *always* saves, we can load it unconditionally here.
+    // --- Logging - Start ---
+    logger.info('createIssue: Loading database...');
+    // --- Logging - End ---
     db = await loadDatabase();
+    // --- Logging - Start ---
+    logger.info('createIssue: Database loaded successfully.');
+    // --- Logging - End ---
 
     // --- Parent Validation Logic for Subtasks ---
     if (issueType === 'Subtask') {
@@ -135,6 +127,9 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     logger.info('createIssue: Generating issue key', { issueType });
     // --- Logging - End ---
     const newIssueKey = await keyGenerator.generateIssueKey(db.issueKeyCounter, issueType);
+    // --- Logging - Start ---
+    logger.info('createIssue: Issue key generated successfully', { newIssueKey });
+    // --- Logging - End ---
     db.issueKeyCounter += 1;
 
 
@@ -239,6 +234,9 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     logger.info('createIssue: Saving database', { issueKey: newIssue.key });
     // --- Logging - End ---
     await saveDatabase(db);
+    // --- Logging - Start ---
+    logger.info('createIssue: Database saved successfully', { issueKey: newIssue.key });
+    // --- Logging - End ---
 
     // 7. Return the newly created issue
     // --- Logging - Start ---

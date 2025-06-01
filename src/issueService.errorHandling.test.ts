@@ -1,6 +1,6 @@
-import { createIssue } from './issueService';
-import { loadDatabase, saveDatabase } from './dataStore';
-import { DbSchema } from './models';
+import { createIssue } from '../src/issueService';
+import { loadDatabase, saveDatabase } from '../src/dataStore';
+import { DbSchema } from '../src/models';
 // IssueCreationError might not be strictly needed here if we only test generic errors,
 // but it's good practice to have common imports if related functionalities are tested.
 // For now, it's not used directly in these specific tests.

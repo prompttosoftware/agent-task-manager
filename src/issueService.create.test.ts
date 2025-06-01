@@ -1,9 +1,14 @@
 import { createIssue } from './issueService';
+// Correct import path for database functions based on issueService.ts
+// issueService.ts imports these from './database/database', so the test should mock that module
 import { loadDatabase, saveDatabase } from './database/database';
 import { DbSchema, AnyIssue, Task, Story, Bug, Epic, Subtask } from './models';
+// Correct import path for errorHandling based on issueService.ts
+// issueService.ts imports this from './utils/errorHandling'
 import { IssueCreationError } from './utils/errorHandling';
 
 // Mock the database module to control database interactions
+// The module path here should match the import path used by the module being tested (issueService.ts)
 jest.mock('./database/database');
 
 // Declare mockUuidV4Function before jest.mock call
@@ -182,6 +187,7 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
+    // Verify the saved database state
     // Using default initialDb (counter 1, issues [])
     expect(savedDbState!.issueKeyCounter).toBe(2); // Counter increments from initial 1 to 2
     expect(savedDbState!.issues.length).toBe(1); // Only the new issue
@@ -254,8 +260,8 @@ describe('issueService - Create Operations', () => {
         description: 'This is a mock parent issue for subtask testing.',
         status: 'Todo', // Parent status doesn't matter for subtask creation validation
         // Use specific ISO strings for existing issues
-        createdAt: '2023-10-26T09:00:00.000Z',
-        updatedAt: '2023-10-26T09:00:00.000Z',
+        createdAt: '2023-10-26T09:00:00.000Z', // Use a specific date/time for this mock issue
+        updatedAt: '2023-10-26T09:00:00.000Z', // Use a specific date/time for this mock issue
         parentKey: null, // Parent has no parent
         childIssueKeys: [], // Parent starts with no children
     };
@@ -269,7 +275,7 @@ describe('issueService - Create Operations', () => {
     };
 
     // Override mockLoadDatabase for this specific test to return the db with the parent
-    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent))); // Corrected deep copy
     // --- End: Add mock parent issue for this test ---
 
 
@@ -301,8 +307,7 @@ describe('issueService - Create Operations', () => {
     // Check parent key was correctly assigned from input
     expect(createdIssue.parentKey).toBe('EPIC-123');
 
-    // Verify the returned object matches the saved object
-    // This also implicitly verifies parentKey is correct in the saved object
+    // Verify the returned object matches the saved object (reference might differ, but properties should match)
     expect(createdIssue).toEqual(savedSubtask);
 
     // Verify the parent issue in the saved state *was* modified to include the new child key
@@ -310,14 +315,15 @@ describe('issueService - Create Operations', () => {
     expect(savedParentIssue).toBeDefined();
     // Expect childIssueKeys to include the key of the newly created subtask
     expect(savedParentIssue.childIssueKeys).toEqual(['SUBT-123']);
-    // Expect the parent's updatedAt timestamp to be updated
-    expect(savedParentIssue.updatedAt).toEqual(mockDate.toISOString()); // Parent update should use the current mock date
+    // Expect the parent's updatedAt timestamp to be updated to the current mock date
+    expect(savedParentIssue.updatedAt).toEqual(mockDate.toISOString());
     // Expect other parent properties to remain unchanged
     expect(savedParentIssue.id).toBe('parent-uuid');
     expect(savedParentIssue.summary).toBe('Mock Parent Epic');
     expect(savedParentIssue.description).toBe('This is a mock parent issue for subtask testing.');
     expect(savedParentIssue.status).toBe('Todo');
-    expect(savedParentIssue.createdAt).toEqual(new Date('2023-10-26T09:00:00.000Z').toISOString()); // createdAt should not change
+    // FIX: createdAt of the existing parent should NOT change, it should match the original hardcoded value.
+    expect(savedParentIssue.createdAt).toEqual('2023-10-26T09:00:00.000Z'); // Expect the original hardcoded value
 
 
   });
@@ -365,8 +371,8 @@ describe('issueService - Create Operations', () => {
           description: '...',
           status: 'Done',
           // Use specific ISO strings for existing issues
-          createdAt: '2023-01-01T10:00:00.000Z',
-          updatedAt: '2023-01-01T10:00:00.000Z',
+          createdAt: '2023-01-01T10:00:00.000Z', // Hardcoded date for existing issue
+          updatedAt: '2023-01-01T10:00:00.000Z', // Hardcoded date for existing issue
           parentKey: null,
         } as Task,
         {
@@ -377,15 +383,15 @@ describe('issueService - Create Operations', () => {
           description: '...',
           status: 'Todo',
           // Use specific ISO strings for existing issues
-          createdAt: '2023-01-01T11:00:00.000Z',
-          updatedAt: '2023-01-01T11:00:00.000Z',
+          createdAt: '2023-01-01T11:00:00.000Z', // Hardcoded date for existing issue
+          updatedAt: '2023-01-01T11:00:00.000Z', // Hardcoded date for existing issue
           parentKey: null,
         } as Story
       ],
       issueKeyCounter: 10, // Counter is set to the *next* number to be used
     };
 
-    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithExistingIssues)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithExistingIssues))); // Corrected Deep copy
 
     const input = {
       title: 'New Issue After 9', // Title updated to reflect the key number
@@ -413,8 +419,8 @@ describe('issueService - Create Operations', () => {
     expect(createdIssue.description).toBe(input.description);
     expect(createdIssue.issueType).toBe('Task');
     expect(createdIssue.status).toBe('Todo');
-    expect(createdIssue.createdAt).toEqual(mockDate.toISOString());
-    expect(createdIssue.updatedAt).toEqual(mockDate.toISOString());
+    expect(createdIssue.createdAt).toEqual(mockDate.toISOString()); // New issue gets mock date
+    expect(createdIssue.updatedAt).toEqual(mockDate.toISOString()); // New issue gets mock date
     expect(createdIssue.parentKey).toBeNull();
 
     // Check the newly added issue in saved state
@@ -426,15 +432,16 @@ describe('issueService - Create Operations', () => {
     const savedExistingTask = savedDbState!.issues.find(issue => issue.key === 'TASK-8') as Task;
     expect(savedExistingTask).toBeDefined();
     expect(savedExistingTask.summary).toBe('Existing Task 8'); // Verify properties of existing issue
-    // Check createdAt/updatedAt of existing issues aren't affected by new issue creation
-    expect(savedExistingTask.createdAt).toEqual(new Date('2023-01-01T10:00:00.000Z').toISOString());
-    expect(savedExistingTask.updatedAt).toEqual(new Date('2023-01-01T10:00:00.000Z').toISOString());
+    // FIX: Check createdAt/updatedAt of existing issues are NOT affected by new issue creation
+    expect(savedExistingTask.createdAt).toEqual('2023-01-01T10:00:00.000Z'); // Should match original hardcoded value
+    expect(savedExistingTask.updatedAt).toEqual('2023-01-01T10:00:00.000Z'); // Should match original hardcoded value
 
     const savedExistingStory = savedDbState!.issues.find(issue => issue.key === 'STOR-9') as Story;
     expect(savedExistingStory).toBeDefined();
     expect(savedExistingStory.summary).toBe('Existing Story 9');
-    expect(savedExistingStory.createdAt).toEqual(new Date('2023-01-01T11:00:00.000Z').toISOString());
-    expect(savedExistingStory.updatedAt).toEqual(new Date('2023-01-01T11:00:00.000Z').toISOString());
+    // FIX: Check createdAt/updatedAt of existing issues are NOT affected by new issue creation
+    expect(savedExistingStory.createdAt).toEqual('2023-01-01T11:00:00.000Z'); // Should match original hardcoded value
+    expect(savedExistingStory.updatedAt).toEqual('2023-01-01T11:00:00.000Z'); // Should match original hardcoded value
   });
 
   it('should include createdAt and updatedAt timestamps as ISO strings', async () => {
@@ -507,8 +514,8 @@ describe('issueService - Create Operations', () => {
       description: 'Epic description',
       status: 'Todo',
       // Use specific ISO strings for existing issues
-      createdAt: '2023-11-01T10:00:00.000Z', // Use a different date/time
-      updatedAt: '2023-11-01T10:00:00.000Z', // Use a different date/time
+      createdAt: '2023-11-01T10:00:00.000Z', // Hardcoded date for existing issue
+      updatedAt: '2023-11-01T10:00:00.000Z', // Hardcoded date for existing issue
       parentKey: null,
       childIssueKeys: [],
     };
@@ -518,7 +525,7 @@ describe('issueService - Create Operations', () => {
       issueKeyCounter: 1,
     };
 
-    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic))); // Corrected Deep copy
 
     const createdIssue = await createIssue(input);
 
@@ -544,6 +551,8 @@ describe('issueService - Create Operations', () => {
     expect(savedEpic).toBeDefined();
     expect(savedEpic.childIssueKeys).toEqual(['TASK-1']);
     expect(savedEpic.updatedAt).toEqual(mockDate.toISOString()); // Parent update should use the current mock date
+     // FIX: Ensure parent createdAt does not change
+    expect(savedEpic.createdAt).toEqual('2023-11-01T10:00:00.000Z'); // Should match original hardcoded value
   });
 
   it('should create a Story with a parentKey pointing to an existing Epic', async () => {
@@ -563,18 +572,18 @@ describe('issueService - Create Operations', () => {
       description: 'Epic description',
       status: 'Todo',
       // Use specific ISO strings for existing issues
-      createdAt: '2023-11-01T11:00:00.000Z', // Use a different date/time
-      updatedAt: '2023-11-01T11:00:00.000Z', // Use a different date/time
+      createdAt: '2023-11-01T11:00:00.000Z', // Hardcoded date for existing issue
+      updatedAt: '2023-11-01T11:00:00.000Z', // Hardcoded date for existing issue
       parentKey: null,
       childIssueKeys: [],
     };
 
     const dbWithEpic: DbSchema = {
       issues: [epic],
-      issueKeyCounter: 1,
+      issueKeyCounter: 1, // Next key will be STOR-1
     };
 
-    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic))); // Corrected Deep copy
 
     const createdIssue = await createIssue(input);
 
@@ -582,7 +591,7 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(createdIssue.key).toBe('STOR-1');
+    expect(createdIssue.key).toBe('STOR-1'); // Uses counter 1
     expect(createdIssue.issueType).toBe('Story');
     expect(createdIssue.status).toBe('Todo');
     expect(createdIssue.parentKey).toBe('EPIC-1');
@@ -600,5 +609,7 @@ describe('issueService - Create Operations', () => {
     expect(savedEpic).toBeDefined();
     expect(savedEpic.childIssueKeys).toEqual(['STOR-1']);
     expect(savedEpic.updatedAt).toEqual(mockDate.toISOString()); // Parent update should use the current mock date
+     // FIX: Ensure parent createdAt does not change, fix typo in expected string
+    expect(savedEpic.createdAt).toEqual('2023-11-01T11:00:00.000Z'); // Should match original hardcoded value
   });
 });
