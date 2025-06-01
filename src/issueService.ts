@@ -70,6 +70,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   }
 
   let db: DbSchema;
+  let parentIssue: AnyIssue | undefined; // Declare parentIssue variable outside try block
 
   try {
     // Load the database *once* at the beginning if any operation requires it (like parent validation or saving).
@@ -85,7 +86,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       }
 
       // Validate that the parent issue exists using the already loaded database
-      const parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper
+      parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper and assign to parentIssue variable
       if (!parentIssue) {
         throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
       }
@@ -95,9 +96,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
          throw new IssueCreationError(`Parent issue '${input.parentKey}' is a Subtask. Subtasks cannot have Subtask children.`, 'INVALID_PARENT_TYPE', 400);
       }
 
-      // TODO: Consider adding the subtask's key to the parent's childIssueKeys array if the parent type supports it (like Epic).
-      // This requires modifying the parent issue, which adds complexity (loading, modifying, saving the parent).
-      // For now, we'll just validate and create the subtask with the parentKey reference.
+      // The TODO regarding adding subtask key to parent is addressed below after the subtask is created.
     }
     // --- End Parent Validation ---
 
@@ -154,7 +153,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       newIssue = {
         ...baseIssue,
         issueType: 'Subtask', // Explicitly set for type narrowing
-        parentIssueKey: input.parentKey, // Required for Subtasks
+        // parentIssueKey: input.parentKey, // REMOVED: parentKey is already included from spreading baseIssue
       } as Subtask; // Cast to Subtask type to satisfy interface
     } else {
       // Task, Story, Bug issues only have BaseIssue properties (plus optional description/parentKey)
@@ -166,9 +165,42 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // 4. Add the new issue to the issues array in the database
     db.issues.push(newIssue);
 
-    // 5. Increment issueKeyCounter in the database
+    // --- Logic to update parent issue's childIssueKeys ---
+    // This must happen *after* the subtask is created and added to the db.issues array
+    // because we need the new subtask's key.
+    // Use a guaranteed variable to help TypeScript understand parentIssue is defined and is an Epic here.
+    if (issueType === 'Subtask' && parentIssue && parentIssue.issueType === 'Epic') {
+        const guaranteedParentEpic = parentIssue; // Guaranteed defined Epic parent
+
+        // Find the index of the parent issue in the db array
+        const parentIndex = db.issues.findIndex(issue => issue.key === guaranteedParentEpic.key);
+        if (parentIndex !== -1) {
+            // Access the parent issue from the database array by index.
+            // We already know it's an Epic due to the outer guard, but casting ensures
+            // type safety for accessing childIssueKeys.
+            const parentEpicInDb = db.issues[parentIndex] as Epic;
+
+            // Add the new subtask's key to the parent's childIssueKeys array
+            // Ensure the array exists first (though model says it should for Epic)
+            if (!parentEpicInDb.childIssueKeys) {
+                 parentEpicInDb.childIssueKeys = [];
+            }
+            parentEpicInDb.childIssueKeys.push(newIssueKey);
+             // Note: The parent issue object in the array (db.issues[parentIndex]) is modified in place.
+        } else {
+            // This case should ideally not happen if parentIssue was found earlier,
+            // but indicates a potential data inconsistency or logic error if it does.
+            console.error(`Internal Error: Could not find parent issue with key ${guaranteedParentEpic.key} in db.issues array after it was found.`);
+            // Depending on policy, might throw an error or just log. Logging for now.
+        }
+    }
+    // --- End Logic to update parent issue's childIssueKeys ---
+
+
+    // 5. Increment issueKeyCounter in the database (Done above)
 
     // 6. Save the updated database
+    // This save will now include both the new subtask and the modified parent (if applicable).
     await saveDatabase(db);
 
     // 7. Return the newly created issue
@@ -183,6 +215,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         throw error; // Re-throw validation/specific errors
     }
     // Throw a generic error for unexpected issues, e.g., database write failures.
-    throw new Error('Failed to create issue due to an unexpected error.'); // Could use a more specific DB error class if defined
+    // Use the original error's message if available, otherwise a generic one.
+    throw new Error(`Failed to create issue: ${error instanceof Error ? error.message : 'An unexpected error occurred.'}`); // Provide more context or the original error message
   }
 }

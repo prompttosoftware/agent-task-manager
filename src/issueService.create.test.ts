@@ -244,7 +244,7 @@ describe('issueService - Create Operations', () => {
     };
 
     // Override mockLoadDatabase for this specific test to return the db with the parent
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.parse(JSON.stringify(dbWithParent))));
+    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent)));
     // --- End: Add mock parent issue for this test ---
 
 

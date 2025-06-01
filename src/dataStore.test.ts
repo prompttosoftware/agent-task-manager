@@ -107,6 +107,10 @@ describe('DataStore', () => {
     expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
 
+    // Verify mkdir was called to ensure the directory exists before writing
+    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
+    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
+
     // Verify writeFile was called to save the default data
     expect(mockFsPromises.writeFile).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.writeFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, expectedSavedData, 'utf8');
@@ -237,6 +241,10 @@ describe('DataStore', () => {
     // Verify readFile was called and failed
     expect(mockFsPromises.readFile).toHaveBeenCalledTimes(1);
     expect(mockFsPromises.readFile).toHaveBeenCalledWith(DB_FILE_PATH_FOR_TEST, 'utf8');
+
+    // Verify mkdir was called to ensure the directory exists before writing
+    expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
+    expect(mockFsPromises.mkdir).toHaveBeenCalledWith(DB_DIR_PATH_FOR_TEST, { recursive: true });
 
     // Verify writeFile was called to save the default data
     expect(mockFsPromises.writeFile).toHaveBeenCalledTimes(1);

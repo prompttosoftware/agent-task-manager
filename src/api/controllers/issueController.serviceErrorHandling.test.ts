@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { createIssue } from './createIssue'; // Import from the new file
-import { AnyIssue, CreateIssueInput, IssueType, Task } from '../../models'; // Import Task type
+import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import Task type
 import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
 
 // Import the service function to be mocked.

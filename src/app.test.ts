@@ -36,7 +36,15 @@ describe('POST /issues', () => {
       },
     });
 
-    const { data } = response.body;
+    // Define the expected structure of the successful response body
+    interface CreatedIssueResponse {
+      message: string;
+      // Assuming AnyIssue contains issueType, summary, status, etc.
+      data: AnyIssue & { id: string; key: string; createdAt: string; updatedAt: string; };
+    }
+
+    // Cast response.body to the expected type to satisfy TypeScript
+    const { data } = response.body as CreatedIssueResponse;
 
     // Assert the presence and basic format of generated fields
     expect(data.id).toBeDefined();
