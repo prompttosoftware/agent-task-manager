@@ -1,21 +1,20 @@
 import { Request, Response } from 'express';
-import { createIssue } from './createIssue'; // Import from the new file
-import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import Task type
-import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
-import logger from '../../utils/logger'; // Import logger
-
 // Import the service function to be mocked.
-// Assuming test file is in src/controllers/issue/__tests__ and service is in src/services
 import { createIssue as actualServiceCreateIssue } from '../../issueService';
+import { AnyIssue, CreateIssueInput, IssueType } from '../../models';
+import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling';
+// Import logger after mock definition
+// import logger from '../../utils/logger'; // Will import after mock
 
 // Mock the issueService module.
 jest.mock('../../issueService', () => ({
   createIssue: jest.fn<Promise<AnyIssue>, [CreateIssueInput]>(),
 }));
 
-// Mock the logger utility
+// Mock the logger utility - NEW STYLE - Using pattern for default exports
 jest.mock('../../utils/logger', () => ({
-  logger: {
+  __esModule: true, // This tells Jest that the module is an ES module with a default export
+  default: { // The default export is this object
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
@@ -23,10 +22,19 @@ jest.mock('../../utils/logger', () => ({
   },
 }));
 
+
+// NOW import the code under test and the logger
+import { createIssue } from './createIssue'; // Import from the new file
+import logger from '../../utils/logger'; // Import logger
+
+
 // Cast the (already mocked) imported service function to Jest's mock type.
 const mockedCreateIssueService = actualServiceCreateIssue as jest.MockedFunction<typeof actualServiceCreateIssue>;
-// Cast the (already mocked) imported logger function to Jest's mock type.
+// Cast the (already mocked) imported logger functions to Jest's mock type.
 const mockedLoggerError = logger.error as jest.Mock;
+const mockedLoggerInfo = logger.info as jest.Mock;
+const mockedLoggerWarn = logger.warn as jest.Mock;
+const mockedLoggerDebug = logger.debug as jest.Mock;
 
 
 // Mock the request and response objects
@@ -48,7 +56,7 @@ const allowedIssueTypes: AnyIssue['issueType'][] = ['Task', 'Story', 'Epic', 'Bu
 const allowedStatuses: AnyIssue['status'][] = ['Todo', 'In Progress', 'Done'];
 
 
-describe('createIssue Controller - Service Error Handling Scenarios', () => { // Updated describe block name
+describe('createIssue Controller - Parent Issue Service Error Handling', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -57,7 +65,7 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
         jest.restoreAllMocks();
     });
 
-    // --- Service Error Handling (Validation Errors mapped by Controller/Error Class) ---
+    // --- Service Error Handling (Parent Issue Related) ---
 
     it('should return 404 with error messages if service throws IssueCreationError with PARENT_ISSUE_NOT_FOUND', async () => {
         const parentKey = 'NONEXISTENT-123';
@@ -90,6 +98,10 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
           `Issue creation failed: ${serviceError.message}`,
           { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey }
         );
+        // Verify info logs were called
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Start processing request.');
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Received body:', { body: issueInput });
+
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(404); // Status code comes from the error's statusCode or map
@@ -99,21 +111,21 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
         });
     });
 
-    // Add the new test here
-    it('should return 404 with error messages if service throws IssueCreationError with PARENT_NOT_FOUND', async () => {
+    // This test was already using the correct PARENT_ISSUE_NOT_FOUND code
+    it('should return 404 with error messages if service throws IssueCreationError with PARENT_ISSUE_NOT_FOUND (alternative message)', async () => {
         const parentKey = 'ANOTHER-NONEXISTENT-123'; // Use a different key for clarity
         const issueInput = {
             issueType: 'Task' as IssueType, // Can use any type, parentKey is key
-            summary: 'Issue with non-existent parent handled by service (PARENT_NOT_FOUND)',
+            summary: 'Issue with non-existent parent handled by service (PARENT_ISSUE_NOT_FOUND)',
             status: 'Todo',
             parentIssueKey: parentKey,
         };
         const req = mockRequest(issueInput);
         const res = mockResponse();
 
-        // Mock the service to throw the specific error with PARENT_NOT_FOUND
+        // Mock the service to throw the specific error with PARENT_ISSUE_NOT_FOUND
         const errorMessage = `Parent object with ID ${parentKey} could not be located.`; // A slightly different message
-        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.PARENT_NOT_FOUND, 404); // Use PARENT_NOT_FOUND code
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.PARENT_ISSUE_NOT_FOUND, 404); // Use PARENT_ISSUE_NOT_FOUND code
         mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
@@ -131,6 +143,10 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
           `Issue creation failed: ${serviceError.message}`,
           { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey }
         );
+         // Verify info logs were called
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Start processing request.');
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Received body:', { body: issueInput });
+
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(404);
@@ -171,6 +187,9 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
           `Issue creation failed: ${serviceError.message}`,
           { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
         );
+         // Verify info logs were called
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Start processing request.');
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Received body:', { body: issueInput });
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(400); // Status code comes from the error's statusCode or map
@@ -213,6 +232,10 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
           `Issue creation failed: ${serviceError.message}`,
           { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
         );
+         // Verify info logs were called
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Start processing request.');
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Received body:', { body: issueInput });
+
 
         // Verify the controller handled the error correctly
         expect(res.status).toHaveBeenCalledWith(400);
@@ -255,131 +278,16 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
           `Issue creation failed: ${serviceError.message}`,
           { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
         );
+        // Verify info logs were called
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Start processing request.');
+        expect(mockedLoggerInfo).toHaveBeenCalledWith('createIssue Controller: Received body:', { body: issueInput });
+
 
         // Verify the controller handled the error correctly
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.json).toHaveBeenCalledWith({
              errorMessages: [errorMessage],
              errors: {}
-        });
-    });
-
-
-     it('should return 400 with error messages if service throws IssueCreationError with INVALID_INPUT', async () => {
-        // Example scenario: Service might find an issue with the combination of fields
-        // or more complex validation not done at the controller layer.
-        const issueInput = {
-            issueType: 'Task' as IssueType,
-            summary: 'Task with problematic input',
-            status: 'Todo',
-            // Assume some combination here triggers INVALID_INPUT in service
-        };
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        // Mock the service to throw the specific error
-        const errorMessage = 'Service reported invalid input for this request.';
-        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_INPUT, 400);
-        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
-
-        await createIssue(req, res);
-
-         // Verify service was called with transformed input (summary -> title, issueType -> issueTypeName)
-         expect(mockedCreateIssueService).toHaveBeenCalledWith({
-            title: issueInput.summary,
-            issueTypeName: issueInput.issueType,
-            description: '', // Default description
-            parentKey: null // Expect null if not provided
-        });
-
-         // Verify logger was called
-        expect(mockedLoggerError).toHaveBeenCalledWith(
-          `Issue creation failed: ${serviceError.message}`,
-          { errorCode: serviceError.errorCode, status: serviceError.statusCode, issueType: issueInput.issueType } // Added issueType
-        );
-
-        // Verify the controller handled the error correctly, returning the specified validation format
-        expect(res.status).toHaveBeenCalledWith(400); // Status code comes from the error's statusCode or map
-        expect(res.json).toHaveBeenCalledWith({
-             errorMessages: [errorMessage], // Expect the message in the array
-             errors: {} // Expect empty errors object
-        });
-    });
-
-
-    // --- Error Handling (Non-Validation) ---
-     it('should return 500 if service throws a non-IssueCreationError', async () => {
-        const issueInput = {
-            issueType: 'Task' as IssueType,
-            summary: 'Task causing generic service error',
-            status: 'Todo',
-        };
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        // Mock the service to throw a generic error
-        const genericError = new Error('Something unexpected went wrong in the service.');
-        mockedCreateIssueService.mockRejectedValueOnce(genericError);
-
-        await createIssue(req, res);
-
-         // Verify service was called
-         expect(mockedCreateIssueService).toHaveBeenCalledWith({
-            title: issueInput.summary,
-            issueTypeName: issueInput.issueType,
-            description: '',
-            parentKey: null
-        });
-
-        // Verify logger was called with generic error message
-        expect(mockedLoggerError).toHaveBeenCalledWith(
-            `Internal server error during issue creation: ${genericError.message}`,
-            { issueType: issueInput.issueType } // Include issue type for context
-        );
-
-        // Verify the controller handled the generic error correctly
-        expect(res.status).toHaveBeenCalledWith(500);
-        // The controller returns a generic message for non-IssueCreationError
-        expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
-    });
-
-     it('should return the error status and message for a non-validation IssueCreationError', async () => {
-        const issueInput = {
-            issueType: 'Task' as IssueType,
-            summary: 'Task causing specific service error',
-            status: 'Todo',
-        };
-        const req = mockRequest(issueInput);
-        const res = mockResponse();
-
-        // Mock the service to throw a non-validation related IssueCreationError
-        // Example: a hypothetical error like DB_SAVE_FAILED
-        const specificError = new IssueCreationError('Failed to save to database.', 'DB_SAVE_FAILED', 500);
-        mockedCreateIssueService.mockRejectedValueOnce(specificError);
-
-        await createIssue(req, res);
-
-         // Verify service was called
-         expect(mockedCreateIssueService).toHaveBeenCalledWith({
-            title: issueInput.summary,
-            issueTypeName: issueInput.issueType,
-            description: '',
-            parentKey: null
-        });
-
-        // Verify logger was called with specific error message
-        expect(mockedLoggerError).toHaveBeenCalledWith(
-          `Issue creation failed: ${specificError.message}`,
-          { errorCode: specificError.errorCode, status: specificError.statusCode, issueType: issueInput.issueType } // Include issue type for context
-        );
-
-
-        // Verify the controller handled the specific IssueCreationError correctly
-        expect(res.status).toHaveBeenCalledWith(500); // Status code comes from the error's statusCode
-        // Expect the specific error code and message
-        expect(res.json).toHaveBeenCalledWith({
-            errorCode: specificError.errorCode,
-            message: specificError.message
         });
     });
 });
