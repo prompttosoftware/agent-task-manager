@@ -8,7 +8,8 @@ type IssueType = "Task" | "Story" | "Epic" | "Bug" | "Subtask";
 // BaseIssue interface
 interface BaseIssue {
   id: string; // UUID
-  key: string;
+  key: string; // Format: PROJECT-123
+  projectKey: string; // The key of the project the issue belongs to (e.g., "PROJ")
   issueType: IssueType;
   summary: string;
   description?: string;
@@ -38,6 +39,14 @@ interface Epic extends BaseIssue, EpicSpecifics {}
 // Extending SubtaskSpecifics even if empty makes it clear it's a specific type.
 interface Subtask extends BaseIssue, SubtaskSpecifics {}
 
+// Add specific types for casting in tests/logic where the type is known
+type TaskIssue = Task;
+type StoryIssue = Story;
+type EpicIssue = Epic;
+type BugIssue = Bug;
+type SubtaskIssue = Subtask;
+
+
 // AnyIssue union type
 type AnyIssue = Task | Story | Epic | Bug | Subtask;
 
@@ -56,6 +65,25 @@ interface CreateIssueInput {
   title: string;
   description?: string;
   parentKey?: string | null; // Use parentKey consistently for input as well
+  // projectKey is derived by the service/database layer, not typically part of this input
 }
 
-export { IssueType, BaseIssue, EpicSpecifics, SubtaskSpecifics, Task, Story, Bug, Epic, Subtask, AnyIssue, DbSchema, CreateIssueInput };
+export {
+    IssueType,
+    BaseIssue,
+    EpicSpecifics,
+    SubtaskSpecifics,
+    Task,
+    Story,
+    Bug,
+    Epic,
+    Subtask,
+    TaskIssue, // Export specific types
+    StoryIssue,
+    EpicIssue,
+    BugIssue,
+    SubtaskIssue,
+    AnyIssue,
+    DbSchema,
+    CreateIssueInput
+};
