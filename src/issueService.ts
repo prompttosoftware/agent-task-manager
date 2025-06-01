@@ -2,7 +2,7 @@ import { loadDatabase, saveDatabase } from './dataStore'; // Import only functio
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
-import * as keyGenerator from './keyGenerator'; // Import keyGenerator service
+import * as keyGenerator from './utils/keyGenerator'; // Import keyGenerator service
 
 /**
  * Define the input type for creating an issue.
@@ -101,7 +101,8 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     }
     // --- End Parent Validation ---
 
-    const newIssueKey = await keyGenerator.generateIssueKey(issueType);
+    const newIssueKey = await keyGenerator.generateIssueKey(db.issueKeyCounter, issueType);
+    db.issueKeyCounter += 1;
 
 
     // 3. Create a new issue object adhering to AnyIssue
@@ -166,7 +167,6 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     db.issues.push(newIssue);
 
     // 5. Increment issueKeyCounter in the database
-    // This logic has been moved to the keyGenerator.generateIssueKey function.
 
     // 6. Save the updated database
     await saveDatabase(db);

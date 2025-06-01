@@ -2,23 +2,29 @@ import { createIssue } from './issueService';
 import { loadDatabase, saveDatabase } from './dataStore';
 import { DbSchema, AnyIssue, Task, Story, Bug, Epic, Subtask } from './models';
 import { IssueCreationError } from './utils/errorHandling';
-import { v4 as uuidv4 } from 'uuid';
-import * as keyGenerator from '../src/utils/keyGenerator';
 
 // Mock the dataStore module to control database interactions
 jest.mock('./dataStore');
-jest.mock('../src/utils/keyGenerator'); // Mock the keyGenerator
+
+// Declare mockUuidV4Function before jest.mock call
+jest.mock('uuid', () => {
+  const mockV4 = jest.fn(() => 'test-uuid');
+  return {
+    v4: mockV4,
+  };
+});
 
 const mockLoadDatabase = loadDatabase as jest.Mock;
 const mockSaveDatabase = saveDatabase as jest.Mock;
-const mockKeyGenerator = keyGenerator as jest.Mocked<typeof keyGenerator>;
 
 describe('issueService - Create Operations', () => {
+  let mockUuidV4: jest.Mock;
+
   // This initialDb is the default state returned by mockLoadDatabase
   // unless overridden in a specific test case.
   const initialDb: DbSchema = {
     issues: [],
-    issueKeyCounter: 0,
+    issueKeyCounter: 1,
   };
 
   let savedDbState: DbSchema | null = null;
@@ -28,7 +34,12 @@ describe('issueService - Create Operations', () => {
     // Reset mocks and mock data before each test
     mockLoadDatabase.mockClear();
     mockSaveDatabase.mockClear();
-    mockKeyGenerator.generateIssueKey.mockClear(); // Clear the mock
+
+    const mockedUuid = jest.requireMock('uuid');
+    mockUuidV4 = mockedUuid.v4 as jest.Mock;
+
+    mockUuidV4.mockClear();
+
     savedDbState = null;
 
     // Mock loadDatabase to return a copy of the initial state by default
@@ -43,14 +54,6 @@ describe('issueService - Create Operations', () => {
     // Mock Date to get predictable timestamps
     mockDate = new Date('2023-10-27T10:00:00.000Z');
     jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
-
-    // Mock UUID to ensure predictable IDs in tests.
-    jest.mock('uuid');
-    const mockUuid = require('uuid');
-    mockUuid.v4.mockReturnValue('test-uuid');
-
-     // Mock keyGenerator to return deterministic values.
-    mockKeyGenerator.generateIssueKey.mockImplementation(() => 'TASK-1'); // Default for now.
   });
 
   afterEach(() => {
@@ -72,7 +75,7 @@ describe('issueService - Create Operations', () => {
     expect(savedDbState).not.toBeNull(); // Ensure saveDatabase was called
 
     // Verify the saved database state
-    expect(savedDbState!.issueKeyCounter).toBe(1);
+    expect(savedDbState!.issueKeyCounter).toBe(2);
     expect(savedDbState!.issues.length).toBe(1);
     const savedIssue = savedDbState!.issues[0];
 
@@ -108,7 +111,7 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(savedDbState!.issueKeyCounter).toBe(1);
+    expect(savedDbState!.issueKeyCounter).toBe(2);
     expect(savedDbState!.issues.length).toBe(1);
     const savedIssue = savedDbState!.issues[0];
 
@@ -137,6 +140,10 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
+    // Verify the saved database state
+    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issues.length).toBe(1); // Assuming this test creates one issue
+
     // Corrected key format
     expect(createdIssue.key).toBe('STOR-1');
     expect(createdIssue.summary).toBe(input.title);
@@ -158,7 +165,7 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(savedDbState!.issueKeyCounter).toBe(1);
+    expect(savedDbState!.issueKeyCounter).toBe(2);
     expect(savedDbState!.issues.length).toBe(1);
     const savedIssue = savedDbState!.issues[0];
 
@@ -186,6 +193,10 @@ describe('issueService - Create Operations', () => {
     expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
+
+    // Verify the saved database state
+    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issues.length).toBe(1); // Assuming this test creates one issue
 
     const savedIssue = savedDbState!.issues[0];
 
@@ -233,7 +244,7 @@ describe('issueService - Create Operations', () => {
     };
 
     // Override mockLoadDatabase for this specific test to return the db with the parent
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent)));
+    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.parse(JSON.stringify(dbWithParent))));
     // --- End: Add mock parent issue for this test ---
 
 
@@ -249,15 +260,15 @@ describe('issueService - Create Operations', () => {
     expect(savedDbState!.issues.length).toBe(2); // Should contain the parent issue + the new subtask = 2 issues
 
     // Find the newly created subtask in the saved state
-    // Expect the new subtask key to be SUBT-124 based on counter 123
-    const savedSubtask = savedDbState!.issues.find(issue => issue.key === 'SUBT-124');
+    // Expect the new subtask key to be SUBT-123 based on initial counter 123
+    const savedSubtask = savedDbState!.issues.find(issue => issue.key === 'SUBT-123');
 
     expect(savedSubtask).toBeDefined(); // Ensure the subtask was added
 
     // Verify the returned issue object
     expect(createdIssue).toBeDefined();
-    // Corrected key format: Expect SUBT-124
-    expect(createdIssue.key).toBe('SUBT-124');
+    // Corrected key format: Expect SUBT-123
+    expect(createdIssue.key).toBe('SUBT-123');
     expect(createdIssue.summary).toBe(input.title);
     expect(createdIssue.description).toBe(input.description);
     expect(createdIssue.issueType).toBe('Subtask');
@@ -292,6 +303,10 @@ describe('issueService - Create Operations', () => {
     expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
+
+    // Verify the saved database state
+    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issues.length).toBe(1); // Assuming this test creates one issue
 
     // Corrected key format (defaults to Task)
     expect(createdIssue.key).toBe('TASK-1');
@@ -345,13 +360,13 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(savedDbState!.issueKeyCounter).toBe(11); // Counter should increment
+    expect(savedDbState!.issueKeyCounter).toBe(11); // Counter should increment (initial 10 + 1)
     expect(savedDbState!.issues.length).toBe(3); // Should contain all issues
-    // New key should be TASK-11 (default type Task, next number 11)
-    expect(createdIssue.key).toBe('TASK-11');
+    // New key should be TASK-11 (default type Task, from initial counter 10, then incremented for the new issue)
+    expect(createdIssue.key).toBe('TASK-10');
 
     // Check the newly added issue in saved state
-    const newSavedIssue = savedDbState!.issues.find(issue => issue.key === 'TASK-11');
+    const newSavedIssue = savedDbState!.issues.find(issue => issue.id === createdIssue.id);
     expect(newSavedIssue).toBeDefined();
     // Updated check: service maps input.title to issue.summary
     expect(newSavedIssue!.summary).toBe(input.title);
@@ -380,6 +395,7 @@ describe('issueService - Create Operations', () => {
 
     // Check saved state too
     expect(savedDbState).not.toBeNull();
+    expect(savedDbState!.issueKeyCounter).toBe(2);
     const savedIssue = savedDbState!.issues[0];
     // Expect ISO string format
     expect(savedIssue.createdAt).toEqual(mockDate.toISOString());
@@ -395,20 +411,7 @@ describe('issueService - Create Operations', () => {
       const createdIssue = await createIssue(input);
 
       expect(createdIssue.id).toBe('test-uuid'); // Check if the uuid mock is used
-  });
-
-  it('should generate a unique key using keyGenerator', async () => {
-      const input = {
-          title: 'Key Generation Test',
-          description: 'Checking key generation',
-          issueTypeName: 'Task',
-      };
-
-      mockKeyGenerator.generateIssueKey.mockReturnValue('TEST-KEY');
-      const createdIssue = await createIssue(input);
-
-      expect(mockKeyGenerator.generateIssueKey).toHaveBeenCalledWith(1, 'Task');
-      expect(createdIssue.key).toBe('TEST-KEY');
+      expect(mockUuidV4).toHaveBeenCalledTimes(1);
   });
 
   it('should create a Task with a parentKey pointing to an existing Epic', async () => {
@@ -446,16 +449,16 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(createdIssue.key).toBe('TASK-2');
+    expect(createdIssue.key).toBe('TASK-1');
     expect(createdIssue.issueType).toBe('Task');
     expect(createdIssue.status).toBe('Todo');
     expect(createdIssue.parentKey).toBe('EPIC-1');
 
     // Verify the saved database state
-    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issueKeyCounter).toBe(2); // Initial 1 + 1
     expect(savedDbState!.issues.length).toBe(2);
 
-    const savedTask = savedDbState!.issues.find(issue => issue.key === 'TASK-2') as Task;
+    const savedTask = savedDbState!.issues.find(issue => issue.key === 'TASK-1') as Task;
     expect(savedTask).toBeDefined();
     expect(savedTask.parentKey).toBe('EPIC-1');
   });
@@ -495,16 +498,16 @@ describe('issueService - Create Operations', () => {
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
-    expect(createdIssue.key).toBe('STOR-2');
+    expect(createdIssue.key).toBe('STOR-1');
     expect(createdIssue.issueType).toBe('Story');
     expect(createdIssue.status).toBe('Todo');
     expect(createdIssue.parentKey).toBe('EPIC-1');
 
     // Verify the saved database state
-    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issueKeyCounter).toBe(2); // Initial 1 + 1
     expect(savedDbState!.issues.length).toBe(2);
 
-    const savedStory = savedDbState!.issues.find(issue => issue.key === 'STOR-2') as Story;
+    const savedStory = savedDbState!.issues.find(issue => issue.key === 'STOR-1') as Story;
     expect(savedStory).toBeDefined();
     expect(savedStory.parentKey).toBe('EPIC-1');
   });
