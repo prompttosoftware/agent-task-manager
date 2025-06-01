@@ -410,4 +410,102 @@ describe('issueService - Create Operations', () => {
       expect(mockKeyGenerator.generateIssueKey).toHaveBeenCalledWith(1, 'Task');
       expect(createdIssue.key).toBe('TEST-KEY');
   });
+
+  it('should create a Task with a parentKey pointing to an existing Epic', async () => {
+    const input = {
+      title: 'Task with Epic Parent',
+      description: 'This task has an Epic parent.',
+      issueTypeName: 'Task',
+      parentKey: 'EPIC-1',
+    };
+
+    // Mock an existing Epic in the database
+    const epic: Epic = {
+      id: 'epic-uuid',
+      key: 'EPIC-1',
+      issueType: 'Epic',
+      summary: 'Existing Epic',
+      description: 'Epic description',
+      status: 'Todo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      parentKey: null,
+      childIssueKeys: [],
+    };
+
+    const dbWithEpic: DbSchema = {
+      issues: [epic],
+      issueKeyCounter: 1,
+    };
+
+    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+
+    const createdIssue = await createIssue(input);
+
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(savedDbState).not.toBeNull();
+
+    expect(createdIssue.key).toBe('TASK-2');
+    expect(createdIssue.issueType).toBe('Task');
+    expect(createdIssue.status).toBe('Todo');
+    expect(createdIssue.parentKey).toBe('EPIC-1');
+
+    // Verify the saved database state
+    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issues.length).toBe(2);
+
+    const savedTask = savedDbState!.issues.find(issue => issue.key === 'TASK-2') as Task;
+    expect(savedTask).toBeDefined();
+    expect(savedTask.parentKey).toBe('EPIC-1');
+  });
+
+  it('should create a Story with a parentKey pointing to an existing Epic', async () => {
+    const input = {
+      title: 'Story with Epic Parent',
+      description: 'This story has an Epic parent.',
+      issueTypeName: 'Story',
+      parentKey: 'EPIC-1',
+    };
+
+    // Mock an existing Epic in the database
+    const epic: Epic = {
+      id: 'epic-uuid',
+      key: 'EPIC-1',
+      issueType: 'Epic',
+      summary: 'Existing Epic',
+      description: 'Epic description',
+      status: 'Todo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      parentKey: null,
+      childIssueKeys: [],
+    };
+
+    const dbWithEpic: DbSchema = {
+      issues: [epic],
+      issueKeyCounter: 1,
+    };
+
+    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+
+    const createdIssue = await createIssue(input);
+
+    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(savedDbState).not.toBeNull();
+
+    expect(createdIssue.key).toBe('STOR-2');
+    expect(createdIssue.issueType).toBe('Story');
+    expect(createdIssue.status).toBe('Todo');
+    expect(createdIssue.parentKey).toBe('EPIC-1');
+
+    // Verify the saved database state
+    expect(savedDbState!.issueKeyCounter).toBe(2);
+    expect(savedDbState!.issues.length).toBe(2);
+
+    const savedStory = savedDbState!.issues.find(issue => issue.key === 'STOR-2') as Story;
+    expect(savedStory).toBeDefined();
+    expect(savedStory.parentKey).toBe('EPIC-1');
+  });
 });
