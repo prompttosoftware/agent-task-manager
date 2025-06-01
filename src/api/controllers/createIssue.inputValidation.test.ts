@@ -3,10 +3,10 @@ import { createIssue } from './createIssue'; // Import the controller function
 import { AnyIssue, CreateIssueInput } from '../../models'; // Import necessary types
 
 // Import the service function to be mocked.
-import { createIssue as actualServiceCreateIssue, getIssueByKey } from '../../services/issueService';
+import { createIssue as actualServiceCreateIssue, getIssueByKey } from '../../issueService'; // Corrected path
 
 // Mock the issueService module.
-jest.mock('../../services/issueService', () => ({
+jest.mock('../../issueService', () => ({ // Corrected path
   createIssue: jest.fn<Promise<AnyIssue>, [CreateIssueInput]>(),
   getIssueByKey: jest.fn<Promise<AnyIssue | undefined>, [string]>(),
 }));
