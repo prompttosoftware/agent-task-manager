@@ -2,18 +2,32 @@ import { Request, Response } from 'express';
 import { createIssue } from './createIssue'; // Import from the new file
 import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import Task type
 import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
+import { logger } from '../../utils/logger'; // Import logger
 
 // Import the service function to be mocked.
 // Assuming test file is in src/controllers/issue/__tests__ and service is in src/services
-import { createIssue as actualServiceCreateIssue } from '../../services/issueService';
+import { createIssue as actualServiceCreateIssue } from '../../issueService';
 
 // Mock the issueService module.
 jest.mock('../../issueService', () => ({
   createIssue: jest.fn<Promise<AnyIssue>, [CreateIssueInput]>(),
 }));
 
+// Mock the logger utility
+jest.mock('../../utils/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // Cast the (already mocked) imported service function to Jest's mock type.
 const mockedCreateIssueService = actualServiceCreateIssue as jest.MockedFunction<typeof actualServiceCreateIssue>;
+// Cast the (already mocked) imported logger function to Jest's mock type.
+const mockedLoggerError = logger.error as jest.Mock;
+
 
 // Mock the request and response objects
 const mockRequest = (body: any = {}): Request => ({
@@ -58,9 +72,8 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
 
         // Mock the service to throw the specific error
         const errorMessage = `Parent issue with key ${parentKey} not found.`;
-        mockedCreateIssueService.mockRejectedValueOnce(
-            new IssueCreationError(errorMessage, IssueErrorCodes.PARENT_ISSUE_NOT_FOUND, 404) // Use enum IssueErrorCodes
-        );
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.PARENT_ISSUE_NOT_FOUND, 404);
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
 
@@ -72,6 +85,11 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             parentKey: issueInput.parentIssueKey // Expect the parentKey to be passed to service
         });
 
+        // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey }
+        );
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(404); // Status code comes from the error's statusCode or map
@@ -94,9 +112,8 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
 
         // Mock the service to throw the specific error
         const errorMessage = `Invalid parent type for issue key ${parentKey}. Subtasks require Task or Story parent.`;
-        mockedCreateIssueService.mockRejectedValueOnce(
-            new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400) // Use enum IssueErrorCodes
-        );
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400);
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
 
@@ -107,6 +124,12 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             description: '', // Default description
             parentKey: issueInput.parentIssueKey // Expect the parentKey to be passed to service
         });
+
+        // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
+        );
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(400); // Status code comes from the error's statusCode or map
@@ -131,9 +154,8 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
         // Mock the service to throw the specific error
         // The specific message might vary, but the error code is key
         const errorMessage = `Invalid parent type for issue key ${parentKey}. Tasks require Epic parent.`;
-        mockedCreateIssueService.mockRejectedValueOnce(
-            new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400) // Use enum IssueErrorCodes
-        );
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400);
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
 
@@ -144,6 +166,12 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             description: '',
             parentKey: issueInput.parentIssueKey
         });
+
+        // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
+        );
 
         // Verify the controller handled the error correctly
         expect(res.status).toHaveBeenCalledWith(400);
@@ -168,9 +196,8 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
         // Mock the service to throw the specific error
         // The specific message might vary, but the error code is key
         const errorMessage = `Invalid parent type for issue key ${parentKey}. Stories require Epic parent.`;
-        mockedCreateIssueService.mockRejectedValueOnce(
-            new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400) // Use enum IssueErrorCodes
-        );
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_PARENT_TYPE, 400);
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
 
@@ -181,6 +208,12 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             description: '',
             parentKey: issueInput.parentIssueKey
         });
+
+        // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey, issueType: issueInput.issueType }
+        );
 
         // Verify the controller handled the error correctly
         expect(res.status).toHaveBeenCalledWith(400);
@@ -205,9 +238,8 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
 
         // Mock the service to throw the specific error
         const errorMessage = 'Service reported invalid input for this request.';
-        mockedCreateIssueService.mockRejectedValueOnce(
-            new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_INPUT, 400) // Use enum IssueErrorCodes
-        );
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.INVALID_INPUT, 400);
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
 
         await createIssue(req, res);
 
@@ -218,6 +250,12 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             description: '', // Default description
             parentKey: null // Expect null if not provided
         });
+
+         // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, issueType: issueInput.issueType } // Added issueType
+        );
 
         // Verify the controller handled the error correctly, returning the specified validation format
         expect(res.status).toHaveBeenCalledWith(400); // Status code comes from the error's statusCode or map
@@ -252,6 +290,11 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             parentKey: null
         });
 
+        // Verify logger was called with generic error message
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+            `Internal server error during issue creation: ${genericError.message}`,
+            { issueType: issueInput.issueType } // Include issue type for context
+        );
 
         // Verify the controller handled the generic error correctly
         expect(res.status).toHaveBeenCalledWith(500);
@@ -282,6 +325,12 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
             description: '',
             parentKey: null
         });
+
+        // Verify logger was called with specific error message
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${specificError.message}`,
+          { errorCode: specificError.errorCode, status: specificError.statusCode, issueType: issueInput.issueType } // Include issue type for context
+        );
 
 
         // Verify the controller handled the specific IssueCreationError correctly

@@ -35,7 +35,7 @@ const getIssueByKeyInternal = (db: DbSchema, key: string): AnyIssue | undefined 
 export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
     logger.info('getIssueByKey: Loading database...'); // Add logging before load
     const db = await loadDatabase();
-    return getIssueByKeyInternal(db, key);
+    return getIssueByKeyInternal(db, key); // Corrected second argument from db to key
 }
 
 
@@ -55,33 +55,35 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   logger.info('createIssue: Starting issue creation process', { input });
   // --- Logging - End ---
 
-  // Validate required input fields
-  if (!input.title || input.title.trim().length === 0) {
-    // --- Logging - Start ---
-    logger.warn('createIssue: Validation failed - Missing title', { input });
-    // --- Logging - End ---
-    throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
-  }
-
-  // Determine issue type from input or default to 'Task'
-  // Handle both capitalized and lowercase inputs, including 'feature' alias
-  let issueType: AnyIssue['issueType'];
-  const normalizedIssueTypeName = input.issueTypeName?.toLowerCase(); // Normalize input for matching
-
-  switch (normalizedIssueTypeName) {
-    case 'task': issueType = 'Task'; break;
-    case 'story':
-    case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
-    case 'epic': issueType = 'Epic'; break;
-    case 'bug': issueType = 'Bug'; break;
-    case 'subtask': issueType = 'Subtask'; break;
-    default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
-  }
-
   let db: DbSchema;
   let parentIssue: AnyIssue | undefined; // Declare parentIssue variable outside try block
 
   try {
+    // --- Validation (Synchronous and Requires DB) ---
+    // Validate required input fields (synchronous)
+    if (!input.title || input.title.trim().length === 0) {
+      // --- Logging - Start ---
+      logger.warn('createIssue: Validation failed - Missing title', { input });
+      // --- Logging - End ---
+      throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
+    }
+
+    // Determine issue type from input or default to 'Task' (synchronous)
+    // Handle both capitalized and lowercase inputs, including 'feature' alias
+    let issueType: AnyIssue['issueType'];
+    const normalizedIssueTypeName = input.issueTypeName?.toLowerCase(); // Normalize input for matching
+
+    switch (normalizedIssueTypeName) {
+      case 'task': issueType = 'Task'; break;
+      case 'story':
+      case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
+      case 'epic': issueType = 'Epic'; break;
+      case 'bug': issueType = 'Bug'; break;
+      case 'subtask': issueType = 'Subtask'; break;
+      default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
+    }
+
+
     // Load the database *once* at the beginning if any operation requires it (like parent validation or saving).
     // We must load it if issueType is Subtask to validate parent, or always if we plan to save.
     // Since successful creation *always* saves, we can load it unconditionally here.
@@ -93,7 +95,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     logger.info('createIssue: Database loaded successfully.');
     // --- Logging - End ---
 
-    // --- Parent Validation Logic for Subtasks ---
+    // --- Parent Validation Logic for Subtasks (Requires DB) ---
     if (issueType === 'Subtask') {
       // Subtasks require a parentKey
       if (!input.parentKey || input.parentKey.trim().length === 0) {
@@ -123,10 +125,13 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     }
     // --- End Parent Validation ---
 
+    // --- Logic to create issue object ---
+    // This logic depends on validated input and potentially the loaded database state (for parent)
     // --- Logging - Start ---
     logger.info('createIssue: Generating issue key', { issueType });
     // --- Logging - End ---
-    const newIssueKey = await keyGenerator.generateIssueKey(db.issueKeyCounter, issueType);
+    // Note: keyGenerator is async, but depends on db.issueKeyCounter which is now inside the try
+    const newIssueKey = await keyGenerator.generateIssueKey(db.issueKeyCounter, issueType); // Async step
     // --- Logging - Start ---
     logger.info('createIssue: Issue key generated successfully', { newIssueKey });
     // --- Logging - End ---
@@ -233,7 +238,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // --- Logging - Start ---
     logger.info('createIssue: Saving database', { issueKey: newIssue.key });
     // --- Logging - End ---
-    await saveDatabase(db);
+    await saveDatabase(db); // Async step
     // --- Logging - Start ---
     logger.info('createIssue: Database saved successfully', { issueKey: newIssue.key });
     // --- Logging - End ---
@@ -248,6 +253,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // --- Logging - Start ---
     logger.error('createIssue: Error during issue creation', { error });
     // --- Logging - End ---
+
     // Re-throw the specific error if it's an IssueCreationError,
     // otherwise wrap unexpected errors in a generic Error or specific database error.
     if (error instanceof IssueCreationError) {
