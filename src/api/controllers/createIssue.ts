@@ -1,6 +1,6 @@
 // src/api/controllers/createIssue.ts
 import { Request, Response } from 'express';
-import { createIssue as issueServiceCreateIssue } from '../../issueService';
+import { createIssue as issueServiceCreateIssue, getIssueByKey } from '../../issueService';
 import { CreateIssueInput, AnyIssue } from '../../models';
 import { IssueCreationError, IssueErrorCodes } from '../../utils/errorHandling';
 import logger from '../../utils/logger';
@@ -44,6 +44,37 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
         logger.error("IssueCreationError during validation: Missing or invalid 'issuetype' name.", { error: IssueErrorCodes.INVALID_ISSUE_TYPE, statusCode: 400, body: req.body });
           throw new IssueCreationError("Missing or invalid 'issuetype' name in request fields.", IssueErrorCodes.INVALID_ISSUE_TYPE, 400);
      }
+
+    // Add validation: Epic and Bug cannot have parents
+    if ((fields.issuetype.name === 'Epic' || fields.issuetype.name === 'Bug') && fields.parent?.key) {
+        logger.error("IssueCreationError during validation: Epic and Bug issue types cannot have a parent.", { issueType: fields.issuetype.name, parentKey: fields.parent.key, error: IssueErrorCodes.INVALID_INPUT, statusCode: 400 });
+        throw new IssueCreationError("Epic and Bug issue types cannot have a parent issue.", IssueErrorCodes.INVALID_INPUT, 400);
+    }
+
+    // Validate parent key
+    if (fields.parent?.key) {
+      logger.info('createIssue Controller: Validating parent key:', { parentKey: fields.parent.key });
+      const parentIssue = await getIssueByKey(fields.parent.key);
+      if (!parentIssue) {
+        logger.error('createIssue Controller: Parent issue not found.', { parentKey: fields.parent.key });
+        return res.status(404).json({
+          errorMessages: [`Parent issue with key '${fields.parent.key}' not found.`],
+          errors: {},
+        });
+      }
+      logger.info('createIssue Controller: Parent key validation successful.');
+
+      // --- Additional Validation for Subtask and Parent Issue Type ---
+      if (fields.issuetype.name === 'Subtask' && parentIssue.issueType !== 'Task' && parentIssue.issueType !== 'Story') {
+        logger.error('IssueCreationError during validation: Invalid parent type for Subtask.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT });
+        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Task' or 'Story' for a Subtask.`, IssueErrorCodes.INVALID_PARENT, 400);
+      }
+      if ((fields.issuetype.name === 'Task' || fields.issuetype.name === 'Story') && parentIssue.issueType !== 'Epic') {
+        logger.error('IssueCreationError during validation: Invalid parent type for Task/Story.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT });
+        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Epic' for a Task or Story.`, IssueErrorCodes.INVALID_PARENT, 400);
+      }
+      // --- End Additional Validation ---
+    }
 
     const serviceInput: CreateIssueInput = {
       title: fields.summary,
