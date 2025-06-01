@@ -3,10 +3,8 @@ import { createIssue } from './issueService';
 // issueService.ts imports these from './database/database', so the test should mock that module
 import { loadDatabase, saveDatabase } from './database/database';
 import { DbSchema, Epic, Task, Story, Subtask } from './models'; // Added Subtask
-// IssueCreationError is not used in this specific file but kept for consistency with original structure
-// If not needed, it can be removed.
-import { IssueCreationError } from './utils/errorHandling';
-
+// Import IssueErrorCodes to use PARENT_ISSUE_NOT_FOUND and INVALID_PARENT_TYPE
+import { IssueCreationError, IssueErrorCodes } from './utils/errorHandling'; // Corrected import
 
 // Mock the database module, using the correct path that issueService imports from
 jest.mock('./database/database');
@@ -73,6 +71,7 @@ describe('issueService - Create Operations - Parent-Child Relationships', () => 
     const parentIssue: Epic = {
         id: 'parent-uuid',
         key: 'EPIC-123',
+        projectKey: 'PROJ', // Added projectKey
         issueType: 'Epic',
         summary: 'Mock Parent Epic',
         description: 'This is a mock parent issue for subtask testing.',
@@ -128,6 +127,7 @@ describe('issueService - Create Operations - Parent-Child Relationships', () => 
     const epic: Epic = {
       id: 'epic-uuid',
       key: 'EPIC-1',
+      projectKey: 'PROJ', // Added projectKey
       issueType: 'Epic',
       summary: 'Existing Epic',
       description: 'Epic description',
@@ -180,6 +180,7 @@ describe('issueService - Create Operations - Parent-Child Relationships', () => 
     const epic: Epic = {
       id: 'epic-uuid',
       key: 'EPIC-1',
+      projectKey: 'PROJ', // Added projectKey
       issueType: 'Epic',
       summary: 'Existing Epic',
       description: 'Epic description',
@@ -219,5 +220,74 @@ describe('issueService - Create Operations - Parent-Child Relationships', () => 
     expect(savedEpic.updatedAt).toEqual(mockDate.toISOString());
      // Ensure parent createdAt does not change
     expect(savedEpic.createdAt).toEqual('2023-11-01T11:00:00.000Z');
+  });
+
+  it('should throw PARENT_ISSUE_NOT_FOUND error if the parentKey does not exist', async () => { // Updated test description
+    const input = {
+      title: 'Issue with Missing Parent',
+      description: 'This issue points to a parent that does not exist.',
+      issueTypeName: 'Task',
+      parentKey: 'MISSING-123',
+    };
+
+    // Mock database to contain no issues
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(defaultInitialDb)));
+
+    // Use IssueErrorCodes.PARENT_ISSUE_NOT_FOUND
+    await expect(createIssue(input)).rejects.toThrow(expect.objectContaining({
+      errorCode: IssueErrorCodes.PARENT_ISSUE_NOT_FOUND, // Expect the correct error code constant
+      message: expect.stringContaining('Parent issue with key'), // Added message check for robustness
+    }));
+
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    // Expect saveDatabase NOT to have been called because an error occurred
+    expect(mockSaveDatabaseFunction).not.toHaveBeenCalled();
+    // Ensure database state remains unchanged
+    expect(savedDbState).toBeNull();
+  });
+
+  it('should throw INVALID_PARENT_TYPE error if the parent type is invalid for the child issue type', async () => {
+    const input = {
+      title: 'Subtask with Invalid Parent Type',
+      description: 'This subtask attempts to link to an invalid parent type.',
+      issueTypeName: 'Subtask',
+      // Change parentKey to point to a Task, which is currently an invalid parent for Subtasks
+      parentKey: 'TASK-456',
+    };
+
+    // Mock database to contain a Task parent (which is invalid for Subtask according to current logic)
+    const invalidParent: Task = { // Changed type to Task
+      id: 'task-uuid',
+      key: 'TASK-456', // Changed key
+      projectKey: 'PROJ',
+      issueType: 'Task', // Changed type
+      summary: 'Invalid Parent Task', // Changed summary
+      description: 'This task should not be a parent of a subtask in this test context.',
+      status: 'Todo',
+      createdAt: '2023-11-01T12:00:00.000Z',
+      updatedAt: '2023-11-01T12:00:00.000Z',
+      parentKey: null,
+      // Task type does not have childIssueKeys
+    };
+
+    // Mock database to contain only the invalid parent
+    const dbWithInvalidParent: DbSchema = {
+      issues: [invalidParent],
+      issueKeyCounter: 456, // Counter doesn't matter for this test, but keep it reasonable
+    };
+    // FIX: Removed the extra JSON.parse around JSON.stringify
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithInvalidParent)));
+
+    // Use IssueErrorCodes.INVALID_PARENT_TYPE
+    await expect(createIssue(input)).rejects.toThrow(expect.objectContaining({
+      errorCode: IssueErrorCodes.INVALID_PARENT_TYPE, // Correct error code reference
+      message: expect.stringContaining('cannot be a parent of a Subtask'), // Added message check reflecting the specific error message
+    }));
+
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    // Expect saveDatabase NOT to have been called because an error occurred
+    expect(mockSaveDatabaseFunction).not.toHaveBeenCalled();
+    // Ensure database state remains unchanged
+    expect(savedDbState).toBeNull();
   });
 });
