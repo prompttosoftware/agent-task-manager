@@ -1,4 +1,4 @@
-import { loadDatabase, saveDatabase } from './dataStore'; // Import only functions from dataStore
+import { loadDatabase, saveDatabase } from './database/database'; // Import only functions from dataStore
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
