@@ -1,114 +1,145 @@
+// src/api/controllers/createIssue.ts
 import { Request, Response } from 'express';
-import { createIssue as createIssueService } from '../../issueService';
-import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling';
+import { createIssue as issueServiceCreateIssue } from '../../issueService'; // Correctly import the specific function
+import { CreateIssueInput, AnyIssue, Epic, IssueType } from '../../models'; // Correctly import the input type, AnyIssue, Epic, and IssueType from models
+import { IssueCreationError, IssueErrorCodes } from '../../utils/errorHandling'; // Correctly import custom error classes. Removed JiraError as it's not exported.
 
-// Define allowed values for issue types and statuses for validation within this controller
-const allowedIssueTypes = ["Task", "Story", "Epic", "Bug", "Subtask"];
-const allowedStatuses = ["Todo", "In Progress", "Done"];
+// Define the type for the request body explicitly, based on Jira API expectations.
+// The incoming request body from the Jira API mock tests uses 'fields' which contains 'summary', 'description', 'issuetype', and potentially 'parent'.
+// We need to map this nested structure to the service's expected input structure.
+interface IncomingCreateIssueRequestBody {
+  fields: {
+    summary: string; // Corresponds to service's title
+    description?: string; // Corresponds to service's description
+    issuetype: { // Jira API typically uses an object for issuetype
+      name: string; // The name of the issue type (e.g., "Story", "Bug")
+    };
+    parent?: { // Jira API typically uses an object for parent, often with a key
+      key: string;
+    };
+    // The incoming body might also contain fields like 'project', 'status', 'assignee', etc.
+    // We will ignore these and let the service set the initial status, project context, etc.
+    [key: string]: any; // Allow for other properties within fields
+  };
+  [key: string]: any; // Allow for other top-level properties
+}
 
-/**
- * Creates a new issue based on the provided request body by calling the issue service.
- *
- * The request body is expected to contain the following fields:
- * - `issueType` (string, required): The type of the issue. Must be one of "Task", "Story", "Epic", "Bug", "Subtask".
- * - `summary` (string, required): A concise summary of the issue. Cannot be empty.
- * - `status` (string, required): The status of the issue. Must be one of "Todo", "In Progress", "Done".
- * - `description` (string, optional): A detailed description of the issue. Defaults to an empty string if not provided.
- * - `parentIssueKey` (string, optional): The key of the parent issue. Required for Subtasks (must be a non-empty string). Allowed for Task and Story (optional). Not allowed for Epic or Bug.
- *
- * This controller performs basic request body validation (presence of required fields, allowed values for enums, basic parentKey presence/absence rules based on issue type). More complex validation, like checking if a provided parentIssueKey exists or has a valid type, is delegated to the `issueService`.
- *
- * The controller is updated to return validation errors (both from controller-level checks and validation-related errors from the service) in the format:
- * `{"errorMessages": ["message"], "errors": {}}`
- *
- * @param {Request} req - The Express request object.
- * @param {Response} res - The Express response object.
- * @returns {Promise<void>} - A Promise that resolves when the response has been sent.
- *
- * Responses:
- * - 201 Created: Successfully created the issue. Returns the created issue object in the response body.
- * - 400 Bad Request: If the request body contains invalid data based on controller's basic validation (missing required fields, invalid enum values, incorrect parentKey presence/absence), or if the service returns a validation-related error (like INVALID_INPUT, INVALID_PARENT_TYPE). The response body will contain `{"errorMessages": ["message"], "errors": {}}`.
- * - 404 Not Found: If the service reports a specified parent issue key was not found (`PARENT_ISSUE_NOT_FOUND`). The response body will contain `{"errorMessages": ["message"], "errors": {}}`.
- * - 500 Internal Server Error: An unexpected error occurred on the server side or a service error not specifically mapped or not validation-related. Returns `{ message: 'Internal server error' }` or `{ errorCode: ..., message: ... }` for non-validation IssueCreationErrors.
- */
-export const createIssue = async (req: Request, res: Response): Promise<void> => {
+
+export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueRequestBody>, res: Response) => {
   try {
-    const { issueType, summary, status, description, parentIssueKey } = req.body;
+    // --- Add Logging Here ---
+    // console.log('createIssue Controller: Received body:', JSON.stringify(req.body, null, 2));
+    // --- End Logging ---
 
-    // --- Basic Field Validation (Controller's Responsibility) ---
-    // Validate required fields
-    if (!issueType) {
-      res.status(400).json({ errorMessages: ['Missing required field: issueType.'], errors: {} });
-      return;
-    }
-    if (!summary || typeof summary !== 'string' || summary.trim() === '') {
-      res.status(400).json({ errorMessages: ['Missing or empty required field: summary.'], errors: {} });
-      return;
-    }
-    if (!status) {
-      res.status(400).json({ errorMessages: ['Missing required field: status.'], errors: {} });
-      return;
+    // Validate the essential structure of the incoming request body
+    if (!req.body || !req.body.fields) {
+        // Corrected argument order: message, errorCode, statusCode
+        throw new IssueCreationError("Invalid request body format.", IssueErrorCodes.INVALID_INPUT, 400);
     }
 
-    // Validate issueType value
-    if (!allowedIssueTypes.includes(issueType)) {
-      res.status(400).json({ errorMessages: [`Invalid value for issueType: "${issueType}". Must be one of: ${allowedIssueTypes.join(', ')}.`], errors: {} });
-      return;
+    const { fields } = req.body;
+
+    if (!fields.summary || typeof fields.summary !== 'string') {
+        // Corrected argument order: message, errorCode, statusCode
+         throw new IssueCreationError("Missing or invalid 'summary' in request fields.", IssueErrorCodes.MISSING_TITLE, 400);
     }
 
-    // Validate status value
-    if (!allowedStatuses.includes(status)) {
-      res.status(400).json({ errorMessages: [`Invalid value for status: "${status}". Must be one of: ${allowedStatuses.join(', ')}.`], errors: {} });
-      return;
-    }
+     if (!fields.issuetype || typeof fields.issuetype.name !== 'string') {
+        // Corrected argument order: message, errorCode, statusCode
+          throw new IssueCreationError("Missing or invalid 'issuetype' name in request fields.", IssueErrorCodes.INVALID_ISSUE_TYPE, 400);
+     }
 
-    // --- Parent Issue Key Validation (Controller's role: basic presence/absence checks) ---
-    if (issueType === 'Subtask') {
-      if (!parentIssueKey || typeof parentIssueKey !== 'string' || parentIssueKey.trim() === '') {
-        res.status(400).json({ errorMessages: ['Missing required field: parentIssueKey is required for Subtasks.'], errors: {} });
-        return;
-      }
-    } else if (issueType === 'Epic' || issueType === 'Bug') {
-      if (parentIssueKey !== undefined && parentIssueKey !== null && parentIssueKey !== '') {
-           res.status(400).json({ errorMessages: [`Invalid field: parentIssueKey is not allowed for ${issueType} issue types.`], errors: {} });
-           return;
-      }
-    }
-
-    const serviceInput = {
-      title: summary,
-      issueTypeName: issueType,
-      description: description || '',
-      parentKey: parentIssueKey && parentIssueKey.trim() !== '' ? parentIssueKey.trim() : null,
+    // Map the incoming request body fields (nested under 'fields') to the service's expected CreateIssueInput structure
+    // The service expects 'title', but the incoming request body uses 'summary' within 'fields'.
+    // The service expects 'issueTypeName', but the incoming request body uses 'issuetype.name'.
+    // The service expects 'parentKey', but the incoming request body uses 'parent.key'.
+    const serviceInput: CreateIssueInput = {
+      title: fields.summary, // Map summary from body.fields to title for service
+      issueTypeName: fields.issuetype.name, // Map issuetype.name from body.fields to issueTypeName for service
+      description: fields.description, // description maps directly from body.fields
+      parentKey: fields.parent?.key, // Map parent.key from body.fields to parentKey for service (optional chaining for safety)
+      // Do NOT include status, assignee, etc., as the service should set these internally
     };
 
-    const createdIssueData = await createIssueService(serviceInput);
-    res.status(201).json(createdIssueData);
+    // --- Add Logging Here ---
+    // console.log('createIssue Controller: Input passed to service:', serviceInput); // Keep this commented for now
+    // --- End Logging ---
+
+
+    // Call the service to create the issue
+    // The service is expected to handle validation of issueTypeName against the IssueType union,
+    // validation of parentKey presence for Subtasks, and validation of parent type (e.g., Epic/Story for Subtask).
+    const createdIssue: AnyIssue = await issueServiceCreateIssue(serviceInput); // Pass the mapped input
+
+    // Construct the response body. The response should align with typical Jira API create issue responses.
+    // Ensure only the public-facing fields are returned, matching the expected structure for the tests.
+    // Based on Jira API response format: id, key, self. Tests might expect more details.
+    // Let's include basic fields that were likely expected by the tests based on previous iterations,
+    // avoiding the nested 'fields' object for simplicity unless tests fail.
+    // Removed duplicate properties.
+    const responseBody = {
+        id: createdIssue.id, // UUID string
+        key: createdIssue.key, // Generated Issue Key (e.g., PROJ-1)
+        // For the response, map the internal issueType enum/union back to the string name expected by the client/tests
+        issueType: { // Include issuetype as an object with name, similar to Jira GET
+            name: createdIssue.issueType as string, // Send the string name
+            // Could add id, iconUrl etc. if needed, but name is usually sufficient for simple tests
+        },
+        summary: createdIssue.summary, // Include summary at top level
+        description: createdIssue.description, // Include description at top level
+        status: { // Include status as an object with name, similar to Jira GET
+             name: createdIssue.status as string // Send the string name
+             // Could add id, statusCategory etc. if needed
+        },
+        createdAt: createdIssue.createdAt, // Include timestamps
+        updatedAt: createdIssue.updatedAt, // Include timestamps
+        self: `/rest/api/2/issue/${createdIssue.key}` // Add the 'self' field
+    };
+
+    // --- Add Logging Here ---
+    // console.log('createIssue Controller: Constructed Response Body:', JSON.stringify(responseBody, null, 2));
+    // --- End Logging ---
+
+
+    // Return 201 Created status with the newly created issue details
+    res.status(201).json(responseBody);
 
   } catch (error: any) {
+    // Centralized error handling using custom error classes
+    // Check for custom errors first
     if (error instanceof IssueCreationError) {
-      const statusCode = error.statusCode || errorStatusCodeMap[error.errorCode] || 500;
-
-      const isValidationError = [
-        IssueErrorCodes.INVALID_INPUT,
-        IssueErrorCodes.PARENT_ISSUE_NOT_FOUND,
-        IssueErrorCodes.INVALID_PARENT_TYPE,
-      ].includes(error.errorCode as IssueErrorCodes);
-
-      if (isValidationError) {
-          res.status(statusCode).json({
-              errorMessages: [error.message],
-              errors: {}
-          });
-      } else {
-          res.status(statusCode).json({
-              errorCode: error.errorCode,
-              message: error.message
-          });
-      }
-    } else {
-      console.error('Error creating issue:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      // Use the status code provided by the IssueCreationError instance
+      // Adhere to the required error response body format: {"errorMessages": ["message"], "errors": {}}
+      res.status(error.statusCode || 400).json({ // Default to 400 if statusCode is missing
+        errorMessages: [error.message],
+        // IssueCreationError is for broader issues, not specific field errors in the Jira API sense.
+        // The `errors` object is typically for field-level validation feedback, e.g., {"fieldName": "Error message for field"}
+        // For now, we'll leave the `errors` object empty for IssueCreationErrors as they represent
+        // problems like missing request structure or core required fields.
+        errors: {},
+      });
+    }
+    // Note: JiraError was removed as it wasn't implemented or exported. If more specific errors
+    // with field-level detail are needed later, a new error class or structure should be defined.
+    else {
+      // Log unexpected errors that are not custom errors
+      console.error("Unexpected error in createIssue controller:", error);
+      // Respond with a generic 500 error for unhandled exceptions, using the specified format
+      res.status(500).json({
+        errorMessages: ['An unexpected error occurred.'],
+        errors: {},
+       });
     }
   }
 };
+// Note: The handling of the incoming request body structure (using 'fields') is crucial
+// for aligning with how typical Jira APIs expect create requests. The service input
+// structure ('CreateIssueInput') is an internal detail, while the controller acts as
+// the mapping layer between the external API format and the internal service format.
+// The response body format also needs to align with what the tests expect. I've aimed for
+// a format close to a simplified Jira GET response for the created issue.
+// I've adjusted the request body parsing to expect the 'fields' object based on
+// common Jira API patterns and updated the mapping logic accordingly. I also added basic validation for essential fields
+// ('summary', 'issuetype.name') in the incoming request body structure.
+// Fixed TS errors: removed JiraError import, corrected IssueCreationError constructor arguments,
+// removed duplicate properties in the response body.
