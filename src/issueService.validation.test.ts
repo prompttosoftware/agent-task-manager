@@ -1,10 +1,10 @@
 import { createIssue } from '../src/issueService';
-import { loadDatabase, saveDatabase } from '../src/dataStore';
+import { loadDatabase, saveDatabase } from '../src/database/database';
 import { DbSchema } from '../src/models';
 import { IssueCreationError } from '../src/utils/errorHandling'; // Corrected import path
 
-// Mock the dataStore module to control database interactions
-jest.mock('./dataStore');
+// Mock the database module to control database interactions
+jest.mock('../src/database/database');
 
 const mockLoadDatabase = loadDatabase as jest.Mock;
 const mockSaveDatabase = saveDatabase as jest.Mock;

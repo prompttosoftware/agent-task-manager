@@ -1,14 +1,14 @@
 import express, { Application } from 'express';
 import request from 'supertest';
 import issueRoutes from './issueRoutes';
-import * as issueService from '../../issueService'; // Import the service to mock it if needed
+import * as issueService from '../../services/issueService'; // Import the service to mock it if needed
 import { IssueCreationError } from '../../utils/errorHandling'; // Import custom error type
 import { AnyIssue } from '../../models'; // Import types
 
 
 // Mock the issueService to control its behavior during testing
 // We need to mock the specific function used by the controller
-jest.mock('../../issueService', () => ({
+jest.mock('../../services/issueService', () => ({
   createIssue: jest.fn(),
   // Keep other service functions as they are for now, or mock them if needed for future tests
 }));
@@ -20,8 +20,8 @@ app.use('/rest/api/2', issueRoutes); // Mount the issueRoutes router under the c
 
 describe('POST /rest/api/2/issue - issueRoutes', () => {
 
-  // Cast the mocked function for type safety
-  const mockedCreateIssueService = issueService.createIssue as jest.Mock;
+  // Cast the mocked function for type safety, preserving original function signature type
+  const mockedCreateIssueService = issueService.createIssue as jest.MockedFunction<typeof issueService.createIssue>;
 
   // Reset mocks before each test
   beforeEach(() => {

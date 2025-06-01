@@ -4,7 +4,7 @@ import issueRoutes from './issueRoutes';
 import { AnyIssue } from '../../models'; // Import types
 import fs from 'fs'; // Import fs module
 import path from 'path'; // Import path module
-import { DB_FILE_PATH } from '../../dataStore'; // Import the correct DB file path
+import { DB_FILE_PATH } from '../../database/database'; // Import the correct DB file path
 
 // Determine the path to db.json - Use the path from dataStore
 const dbPath = DB_FILE_PATH; // Use the imported path

@@ -1,5 +1,5 @@
 import { createIssue } from '../src/issueService';
-import { loadDatabase, saveDatabase } from '../src/dataStore';
+import { loadDatabase, saveDatabase } from './database/database';
 import { DbSchema } from './models';
 // IssueCreationError is not used in this specific file but kept for consistency with original structure
 // If not needed, it can be removed.

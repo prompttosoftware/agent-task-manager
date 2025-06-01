@@ -1,7 +1,7 @@
 import { loadDatabase, saveDatabase, DB_FILE_PATH } from './database';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { DbSchema } from '../models'; // Assuming DbSchema is defined in ../models
+import { DbSchema, IssueType } from '../models'; // Assuming DbSchema and IssueType are defined in ../models
 
 // Mock the 'fs/promises' module
 jest.mock('fs/promises');
@@ -18,8 +18,8 @@ const testDb: DbSchema = {
       key: 'ISSUE-1',
       summary: 'Test Issue',
       description: 'This is a test issue.',
-      status: 'Open',
-      type: 'Task',
+      status: 'Todo',
+      type: IssueType.Task, // Assuming IssueType is an enum or value exported from ../models
       priority: 'Medium',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

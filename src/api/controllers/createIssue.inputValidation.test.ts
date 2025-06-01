@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
-import { createIssue } from './createIssue'; // Import from the new file
-import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import necessary types
-import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
+import { createIssue } from './createIssue'; // Import the controller function
+import { AnyIssue, CreateIssueInput } from '../../models'; // Import necessary types
 
 // Import the service function to be mocked.
-import { createIssue as actualServiceCreateIssue, getIssueByKey } from '../../issueService';
+import { createIssue as actualServiceCreateIssue, getIssueByKey } from '../../services/issueService';
 
 // Mock the issueService module.
-jest.mock('../../issueService', () => ({
+jest.mock('../../services/issueService', () => ({
   createIssue: jest.fn<Promise<AnyIssue>, [CreateIssueInput]>(),
   getIssueByKey: jest.fn<Promise<AnyIssue | undefined>, [string]>(),
 }));

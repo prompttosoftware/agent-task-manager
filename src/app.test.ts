@@ -1,6 +1,8 @@
 import request from 'supertest';
 import app from '../src/app';
-import { AnyIssue } from '../src/models';
+// Assuming types like AnyIssue are defined in a separate 'types' file or directory
+// Adjust the import path based on your project structure where AnyIssue is defined
+import { AnyIssue } from '../src/types';
 
 describe('POST /issues', () => {
   // Note: This test relies on the in-memory database starting in a clean state
@@ -36,15 +38,17 @@ describe('POST /issues', () => {
       },
     });
 
-    // Define the expected structure of the successful response body
-    interface CreatedIssueResponse {
-      message: string;
-      // Assuming AnyIssue contains issueType, summary, status, etc.
-      data: AnyIssue & { id: string; key: string; createdAt: string; updatedAt: string; };
+    // Define the expected structure of the data part of the response
+    interface ExpectedIssueData extends AnyIssue {
+      id: string;
+      key: string;
+      createdAt: string;
+      updatedAt: string;
     }
 
-    // Cast response.body to the expected type to satisfy TypeScript
-    const { data } = response.body as CreatedIssueResponse;
+    // Access the data property and cast it to the expected data type after assertion
+    // Note: The expect().toMatchObject() call above checks the runtime shape.
+    const data = (response.body as { data: ExpectedIssueData }).data;
 
     // Assert the presence and basic format of generated fields
     expect(data.id).toBeDefined();

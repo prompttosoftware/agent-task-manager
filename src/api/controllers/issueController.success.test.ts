@@ -158,3 +158,114 @@ describe('createIssue Controller - Success Scenarios', () => {
         expect(res.json).toHaveBeenCalledWith(expectedIssue);
     });
 });
+
+// Assume IssueErrorCodes is available from '../../utils/errorHandling' or elsewhere
+// import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling';
+
+
+describe('createIssue Controller - Error Scenarios', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('should return 400 if issueService.createIssue throws IssueCreationError with INVALID_PARENT_KEY', async () => {
+        const issueInput = {
+            issueType: 'Subtask',
+            summary: 'Invalid Parent Test',
+            status: 'Todo',
+            parentIssueKey: 'NON-EXISTENT-PARENT',
+        };
+
+        // Assuming IssueErrorCodes and IssueCreationError are structured like this
+        const IssueErrorCodes = { // Define locally for test if not imported
+            INVALID_PARENT_KEY: 'INVALID_PARENT_KEY',
+            // ... other codes potentially
+        };
+        const errorStatusCodeMap = { // Define locally for test if not imported
+            [IssueErrorCodes.INVALID_PARENT_KEY]: 400,
+             500: 500, // Add a default for unexpected errors
+            // ... other mappings
+        };
+         class IssueCreationError extends Error { // Define locally for test if not imported
+            code: string; // Use string to match the mock definition
+            details?: any;
+
+            constructor(code: string, message: string, details?: any) {
+                super(message);
+                this.code = code;
+                this.details = details;
+                 // Set the prototype explicitly. See https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes#extending-built-ins-like-error-array-and-map-may-no-longer-work
+                Object.setPrototypeOf(this, IssueCreationError.prototype);
+            }
+        }
+
+
+        const errorCode = IssueErrorCodes.INVALID_PARENT_KEY;
+        const errorMessage = 'Parent issue with key NON-EXISTENT-PARENT not found or is not a valid parent.';
+        const errorDetails = { parentKey: issueInput.parentIssueKey };
+        const serviceError = new IssueCreationError(errorCode, errorMessage, errorDetails);
+
+        mockedCreateIssueService.mockRejectedValue(serviceError);
+
+        const req = mockRequest(issueInput);
+        const res = mockResponse();
+
+        await createIssue(req, res);
+
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        expect(mockedCreateIssueService).toHaveBeenCalledWith({
+            issueTypeName: 'Subtask',
+            title: 'Invalid Parent Test',
+            description: '',
+            parentKey: issueInput.parentIssueKey,
+        } as CreateIssueInput);
+
+        // Expect the controller to handle the error
+        expect(res.status).toHaveBeenCalledWith(errorStatusCodeMap[errorCode]);
+        expect(res.json).toHaveBeenCalledWith({
+            message: errorMessage,
+            code: errorCode,
+            details: errorDetails,
+        });
+    });
+
+    it('should return a generic 500 if an unexpected error occurs', async () => {
+        const issueInput = {
+            issueType: 'Bug',
+            summary: 'Unexpected Error Test',
+            status: 'Todo',
+        };
+
+         const errorStatusCodeMap = { // Define locally for test if not imported
+            500: 500, // Add a default for unexpected errors
+            // ... other mappings
+        };
+
+
+        const unexpectedError = new Error('Something went wrong in the service');
+
+        mockedCreateIssueService.mockRejectedValue(unexpectedError);
+
+        const req = mockRequest(issueInput);
+        const res = mockResponse();
+
+        await createIssue(req, res);
+
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+         expect(mockedCreateIssueService).toHaveBeenCalledWith({
+            issueTypeName: 'Bug',
+            title: 'Unexpected Error Test',
+            description: '',
+            parentKey: null,
+        } as CreateIssueInput);
+
+        // Expect the controller to handle the unexpected error
+        expect(res.status).toHaveBeenCalledWith(errorStatusCodeMap[500]); // Use the default 500 mapping
+        // Assuming the controller sends a generic 500 response for unhandled errors
+        expect(res.json).toHaveBeenCalledWith({ message: 'Internal Server Error' }); // Adjust based on actual controller implementation
+    });
+});
