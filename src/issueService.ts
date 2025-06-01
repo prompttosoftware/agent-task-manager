@@ -62,26 +62,54 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
   try {
     // --- Validation (Synchronous and Requires DB) ---
     // Validate required input fields (synchronous)
+    // Add logging before checking title
+    logger.info('createIssue: Validating issue title...');
     if (!input.title || input.title.trim().length === 0) {
       // --- Logging - Start ---
-      logger.warn('createIssue: Validation failed - Missing title', { input });
+      // Update logging to include error code
+      logger.warn('createIssue: Validation failed - Missing or empty title', { input, errorCode: IssueErrorCodes.MISSING_TITLE });
+      // Log before throwing error
+      logger.error('createIssue: Throwing IssueCreationError due to missing or empty title', { errorCode: IssueErrorCodes.MISSING_TITLE });
       // --- Logging - End ---
       throw new IssueCreationError('Issue title is required.', IssueErrorCodes.MISSING_TITLE, 400); // Use imported error class and code
     }
 
-    // Determine issue type from input or default to 'Task' (synchronous)
-    // Handle both capitalized and lowercase inputs, including 'feature' alias
+    // Add logging before determining/validating issue type
+    logger.info('createIssue: Validating issue type name...');
     let issueType: AnyIssue['issueType'];
-    const normalizedIssueTypeName = input.issueTypeName?.toLowerCase(); // Normalize input for matching
+    const inputTypeName = input.issueTypeName; // Get the input string
+    const normalizedIssueTypeName = inputTypeName?.toLowerCase(); // Normalize for matching
 
-    switch (normalizedIssueTypeName) {
-      case 'task': issueType = 'Task'; break;
-      case 'story':
-      case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
-      case 'epic': issueType = 'Epic'; break;
-      case 'bug': issueType = 'Bug'; break;
-      case 'subtask': issueType = 'Subtask'; break;
-      default: issueType = 'Task'; // Default to 'Task' if unrecognized or not provided
+    // Define the set of explicitly allowed input names (including aliases)
+    const allowedTypeNames = ['task', 'story', 'feature', 'epic', 'bug', 'subtask'];
+
+    if (inputTypeName !== undefined && inputTypeName !== null && inputTypeName.trim().length > 0) {
+      // Input was provided, validate it
+      if (!allowedTypeNames.includes(normalizedIssueTypeName || '')) { // Check if normalized name is in the allowed list
+        // --- Logging - Start ---
+        logger.warn('createIssue: Validation failed - Invalid issueTypeName', { issueTypeName: inputTypeName, errorCode: IssueErrorCodes.INVALID_ISSUE_TYPE });
+        logger.error('createIssue: Throwing IssueCreationError due to invalid issueTypeName', { errorCode: IssueErrorCodes.INVALID_ISSUE_TYPE });
+        // --- Logging - End ---
+        throw new IssueCreationError(`Invalid issue type name: '${inputTypeName}'. Allowed types are: ${allowedTypeNames.join(', ')}.`, IssueErrorCodes.INVALID_ISSUE_TYPE, 400);
+      }
+
+      // Input is valid, determine the internal issueType enum value
+      switch (normalizedIssueTypeName) {
+        case 'task': issueType = 'Task'; break;
+        case 'story':
+        case 'feature': issueType = 'Story'; break; // Allow 'feature' as an alias for 'Story'
+        case 'epic': issueType = 'Epic'; break;
+        case 'bug': issueType = 'Bug'; break;
+        case 'subtask': issueType = 'Subtask'; break;
+        // Default case is not needed here because we already validated against allowedTypeNames
+        default: // Should not be reached
+           logger.error('createIssue: Internal error - Failed to map valid issueTypeName to enum', { issueTypeName: inputTypeName, normalizedIssueTypeName, errorCode: IssueErrorCodes.INTERNAL_ERROR });
+           throw new IssueCreationError('Internal error determining issue type from valid input.', IssueErrorCodes.INTERNAL_ERROR, 500);
+      }
+    } else {
+      // input.issueTypeName was not provided or was empty, default to 'Task'
+      logger.info('createIssue: issueTypeName not provided, defaulting to Task');
+      issueType = 'Task';
     }
 
 
@@ -160,6 +188,17 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // 3. Create a new issue object adhering to AnyIssue
     const now = new Date();
     const newIssueId = uuidv4(); // Generate a unique UUID for id
+
+    // Add logging before processing description (validation placeholder)
+    // Note: Specific validation rules for description (e.g., max length) are not provided in the requirements,
+    // but logging is added here before the description is incorporated into the issue object.
+    logger.info('createIssue: Processing description...', { descriptionProvided: input.description !== undefined && input.description !== null });
+    // Add description validation here if specific rules are needed (e.g., max length)
+    // if (input.description !== undefined && input.description !== null && input.description.length > MAX_DESCRIPTION_LENGTH) {
+    //    logger.warn('createIssue: Validation failed - Description exceeds max length', { inputDescriptionLength: input.description.length, errorCode: IssueErrorCodes.DESCRIPTION_TOO_LONG });
+    //    logger.error('createIssue: Throwing IssueCreationError due to description exceeding max length', { errorCode: IssueErrorCodes.DESCRIPTION_TOO_LONG });
+    //    throw new IssueCreationError('Description exceeds maximum allowed length.', IssueErrorCodes.DESCRIPTION_TOO_LONG, 400);
+    // }
 
 
     // Determine initial status based on the mapped issueType, ensuring it's one of the allowed types ('Todo', 'In Progress', 'Done').
