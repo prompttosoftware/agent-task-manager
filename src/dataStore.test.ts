@@ -11,7 +11,7 @@ const mockFsPromises = {
 };
 jest.mock('fs/promises', () => mockFsPromises);
 
-import { loadDatabase, saveDatabase } from './dataStore';
+import { loadDatabase, saveDatabase } from 'src/dataStore';
 import * as path from 'path';
 import * as os from 'os';
 import { DbSchema } from './models';

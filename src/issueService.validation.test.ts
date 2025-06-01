@@ -1,7 +1,7 @@
-import { createIssue } from './issueService';
-import { loadDatabase, saveDatabase } from './dataStore';
-import { DbSchema } from './models';
-import { IssueCreationError } from './utils/errorHandling'; // Corrected import path
+import { createIssue } from '../src/issueService';
+import { loadDatabase, saveDatabase } from '../src/dataStore';
+import { DbSchema } from '../src/models';
+import { IssueCreationError } from '../src/utils/errorHandling'; // Corrected import path
 
 // Mock the dataStore module to control database interactions
 jest.mock('./dataStore');

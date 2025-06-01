@@ -1,4 +1,6 @@
 import { createIssue } from './issueService';
+// Correct import path for database functions based on issueService.ts
+// issueService.ts imports these from './database/database', so the test should mock that module
 import { loadDatabase, saveDatabase } from './database/database';
 import { DbSchema, Epic, Task, Story, Subtask } from './models'; // Added Subtask
 // IssueCreationError is not used in this specific file but kept for consistency with original structure
@@ -6,7 +8,7 @@ import { DbSchema, Epic, Task, Story, Subtask } from './models'; // Added Subtas
 import { IssueCreationError } from './utils/errorHandling';
 
 
-// Mock the database module
+// Mock the database module, using the correct path that issueService imports from
 jest.mock('./database/database');
 
 // Mock uuid
@@ -17,6 +19,7 @@ jest.mock('uuid', () => {
   };
 });
 
+// Correctly type the mocked functions from the mocked module
 const mockLoadDatabaseFunction = loadDatabase as jest.Mock;
 const mockSaveDatabaseFunction = saveDatabase as jest.Mock;
 
@@ -110,7 +113,7 @@ describe('issueService - Create Operations - Parent-Child Relationships', () => 
     expect(savedParentIssue).toBeDefined();
     expect(savedParentIssue.childIssueKeys).toEqual(['SUBT-123']);
     expect(savedParentIssue.updatedAt).toEqual(mockDate.toISOString());
-    // FIX: Compare against hardcoded ISO string, not new Date() which uses mocked date
+    // Compare against hardcoded ISO string, not new Date() which uses mocked date
     expect(savedParentIssue.createdAt).toEqual('2023-10-26T09:00:00.000Z'); // createdAt should not change
   });
 

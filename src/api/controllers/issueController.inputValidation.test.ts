@@ -4,10 +4,10 @@ import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import 
 import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
 
 // Import the service function to be mocked.
-import { createIssue as actualServiceCreateIssue } from '../../issueService';
+import { createIssue as actualServiceCreateIssue } from '../issueService';
 
 // Mock the issueService module.
-jest.mock('../../issueService', () => ({
+jest.mock('../issueService', () => ({
   createIssue: jest.fn<Promise<AnyIssue>, [CreateIssueInput]>(),
 }));
 
