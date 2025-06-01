@@ -1,7 +1,8 @@
 import { loadDatabase, saveDatabase, DB_FILE_PATH } from './database/database'; // Import database functions and constant
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
-import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
+// Import IssueCreationError and IssueErrorCodes from utils
+import { IssueCreationError, IssueErrorCodes } from './utils/errorHandling';
 import logger from './utils/logger'; // Import shared logger
 import * as keyGenerator from './utils/keyGenerator'; // Import keyGenerator service
 
@@ -65,7 +66,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       // --- Logging - Start ---
       logger.warn('createIssue: Validation failed - Missing title', { input });
       // --- Logging - End ---
-      throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
+      throw new IssueCreationError('Issue title is required.', IssueErrorCodes.MISSING_TITLE, 400); // Use imported error class and code
     }
 
     // Determine issue type from input or default to 'Task' (synchronous)
@@ -104,7 +105,8 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
             // --- Logging - Start ---
             logger.warn('createIssue: Validation failed - Parent not found', { parentKey: input.parentKey });
             // --- Logging - End ---
-            throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
+            // Use the correct error code constant
+            throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, IssueErrorCodes.PARENT_ISSUE_NOT_FOUND, 404);
         }
         // Note: parentIssue is now guaranteed to exist if input.parentKey was provided.
         // We store the found parent in the `parentIssue` variable for potential later use (like type checks).
@@ -122,7 +124,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         // --- Logging - Start ---
         logger.warn('createIssue: Validation failed - Missing parentKey for subtask', { input });
         // --- Logging - End ---
-        throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
+        throw new IssueCreationError('Subtask creation requires a parentKey.', IssueErrorCodes.INVALID_PARENT_KEY, 400); // Use imported error class and code
       }
 
       // Validate that the parent is a valid type (Epic or Story)
@@ -130,12 +132,13 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       // And the check just above guarantees input.parentKey is present for Subtasks.
       // Add null check for parentIssue for type safety, although logic implies it's defined here.
       if (parentIssue) { // Add check here
+        // Current logic: Parent must be Epic OR Story. Throw if NEITHER Epic NOR Story.
         if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') { // Use parentIssue variable
           // --- Logging - Start ---
           // Accessing parentIssue.issueType and parentIssue.key is safe inside this if(parentIssue) block.
           logger.warn('createIssue: Validation failed - Invalid parent type', { parentKey: input.parentKey, parentType: parentIssue.issueType });
           // --- Logging - End ---
-           throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, 'INVALID_PARENT_TYPE', 400);
+           throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, IssueErrorCodes.INVALID_PARENT_TYPE, 400);
         }
       }
     }
@@ -173,6 +176,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     const baseIssue: BaseIssue = {
       id: newIssueId, // UUID generated for the issue
       key: newIssueKey, // Unique key derived from the counter
+      projectKey: 'PROJ', // TODO: Determine project key dynamically
       issueType: issueType, // Determined issue type
       summary: input.title, // Issue title from input, mapped to summary (Input uses title, models use summary)
       description: input.description || '', // Optional description from input, default to ''
@@ -198,7 +202,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       // Validation for existence and parent type is done above.
        if (!input.parentKey) {
            // This case should have been caught by the validation above, but keeping it for type safety/redundancy.
-           throw new IssueCreationError('Internal Error: Missing parentKey for Subtask after validation.', 'INTERNAL_ERROR', 500);
+           throw new IssueCreationError('Internal Error: Missing parentKey for Subtask after validation.', IssueErrorCodes.INTERNAL_ERROR, 500); // Use constant
        }
       newIssue = {
         ...baseIssue,
@@ -219,7 +223,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // --- Logic to update parent issue's childIssueKeys and updatedAt ---
     // This happens *after* the new issue is added to the db.issues array.
     // Check if a parentKey was provided in the input.
-    // We already looked up parentIssue earlier if parentKey was provided.
+    // We already looked up parentIssue earlier if input.parentKey was provided.
     // Use the stored parentIssue variable.
     if (parentIssue) { // Check if parentIssue variable was set (meaning input.parentKey was provided and parent was found)
         // Check if the found parent is an Epic (only Epics have childIssueKeys)
@@ -273,6 +277,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     }
     // Throw a generic error for unexpected issues, e.g., database write failures.
     // Use the original error's message if available, otherwise a generic one.
+    // Also use a generic error code constant for unexpected errors if defined.
     throw new Error(`Failed to create issue: ${error instanceof Error ? error.message : 'An unexpected error occurred.'}`); // Provide more context or the original error message
   }
 }

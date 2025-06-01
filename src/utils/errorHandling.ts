@@ -35,9 +35,10 @@ export enum IssueErrorCodes {
   DATABASE_ERROR = 'DATABASE_ERROR', // General database/data store error
   CONFLICT = 'CONFLICT', // Resource conflict (e.g., issue already exists - though less likely with key generation)
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE', // External service dependency is unavailable or unresponsive
+  INTERNAL_ERROR = 'INTERNAL_ERROR', // Unexpected internal server error not covered by specific codes (e.g. post-validation logic failure)
   // Generic errors
   INVALID_INPUT = 'INVALID_INPUT', // Generic service-side input validation failure
-  INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR', // Unexpected internal server error not covered by specific codes
+  INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR', // Unexpected internal server error - broader than INTERNAL_ERROR, might cover uncaught exceptions
 }
 
 /**
@@ -56,5 +57,6 @@ export const errorStatusCodeMap: { [key in IssueErrorCodes]: number } = {
   [IssueErrorCodes.CONFLICT]: 409,
   [IssueErrorCodes.SERVICE_UNAVAILABLE]: 503, // Added mapping for new code
   [IssueErrorCodes.INVALID_INPUT]: 400,
+  [IssueErrorCodes.INTERNAL_ERROR]: 500, // Added mapping for new code
   [IssueErrorCodes.INTERNAL_SERVER_ERROR]: 500, // Added mapping for new code
 };
