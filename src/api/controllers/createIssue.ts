@@ -47,8 +47,8 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
 
     // Add validation: Epic and Bug cannot have parents
     if ((fields.issuetype.name === 'Epic' || fields.issuetype.name === 'Bug') && fields.parent?.key) {
-        logger.error("IssueCreationError during validation: Epic and Bug issue types cannot have a parent.", { issueType: fields.issuetype.name, parentKey: fields.parent.key, error: IssueErrorCodes.INVALID_INPUT, statusCode: 400 });
-        throw new IssueCreationError("Epic and Bug issue types cannot have a parent issue.", IssueErrorCodes.INVALID_INPUT, 400);
+        logger.error("IssueCreationError during validation: Epic and Bug issue types cannot have a parent.", { issueType: fields.issuetype.name, parentKey: fields.parent.key, error: IssueErrorCodes.INVALID_PARENT_KEY, statusCode: 400 });
+        throw new IssueCreationError("Epic and Bug issue types cannot have a parent issue.", IssueErrorCodes.INVALID_PARENT_KEY, 400);
     }
 
     // Validate parent key
@@ -66,12 +66,12 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
 
       // --- Additional Validation for Subtask and Parent Issue Type ---
       if (fields.issuetype.name === 'Subtask' && parentIssue.issueType !== 'Task' && parentIssue.issueType !== 'Story') {
-        logger.error('IssueCreationError during validation: Invalid parent type for Subtask.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT });
-        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Task' or 'Story' for a Subtask.`, IssueErrorCodes.INVALID_PARENT, 400);
+        logger.error('IssueCreationError during validation: Invalid parent type for Subtask.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT_KEY });
+        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Task' or 'Story' for a Subtask.`, IssueErrorCodes.INVALID_PARENT_KEY, 400);
       }
       if ((fields.issuetype.name === 'Task' || fields.issuetype.name === 'Story') && parentIssue.issueType !== 'Epic') {
-        logger.error('IssueCreationError during validation: Invalid parent type for Task/Story.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT });
-        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Epic' for a Task or Story.`, IssueErrorCodes.INVALID_PARENT, 400);
+        logger.error('IssueCreationError during validation: Invalid parent type for Task/Story.', { parentKey: fields.parent.key, parentType: parentIssue.issueType, issueType: fields.issuetype.name, error: IssueErrorCodes.INVALID_PARENT_KEY });
+        throw new IssueCreationError(`Parent issue with key '${fields.parent.key}' must be of type 'Epic' for a Task or Story.`, IssueErrorCodes.INVALID_PARENT_KEY, 400);
       }
       // --- End Additional Validation ---
     }

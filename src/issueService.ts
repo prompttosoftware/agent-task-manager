@@ -95,32 +95,48 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     logger.info('createIssue: Database loaded successfully.');
     // --- Logging - End ---
 
+    // --- General Parent Existence Validation (Requires DB) ---
+    // Check if a parentKey was provided in the input.
+    if (input.parentKey) {
+        // Validate that the parent issue exists using the already loaded database
+        parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper and assign to parentIssue variable
+        if (!parentIssue) {
+            // --- Logging - Start ---
+            logger.warn('createIssue: Validation failed - Parent not found', { parentKey: input.parentKey });
+            // --- Logging - End ---
+            throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
+        }
+        // Note: parentIssue is now guaranteed to exist if input.parentKey was provided.
+        // We store the found parent in the `parentIssue` variable for potential later use (like type checks).
+    }
+    // --- End General Parent Existence Validation ---
+
+
     // --- Parent Validation Logic for Subtasks (Requires DB) ---
     if (issueType === 'Subtask') {
       // Subtasks require a parentKey
-      if (!input.parentKey || input.parentKey.trim().length === 0) {
+      // We already checked if parentKey exists and the parent issue is found above.
+      // So, for Subtasks, we only need to ensure a parentKey was *provided*.
+      // The check `!input.parentKey || input.parentKey.trim().length === 0` covers this.
+      if (!input.parentKey || input.parentKey.trim().length === 0) { // This check is still necessary for Subtasks specifically
         // --- Logging - Start ---
         logger.warn('createIssue: Validation failed - Missing parentKey for subtask', { input });
         // --- Logging - End ---
         throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
       }
 
-      // Validate that the parent issue exists using the already loaded database
-      parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper and assign to parentIssue variable
-      if (!parentIssue) {
-        // --- Logging - Start ---
-        logger.warn('createIssue: Validation failed - Parent not found', { parentKey: input.parentKey });
-        // --- Logging - End ---
-        throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
-      }
-
       // Validate that the parent is a valid type (Epic or Story)
-      // Updated validation to explicitly check for allowed parent types
-      if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') {
-        // --- Logging - Start ---
-        logger.warn('createIssue: Validation failed - Invalid parent type', { parentKey: input.parentKey, parentType: parentIssue.issueType });
-        // --- Logging - End ---
+      // We can safely access parentIssue here because the block above guarantees its existence if input.parentKey is present.
+      // And the check just above guarantees input.parentKey is present for Subtasks.
+      // Add null check for parentIssue for type safety, although logic implies it's defined here.
+      if (parentIssue) { // Add check here
+        if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') { // Use parentIssue variable
+          // --- Logging - Start ---
+          // Accessing parentIssue.issueType and parentIssue.key is safe inside this if(parentIssue) block.
+          logger.warn('createIssue: Validation failed - Invalid parent type', { parentKey: input.parentKey, parentType: parentIssue.issueType });
+          // --- Logging - End ---
            throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, 'INVALID_PARENT_TYPE', 400);
+        }
       }
     }
     // --- End Parent Validation ---
@@ -203,17 +219,13 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // --- Logic to update parent issue's childIssueKeys and updatedAt ---
     // This happens *after* the new issue is added to the db.issues array.
     // Check if a parentKey was provided in the input.
-    if (input.parentKey) { // Check if a parent was specified
-        // Find the parent issue in the loaded database state using the internal helper.
-        // Note: We need the actual object reference from the db array to modify it in place.
-        // We already validated the parent exists earlier if the new issue is a Subtask.
-        // For other issue types, we just look it up here.
-        const parentInDb = db.issues.find(issue => issue.key === input.parentKey);
-
-        // Check if the found parent exists and is an Epic (only Epics have childIssueKeys)
+    // We already looked up parentIssue earlier if parentKey was provided.
+    // Use the stored parentIssue variable.
+    if (parentIssue) { // Check if parentIssue variable was set (meaning input.parentKey was provided and parent was found)
+        // Check if the found parent is an Epic (only Epics have childIssueKeys)
         // Use a type guard or cast to ensure we can access childIssueKeys
-        if (parentInDb && parentInDb.issueType === 'Epic') {
-             const parentEpicInDb = parentInDb as Epic; // Cast for type safety
+        if (parentIssue.issueType === 'Epic') { // Use the parentIssue variable
+             const parentEpicInDb = parentIssue as Epic; // Cast for type safety - parentIssue is already the object from db
 
             // Add the new issue's key to the parent's childIssueKeys array
             // Ensure the array exists first (should exist based on Epic model, but safety check)
@@ -225,7 +237,7 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
             // Update the parent's updatedAt timestamp to the current time
             parentEpicInDb.updatedAt = newIssue.updatedAt; // Use the timestamp generated for the new issue
         }
-         // If parentInDb doesn't exist or isn't an Epic, we don't track children on non-Epic parents
+         // If parentIssue isn't an Epic, we don't track children on non-Epic parents
          // based on the current model, so no further action needed for the parent here.
     }
     // --- End Logic to update parent issue's childIssueKeys and updatedAt ---

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { createIssue } from './createIssue'; // Import from the new file
 import { AnyIssue, CreateIssueInput, IssueType } from '../../models'; // Import Task type
 import { IssueCreationError, errorStatusCodeMap, IssueErrorCodes } from '../../utils/errorHandling'; // Import necessary types and IssueErrorCodes
-import { logger } from '../../utils/logger'; // Import logger
+import logger from '../../utils/logger'; // Import logger
 
 // Import the service function to be mocked.
 // Assuming test file is in src/controllers/issue/__tests__ and service is in src/services
@@ -96,6 +96,47 @@ describe('createIssue Controller - Service Error Handling Scenarios', () => { //
         expect(res.json).toHaveBeenCalledWith({
              errorMessages: [errorMessage], // Expect the message in the array
              errors: {} // Expect empty errors object
+        });
+    });
+
+    // Add the new test here
+    it('should return 404 with error messages if service throws IssueCreationError with PARENT_NOT_FOUND', async () => {
+        const parentKey = 'ANOTHER-NONEXISTENT-123'; // Use a different key for clarity
+        const issueInput = {
+            issueType: 'Task' as IssueType, // Can use any type, parentKey is key
+            summary: 'Issue with non-existent parent handled by service (PARENT_NOT_FOUND)',
+            status: 'Todo',
+            parentIssueKey: parentKey,
+        };
+        const req = mockRequest(issueInput);
+        const res = mockResponse();
+
+        // Mock the service to throw the specific error with PARENT_NOT_FOUND
+        const errorMessage = `Parent object with ID ${parentKey} could not be located.`; // A slightly different message
+        const serviceError = new IssueCreationError(errorMessage, IssueErrorCodes.PARENT_NOT_FOUND, 404); // Use PARENT_NOT_FOUND code
+        mockedCreateIssueService.mockRejectedValueOnce(serviceError);
+
+        await createIssue(req, res);
+
+        // Verify service was called
+         expect(mockedCreateIssueService).toHaveBeenCalledWith({
+            title: issueInput.summary,
+            issueTypeName: issueInput.issueType,
+            description: '', // Default description
+            parentKey: issueInput.parentIssueKey // Expect the parentKey to be passed to service
+        });
+
+        // Verify logger was called
+        expect(mockedLoggerError).toHaveBeenCalledWith(
+          `Issue creation failed: ${serviceError.message}`,
+          { errorCode: serviceError.errorCode, status: serviceError.statusCode, parentKey: issueInput.parentIssueKey }
+        );
+
+        // Verify the controller handled the error correctly, returning the specified validation format
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({
+             errorMessages: [errorMessage],
+             errors: {}
         });
     });
 

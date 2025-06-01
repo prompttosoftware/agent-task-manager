@@ -11,10 +11,10 @@ const mockFsPromises = {
 };
 jest.mock('fs/promises', () => mockFsPromises);
 
-import { loadDatabase, saveDatabase } from 'src/dataStore';
+import { loadDatabase, saveDatabase } from './dataStore';
 import * as path from 'path';
 import * as os from 'os';
-import { DbSchema } from './models';
+import { DbSchema } from '../models';
 
 // Determine the exact file path and directory path used by the dataStore functions
 // This should match the constant defined in src/dataStore.ts

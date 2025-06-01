@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { createIssue } from '../controllers/createIssue';
 import { getIssues, getIssue, getIssueByKeyEndpoint } from '../controllers/readIssues';
 import { updateIssueEndpoint } from '../controllers/updateIssue';
@@ -7,7 +7,7 @@ import { deleteIssueEndpoint } from '../controllers/deleteIssue';
 const router = Router();
 
 // Route to create a new issue
-router.post('/issues', createIssue);
+router.post('/issues', createIssue as RequestHandler);
 
 // Route to get all issues
 router.get('/issues', getIssues);
