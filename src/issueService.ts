@@ -1,8 +1,24 @@
+// src/issueService.ts
+```typescript
 import { loadDatabase, saveDatabase, DB_FILE_PATH } from './database/database'; // Import database functions and constant
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
 import * as keyGenerator from './utils/keyGenerator'; // Import keyGenerator service
+import * as winston from 'winston';
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(), // Log to the console
+    // Add other transports like file, etc., as needed
+  ],
+});
 
 /**
  * Define the input type for creating an issue.
@@ -49,8 +65,15 @@ export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> 
  * @throws {Error} If any database operation fails during the process.
  */
 export async function createIssue(input: IssueInput): Promise<AnyIssue> {
+  // --- Logging - Start ---
+  logger.info('createIssue: Starting issue creation process', { input });
+  // --- Logging - End ---
+
   // Validate required input fields
   if (!input.title || input.title.trim().length === 0) {
+    // --- Logging - Start ---
+    logger.warn('createIssue: Validation failed - Missing title', { input });
+    // --- Logging - End ---
     throw new IssueCreationError('Issue title is required.', 'MISSING_TITLE', 400); // Use imported error class
   }
 
@@ -82,23 +105,35 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     if (issueType === 'Subtask') {
       // Subtasks require a parentKey
       if (!input.parentKey || input.parentKey.trim().length === 0) {
+        // --- Logging - Start ---
+        logger.warn('createIssue: Validation failed - Missing parentKey for subtask', { input });
+        // --- Logging - End ---
         throw new IssueCreationError('Subtask creation requires a parentKey.', 'INVALID_PARENT_KEY', 400); // Use imported error class
       }
 
       // Validate that the parent issue exists using the already loaded database
       parentIssue = getIssueByKeyInternal(db, input.parentKey); // Use internal helper and assign to parentIssue variable
       if (!parentIssue) {
+        // --- Logging - Start ---
+        logger.warn('createIssue: Validation failed - Parent not found', { parentKey: input.parentKey });
+        // --- Logging - End ---
         throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
       }
 
       // Validate that the parent is a valid type (Epic or Story)
       // Updated validation to explicitly check for allowed parent types
       if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') {
+        // --- Logging - Start ---
+        logger.warn('createIssue: Validation failed - Invalid parent type', { parentKey: input.parentKey, parentType: parentIssue.issueType });
+        // --- Logging - End ---
            throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, 'INVALID_PARENT_TYPE', 400);
       }
     }
     // --- End Parent Validation ---
 
+    // --- Logging - Start ---
+    logger.info('createIssue: Generating issue key', { issueType });
+    // --- Logging - End ---
     const newIssueKey = await keyGenerator.generateIssueKey(db.issueKeyCounter, issueType);
     db.issueKeyCounter += 1;
 
@@ -200,14 +235,21 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
 
     // 6. Save the updated database
     // This save will now include both the new subtask and the modified parent (if applicable).
+    // --- Logging - Start ---
+    logger.info('createIssue: Saving database', { issueKey: newIssue.key });
+    // --- Logging - End ---
     await saveDatabase(db);
 
     // 7. Return the newly created issue
+    // --- Logging - Start ---
+    logger.info('createIssue: Issue created successfully', { issueKey: newIssue.key });
+    // --- Logging - End ---
     return newIssue;
 
   } catch (error) {
-    // Log the error internally for debugging purposes
-    console.error('Error creating issue:', error);
+    // --- Logging - Start ---
+    logger.error('createIssue: Error during issue creation', { error });
+    // --- Logging - End ---
     // Re-throw the specific error if it's an IssueCreationError,
     // otherwise wrap unexpected errors in a generic Error or specific database error.
     if (error instanceof IssueCreationError) {

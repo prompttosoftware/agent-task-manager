@@ -3,6 +3,20 @@ import { Request, Response } from 'express';
 import { createIssue as issueServiceCreateIssue } from '../../issueService'; // Correctly import the specific function
 import { CreateIssueInput, AnyIssue, Epic, IssueType } from '../../models'; // Correctly import the input type, AnyIssue, Epic, and IssueType from models
 import { IssueCreationError, IssueErrorCodes } from '../../utils/errorHandling'; // Correctly import custom error classes. Removed JiraError as it's not exported.
+import * as winston from 'winston';
+
+// Configure Winston logger (Consider moving this to a separate file for reusability)
+const logger = winston.createLogger({
+  level: 'info', // Set log level
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json() // Or use winston.format.simple() for simpler output
+  ),
+  transports: [
+    new winston.transports.Console(), // Log to the console
+    // Add other transports like file, etc., as needed
+  ],
+});
 
 // Define the type for the request body explicitly, based on Jira API expectations.
 // The incoming request body from the Jira API mock tests uses 'fields' which contains 'summary', 'description', 'issuetype', and potentially 'parent'.
@@ -28,7 +42,7 @@ interface IncomingCreateIssueRequestBody {
 export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueRequestBody>, res: Response) => {
   try {
     // --- Add Logging Here ---
-    // console.log('createIssue Controller: Received body:', JSON.stringify(req.body, null, 2));
+    logger.info('createIssue Controller: Received body:', { body: req.body });
     // --- End Logging ---
 
     // Validate the essential structure of the incoming request body
@@ -62,7 +76,7 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
     };
 
     // --- Add Logging Here ---
-    // console.log('createIssue Controller: Input passed to service:', serviceInput); // Keep this commented for now
+    logger.info('createIssue Controller: Input passed to service:', { input: serviceInput });
     // --- End Logging ---
 
 
@@ -97,7 +111,7 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
     };
 
     // --- Add Logging Here ---
-    // console.log('createIssue Controller: Constructed Response Body:', JSON.stringify(responseBody, null, 2));
+    logger.info('createIssue Controller: Constructed Response Body:', { response: responseBody });
     // --- End Logging ---
 
 
@@ -123,7 +137,7 @@ export const createIssue = async (req: Request<{}, {}, IncomingCreateIssueReques
     // with field-level detail are needed later, a new error class or structure should be defined.
     else {
       // Log unexpected errors that are not custom errors
-      console.error("Unexpected error in createIssue controller:", error);
+      logger.error("Unexpected error in createIssue controller:", error);
       // Respond with a generic 500 error for unhandled exceptions, using the specified format
       res.status(500).json({
         errorMessages: ['An unexpected error occurred.'],
