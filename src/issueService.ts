@@ -91,9 +91,10 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
         throw new IssueCreationError(`Parent issue with key '${input.parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
       }
 
-      // Validate that the parent is not a Subtask itself
-      if (parentIssue.issueType === 'Subtask') {
-         throw new IssueCreationError(`Parent issue '${input.parentKey}' is a Subtask. Subtasks cannot have Subtask children.`, 'INVALID_PARENT_TYPE', 400);
+      // Validate that the parent is a valid type (Epic or Story)
+      // Updated validation to explicitly check for allowed parent types
+      if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') {
+           throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, 'INVALID_PARENT_TYPE', 400);
       }
 
       // The TODO regarding adding subtask key to parent is addressed below after the subtask is created.
@@ -169,28 +170,23 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // This must happen *after* the subtask is created and added to the db.issues array
     // because we need the new subtask's key.
     // Use a guaranteed variable to help TypeScript understand parentIssue is defined and is an Epic here.
+    // Updated the condition to check if the parent is indeed an Epic, as only Epics track children.
     if (issueType === 'Subtask' && parentIssue && parentIssue.issueType === 'Epic') {
-        const guaranteedParentEpic = parentIssue; // Guaranteed defined Epic parent
+        // FIX: Added non-null assertion '!' to parentIssue.key access in the find callback
+        const parentEpicInDb = db.issues.find((issue): issue is Epic => issue.key === parentIssue!.key && issue.issueType === 'Epic'); // Find parent specifically as an Epic
 
-        // Find the index of the parent issue in the db array
-        const parentIndex = db.issues.findIndex(issue => issue.key === guaranteedParentEpic.key);
-        if (parentIndex !== -1) {
-            // Access the parent issue from the database array by index.
-            // We already know it's an Epic due to the outer guard, but casting ensures
-            // type safety for accessing childIssueKeys.
-            const parentEpicInDb = db.issues[parentIndex] as Epic;
-
+        if (parentEpicInDb) {
             // Add the new subtask's key to the parent's childIssueKeys array
             // Ensure the array exists first (though model says it should for Epic)
             if (!parentEpicInDb.childIssueKeys) {
                  parentEpicInDb.childIssueKeys = [];
             }
             parentEpicInDb.childIssueKeys.push(newIssueKey);
-             // Note: The parent issue object in the array (db.issues[parentIndex]) is modified in place.
+             // Note: The parent issue object in the array (parentEpicInDb) is modified in place.
         } else {
-            // This case should ideally not happen if parentIssue was found earlier,
+            // This case should ideally not happen if parentIssue was found earlier as Epic,
             // but indicates a potential data inconsistency or logic error if it does.
-            console.error(`Internal Error: Could not find parent issue with key ${guaranteedParentEpic.key} in db.issues array after it was found.`);
+            console.error(`Internal Error: Could not find parent Epic issue with key ${parentIssue.key} in db.issues array after it was found.`);
             // Depending on policy, might throw an error or just log. Logging for now.
         }
     }
