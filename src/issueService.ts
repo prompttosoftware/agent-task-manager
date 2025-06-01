@@ -1,4 +1,4 @@
-import { loadDatabase, saveDatabase } from './database/database'; // Import only functions from dataStore
+import { loadDatabase, saveDatabase, DB_FILE_PATH } from './database/database'; // Import database functions and constant
 import { DbSchema, AnyIssue, BaseIssue, Task, Story, Bug, Epic, Subtask } from './models'; // Import types from models
 import { v4 as uuidv4 } from 'uuid'; // Import uuid generator
 import { IssueCreationError } from './utils/errorHandling'; // Import IssueCreationError from utils
@@ -96,8 +96,6 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
       if (parentIssue.issueType !== 'Epic' && parentIssue.issueType !== 'Story') {
            throw new IssueCreationError(`Issue with key '${parentIssue.key}' has type '${parentIssue.issueType}', which cannot be a parent of a Subtask. Only Epic or Story issues can be parents of Subtasks.`, 'INVALID_PARENT_TYPE', 400);
       }
-
-      // The TODO regarding adding subtask key to parent is addressed below after the subtask is created.
     }
     // --- End Parent Validation ---
 
@@ -166,31 +164,36 @@ export async function createIssue(input: IssueInput): Promise<AnyIssue> {
     // 4. Add the new issue to the issues array in the database
     db.issues.push(newIssue);
 
-    // --- Logic to update parent issue's childIssueKeys ---
-    // This must happen *after* the subtask is created and added to the db.issues array
-    // because we need the new subtask's key.
-    // Use a guaranteed variable to help TypeScript understand parentIssue is defined and is an Epic here.
-    // Updated the condition to check if the parent is indeed an Epic, as only Epics track children.
-    if (issueType === 'Subtask' && parentIssue && parentIssue.issueType === 'Epic') {
-        // FIX: Added non-null assertion '!' to parentIssue.key access in the find callback
-        const parentEpicInDb = db.issues.find((issue): issue is Epic => issue.key === parentIssue!.key && issue.issueType === 'Epic'); // Find parent specifically as an Epic
 
-        if (parentEpicInDb) {
-            // Add the new subtask's key to the parent's childIssueKeys array
-            // Ensure the array exists first (though model says it should for Epic)
+    // --- Logic to update parent issue's childIssueKeys and updatedAt ---
+    // This happens *after* the new issue is added to the db.issues array.
+    // Check if a parentKey was provided in the input.
+    if (input.parentKey) { // Check if a parent was specified
+        // Find the parent issue in the loaded database state using the internal helper.
+        // Note: We need the actual object reference from the db array to modify it in place.
+        // We already validated the parent exists earlier if the new issue is a Subtask.
+        // For other issue types, we just look it up here.
+        const parentInDb = db.issues.find(issue => issue.key === input.parentKey);
+
+        // Check if the found parent exists and is an Epic (only Epics have childIssueKeys)
+        // Use a type guard or cast to ensure we can access childIssueKeys
+        if (parentInDb && parentInDb.issueType === 'Epic') {
+             const parentEpicInDb = parentInDb as Epic; // Cast for type safety
+
+            // Add the new issue's key to the parent's childIssueKeys array
+            // Ensure the array exists first (should exist based on Epic model, but safety check)
             if (!parentEpicInDb.childIssueKeys) {
                  parentEpicInDb.childIssueKeys = [];
             }
-            parentEpicInDb.childIssueKeys.push(newIssueKey);
-             // Note: The parent issue object in the array (parentEpicInDb) is modified in place.
-        } else {
-            // This case should ideally not happen if parentIssue was found earlier as Epic,
-            // but indicates a potential data inconsistency or logic error if it does.
-            console.error(`Internal Error: Could not find parent Epic issue with key ${parentIssue.key} in db.issues array after it was found.`);
-            // Depending on policy, might throw an error or just log. Logging for now.
+            parentEpicInDb.childIssueKeys.push(newIssue.key); // Use the new issue's key
+
+            // Update the parent's updatedAt timestamp to the current time
+            parentEpicInDb.updatedAt = newIssue.updatedAt; // Use the timestamp generated for the new issue
         }
+         // If parentInDb doesn't exist or isn't an Epic, we don't track children on non-Epic parents
+         // based on the current model, so no further action needed for the parent here.
     }
-    // --- End Logic to update parent issue's childIssueKeys ---
+    // --- End Logic to update parent issue's childIssueKeys and updatedAt ---
 
 
     // 5. Increment issueKeyCounter in the database (Done above)

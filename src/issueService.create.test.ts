@@ -1,10 +1,10 @@
 import { createIssue } from './issueService';
-import { loadDatabase, saveDatabase } from './dataStore';
+import { loadDatabase, saveDatabase } from './database/database';
 import { DbSchema, AnyIssue, Task, Story, Bug, Epic, Subtask } from './models';
 import { IssueCreationError } from './utils/errorHandling';
 
-// Mock the dataStore module to control database interactions
-jest.mock('./dataStore');
+// Mock the database module to control database interactions
+jest.mock('./database/database');
 
 // Declare mockUuidV4Function before jest.mock call
 jest.mock('uuid', () => {
@@ -14,8 +14,8 @@ jest.mock('uuid', () => {
   };
 });
 
-const mockLoadDatabase = loadDatabase as jest.Mock;
-const mockSaveDatabase = saveDatabase as jest.Mock;
+const mockLoadDatabaseFunction = loadDatabase as jest.Mock;
+const mockSaveDatabaseFunction = saveDatabase as jest.Mock;
 
 describe('issueService - Create Operations', () => {
   let mockUuidV4: jest.Mock;
@@ -33,8 +33,8 @@ describe('issueService - Create Operations', () => {
 
   beforeEach(() => {
     // Reset mocks and mock data before each test
-    mockLoadDatabase.mockClear();
-    mockSaveDatabase.mockClear();
+    mockLoadDatabaseFunction.mockClear();
+    mockSaveDatabaseFunction.mockClear();
 
     const mockedUuid = jest.requireMock('uuid');
     mockUuidV4 = mockedUuid.v4 as jest.Mock;
@@ -45,12 +45,12 @@ describe('issueService - Create Operations', () => {
 
     // Mock loadDatabase to return a copy of the initial state by default
     // Explicitly setting the mock implementation here as requested.
-    mockLoadDatabase.mockImplementation(async () => {
+    mockLoadDatabaseFunction.mockImplementation(async () => {
       return Promise.resolve(JSON.parse(JSON.stringify(defaultInitialDb))); // Deep copy to avoid mutation issues
     });
 
     // Mock saveDatabase to capture the state it was called with
-    mockSaveDatabase.mockImplementation(async (db: DbSchema) => {
+    mockSaveDatabaseFunction.mockImplementation(async (db: DbSchema) => {
       savedDbState = db; // Capture the state
       return Promise.resolve();
     });
@@ -74,8 +74,8 @@ describe('issueService - Create Operations', () => {
     const createdIssue = await createIssue(input);
 
     // Verify database interactions
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull(); // Ensure saveDatabase was called
 
     // Verify the saved database state
@@ -116,8 +116,8 @@ describe('issueService - Create Operations', () => {
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Using default initialDb (counter 1, issues [])
@@ -148,8 +148,8 @@ describe('issueService - Create Operations', () => {
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Verify the saved database state
@@ -178,8 +178,8 @@ describe('issueService - Create Operations', () => {
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Using default initialDb (counter 1, issues [])
@@ -211,8 +211,8 @@ describe('issueService - Create Operations', () => {
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Verify the saved database state
@@ -269,15 +269,15 @@ describe('issueService - Create Operations', () => {
     };
 
     // Override mockLoadDatabase for this specific test to return the db with the parent
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithParent)));
     // --- End: Add mock parent issue for this test ---
 
 
     const createdIssue = await createIssue(input);
 
     // Verify database interactions
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1); // Should load the db once with the parent issue
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1); // Should save the db once with the new subtask added
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1); // Should load the db once with the parent issue
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1); // Should save the db once with the new subtask added
     expect(savedDbState).not.toBeNull(); // Ensure saveDatabase was called
 
     // Verify the saved database state
@@ -331,8 +331,8 @@ describe('issueService - Create Operations', () => {
 
     const createdIssue = await createIssue(input as any); // Cast to any as UnknownType is not in union
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Verify the saved database state
@@ -385,7 +385,7 @@ describe('issueService - Create Operations', () => {
       issueKeyCounter: 10, // Counter is set to the *next* number to be used
     };
 
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithExistingIssues)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithExistingIssues)));
 
     const input = {
       title: 'New Issue After 9', // Title updated to reflect the key number
@@ -396,8 +396,8 @@ describe('issueService - Create Operations', () => {
     const createdIssue = await createIssue(input);
 
     // Verify database interactions
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     // Verify the saved database state
@@ -472,8 +472,8 @@ describe('issueService - Create Operations', () => {
       const createdIssue = await createIssue(input);
 
       // Verify database interactions
-      expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-      expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+      expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+      expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
       expect(savedDbState).not.toBeNull();
 
       // Verify the returned issue object
@@ -518,12 +518,12 @@ describe('issueService - Create Operations', () => {
       issueKeyCounter: 1,
     };
 
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     expect(createdIssue.key).toBe('TASK-1');
@@ -574,12 +574,12 @@ describe('issueService - Create Operations', () => {
       issueKeyCounter: 1,
     };
 
-    mockLoadDatabase.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
+    mockLoadDatabaseFunction.mockResolvedValue(JSON.parse(JSON.stringify(dbWithEpic)));
 
     const createdIssue = await createIssue(input);
 
-    expect(mockLoadDatabase).toHaveBeenCalledTimes(1);
-    expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
     expect(savedDbState).not.toBeNull();
 
     expect(createdIssue.key).toBe('STOR-1');

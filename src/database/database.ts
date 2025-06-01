@@ -3,7 +3,7 @@ import { DbSchema } from '../models';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-const DB_FILE_PATH = '/usr/src/agent-task-manager/.data/db.json';
+export const DB_FILE_PATH = '/usr/src/agent-task-manager/.data/db.json';
 
 /**
  * Saves the database to a JSON file.
