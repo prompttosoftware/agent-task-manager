@@ -15,10 +15,12 @@ app.use(express.json()); // Use express.json() middleware to parse request bodie
 app.use('/rest/api/2', issueRoutes); // Mount the issueRoutes router under the correct path
 
 // Add a new describe block for persistence verification tests
-describe('POST /rest/api/2/issues - Persistence Verification', () => { // Updated describe block name
+describe('POST /rest/api/2/issues - Persistence Verification', () => {
+  // Updated describe block name
 
   // Ensure db.json is cleared before each test in this block
-  beforeEach(async () => { // Made beforeEach async because fs.promises methods return Promises
+  beforeEach(async () => {
+    // Made beforeEach async because fs.promises methods return Promises
     try {
       // Ensure the directory exists before writing
       await fs.promises.mkdir(path.dirname(dbPath), { recursive: true });
@@ -41,7 +43,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
   //   }
   // });
 
-
   // Test Case 1: Successful creation with all required fields and some extra fields (Task)
   it('should return 201 and persist the Task issue correctly in db.json', async () => {
     // Arrange
@@ -53,7 +54,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores, but keep structure)
         description: 'Detailed description here for persistence test',
         assignee: { name: 'user-xyz' }, // Changed assignee structure (controller ignores)
-      }
+      },
     };
 
     // Act
@@ -79,7 +80,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     // expect(response.body).toHaveProperty('parentKey', null); // Removed as controller doesn't add this for non-subtasks
 
     expect(response.body).not.toHaveProperty('parentIssueKey'); // Request field should not be in response (nor parent object)
-     expect(response.body).not.toHaveProperty('parent'); // Ensure the request 'parent' object is not in the response
+    expect(response.body).not.toHaveProperty('parent'); // Ensure the request 'parent' object is not in the response
 
     // ASSERTION FOR 'self' FIELD
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
@@ -117,7 +118,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-    // Test Case 1c: Successful creation for 'Story' issue type - Persistence
+  // Test Case 1c: Successful creation for 'Story' issue type - Persistence
   it('should return 201 and persist the Story issue correctly in db.json', async () => {
     // Arrange
     // FIX: Updated reqBody structure to match controller's expectation (Jira API format)
@@ -127,7 +128,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'As a user, I want... (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
         description: 'Detailed description here for persistence test.',
-      }
+      },
     };
 
     // Act
@@ -146,7 +147,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     // expect(response.body).toHaveProperty('parentKey', null); // Removed
 
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
-
 
     // Now verify persistence by reading db.json
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
@@ -186,7 +186,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'Implement feature X (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
         description: 'Description of the epic persistence.',
-      }
+      },
     };
 
     // Act
@@ -217,7 +217,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
     const dbData = JSON.parse(dbContent);
 
-     // --- Add Logging Here ---
+    // --- Add Logging Here ---
     // console.log(`Test 'Epic persistence': Looking for key '${createdIssueKey}'`);
     // console.log(`Test 'Epic persistence': dbData.issues count: ${dbData.issues.length}`);
     //  if (dbData.issues.length > 0) {
@@ -245,7 +245,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-    // Test Case 1e: Successful creation for 'Bug' issue type - Persistence
+  // Test Case 1e: Successful creation for 'Bug' issue type - Persistence
   it('should return 201 and persist the Bug issue correctly in db.json', async () => {
     // Arrange
     // FIX: Updated reqBody structure to match controller's expectation (Jira API format)
@@ -255,7 +255,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'Fix critical error (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name - Note: Service overrides this to 'In Progress'
         description: 'Steps to reproduce the bug persistence.',
-      }
+      },
     };
 
     // Act
@@ -306,9 +306,9 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-
   // Test Case 1b: Successful creation of a Subtask - Persistence
-  it('should return 201 and persist the Subtask issue correctly in db.json (under an Epic)', async () => { // Updated test description
+  it('should return 201 and persist the Subtask issue correctly in db.json (under an Epic)', async () => {
+    // Updated test description
     // Arrange: Need a parent issue first. Create an EPIC parent for childIssueKeys testing.
     // FIX: Updated parentReqBody structure to match controller's expectation (Jira API format)
     // Changed parent type to Epic
@@ -317,7 +317,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         issuetype: { name: 'Epic' }, // Changed issueType to issuetype.name - **Changed from Task to Epic**
         summary: 'Parent Epic for subtask persistence test',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
-      }
+      },
     };
     const parentResponse = await request(app).post('/rest/api/2/issues').send(parentReqBody); // Updated path
     expect(parentResponse.status).toBe(201); // Assert parent creation success
@@ -333,7 +333,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         status: { name: 'Todo' }, // Changed status to status.name - Service sets initial status based on default
         parent: { key: parentKey }, // Added parent object with key
         // description is intentionally omitted to test default handling
-      }
+      },
     };
 
     // Act
@@ -359,7 +359,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
 
     // ASSERTION FOR 'self' FIELD
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
-
 
     // Now verify persistence by reading db.json
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
@@ -409,5 +408,4 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(persistedParent.childIssueKeys).toContain(createdIssueKey);
     expect(persistedParent.childIssueKeys.length).toBe(1); // Should only contain the newly created subtask
   });
-
 }); // End of describe Persistence Verification

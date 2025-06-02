@@ -14,7 +14,7 @@ const validIssuePayload = {
   title: 'Test Task',
   description: 'This is a test task description.',
   status: 'Open', // Assuming 'Open' is a valid status
-  type: 'Task',   // Assuming 'Task' is a valid type
+  type: 'Task', // Assuming 'Task' is a valid type
 };
 
 describe('/issues POST authentication', () => {
@@ -40,13 +40,11 @@ describe('/issues POST authentication', () => {
 
   // Case 1: No authentication header
   it('should return 401 if no Authorization header is provided', async () => {
-    const response = await request(app)
-      .post('/issues')
-      .send(validIssuePayload); // Send a valid payload even if auth fails first
+    const response = await request(app).post('/issues').send(validIssuePayload); // Send a valid payload even if auth fails first
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
-      errorMessages: ["Authorization header missing."]
+      errorMessages: ['Authorization header missing.'],
     });
   });
 
@@ -59,7 +57,7 @@ describe('/issues POST authentication', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   });
 
@@ -72,22 +70,22 @@ describe('/issues POST authentication', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   });
 
-    // Case 4: Invalid Base64 credentials
-    it('should return 401 if Basic credentials part is not valid Base64', async () => {
-      const response = await request(app)
-        .post('/issues')
-        .set('Authorization', 'Basic invalid-base64-string%')
-        .send(validIssuePayload);
+  // Case 4: Invalid Base64 credentials
+  it('should return 401 if Basic credentials part is not valid Base64', async () => {
+    const response = await request(app)
+      .post('/issues')
+      .set('Authorization', 'Basic invalid-base64-string%')
+      .send(validIssuePayload);
 
-      expect(response.status).toBe(401);
-      expect(response.body).toEqual({
-        errorMessages: ["Authentication failed."]
-      });
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      errorMessages: ['Authentication failed.'],
     });
+  });
 
   // Case 5: Invalid credentials format (Base64 decodes but not username:password)
   it('should return 401 if Base64 decoded credentials are not in username:password format', async () => {
@@ -99,10 +97,9 @@ describe('/issues POST authentication', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   });
-
 
   // Case 6: Invalid Basic authentication (wrong password)
   it('should return 401 if Basic authentication credentials are invalid (wrong password)', async () => {
@@ -114,23 +111,23 @@ describe('/issues POST authentication', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   });
 
-    // Case 7: Invalid Basic authentication (wrong username)
-    it('should return 401 if Basic authentication credentials are invalid (wrong username)', async () => {
-      const wrongUsernameCredentials = Buffer.from(`wronguser:${TEST_PASSWORD}`).toString('base64');
-      const response = await request(app)
-        .post('/issues')
-        .set('Authorization', `Basic ${wrongUsernameCredentials}`)
-        .send(validIssuePayload);
+  // Case 7: Invalid Basic authentication (wrong username)
+  it('should return 401 if Basic authentication credentials are invalid (wrong username)', async () => {
+    const wrongUsernameCredentials = Buffer.from(`wronguser:${TEST_PASSWORD}`).toString('base64');
+    const response = await request(app)
+      .post('/issues')
+      .set('Authorization', `Basic ${wrongUsernameCredentials}`)
+      .send(validIssuePayload);
 
-      expect(response.status).toBe(401);
-      expect(response.body).toEqual({
-        errorMessages: ["Authentication failed."]
-      });
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      errorMessages: ['Authentication failed.'],
     });
+  });
 
   // Case 8: Valid Basic authentication
   it('should return 201 if Basic authentication credentials are valid', async () => {

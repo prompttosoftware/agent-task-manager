@@ -68,7 +68,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
   });
 
   test('should return 401 and error message for incorrect username', () => {
@@ -78,7 +78,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
   });
 
   // Additional tests covering other failure cases handled by the middleware
@@ -88,7 +88,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authorization header missing."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authorization header missing.'] });
   });
 
   test('should return 401 and error message when authorization header is not in Basic format', () => {
@@ -98,7 +98,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
   });
 
   test('should return 401 and error message when base64 credentials are invalid', () => {
@@ -108,7 +108,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
   });
 
   test('should return 401 and error message when decoded credentials are not in username:password format', () => {
@@ -118,7 +118,7 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
   });
 
   test('should return 401 and error message when environment variables are not set', () => {
@@ -133,8 +133,10 @@ describe('Authentication Middleware', () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ errorMessages: ["Authentication failed."] });
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Server misconfiguration: AUTH_USERNAME or AUTH_PASSWORD environment variable not set.");
+    expect(res.json).toHaveBeenCalledWith({ errorMessages: ['Authentication failed.'] });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Server misconfiguration: AUTH_USERNAME or AUTH_PASSWORD environment variable not set.',
+    );
 
     consoleErrorSpy.mockRestore(); // Restore the original console.error
   });

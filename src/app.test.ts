@@ -19,10 +19,7 @@ describe('POST /issues', () => {
     };
 
     // Make the POST request using supertest
-    const response = await request(app)
-      .post('/issues')
-      .send(newIssuePayload)
-      .expect(201); // Assert the status code is 201 Created
+    const response = await request(app).post('/issues').send(newIssuePayload).expect(201); // Assert the status code is 201 Created
 
     // Assert the response body
     expect(response.body).toMatchObject({
@@ -74,7 +71,6 @@ describe('POST /issues', () => {
 
     // For a newly created issue, createdAt and updatedAt should be the same
     expect(data.createdAt).toBe(data.updatedAt);
-
   });
 
   // Add more tests here for other scenarios like missing fields, invalid types etc.

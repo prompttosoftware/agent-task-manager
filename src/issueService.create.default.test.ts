@@ -25,7 +25,6 @@ let savedDbState: DbSchema | null = null;
 let mockDate: Date;
 let mockUuidV4: jest.Mock;
 
-
 beforeEach(() => {
   mockLoadDatabaseFunction.mockClear();
   mockSaveDatabaseFunction.mockClear();
@@ -54,7 +53,6 @@ afterEach(() => {
 });
 
 describe('issueService - Create Operations - Default Behavior', () => {
-
   it('should create a Task issue with default status Todo and properties (summary, description)', async () => {
     const input = {
       title: 'Test Issue Title',
@@ -74,10 +72,9 @@ describe('issueService - Create Operations - Default Behavior', () => {
     expect(savedDbState!.issueKeyCounter).toBe(2); // Counter increments from initial 1 to 2
     expect(savedDbState!.issues.length).toBe(1); // Only the new issue
     // Find the newly created issue in the saved state
-    const savedIssue = savedDbState!.issues.find(issue => issue.id === createdIssue.id);
+    const savedIssue = savedDbState!.issues.find((issue) => issue.id === createdIssue.id);
 
     expect(savedIssue).toBeDefined(); // Ensure the new issue was added
-
 
     // Verify the returned issue object
     expect(createdIssue).toBeDefined();
@@ -100,30 +97,29 @@ describe('issueService - Create Operations - Default Behavior', () => {
   });
 
   it('should generate a unique id using uuidv4', async () => {
-      const input = {
-          title: 'UUID Test',
-          description: 'Checking UUID',
-      };
+    const input = {
+      title: 'UUID Test',
+      description: 'Checking UUID',
+    };
 
-      const createdIssue = await createIssue(input);
+    const createdIssue = await createIssue(input);
 
-      // Verify database interactions
-      expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
-      expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
-      expect(savedDbState).not.toBeNull();
+    // Verify database interactions
+    expect(mockLoadDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(mockSaveDatabaseFunction).toHaveBeenCalledTimes(1);
+    expect(savedDbState).not.toBeNull();
 
-      // Verify the returned issue object
-      expect(createdIssue.id).toBe('test-uuid'); // Check if the uuid mock is used
-      expect(mockUuidV4).toHaveBeenCalledTimes(1); // Ensure uuidv4 was called
+    // Verify the returned issue object
+    expect(createdIssue.id).toBe('test-uuid'); // Check if the uuid mock is used
+    expect(mockUuidV4).toHaveBeenCalledTimes(1); // Ensure uuidv4 was called
 
-      // Verify the saved database state includes the issue with the correct id
-      // Using default initialDb (issues [])
-      expect(savedDbState!.issues.length).toBe(1); // Only the new issue
-      // Find the newly created issue in the saved state
-      const savedIssue = savedDbState!.issues.find(issue => issue.id === 'test-uuid');
-      expect(savedIssue).toBeDefined();
-      expect(savedIssue!.id).toBe('test-uuid');
-      expect(createdIssue).toEqual(savedIssue); // Compare returned object to the one found in saved state
+    // Verify the saved database state includes the issue with the correct id
+    // Using default initialDb (issues [])
+    expect(savedDbState!.issues.length).toBe(1); // Only the new issue
+    // Find the newly created issue in the saved state
+    const savedIssue = savedDbState!.issues.find((issue) => issue.id === 'test-uuid');
+    expect(savedIssue).toBeDefined();
+    expect(savedIssue!.id).toBe('test-uuid');
+    expect(createdIssue).toEqual(savedIssue); // Compare returned object to the one found in saved state
   });
-
 });

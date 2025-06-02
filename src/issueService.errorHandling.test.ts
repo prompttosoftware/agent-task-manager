@@ -6,6 +6,9 @@ import { DbSchema } from '../src/models';
 // For now, it's not used directly in these specific tests.
 import { IssueCreationError, IssueErrorCodes } from '../src/utils/errorHandling';
 
+// Define the default project key used in the application logic for tests
+const defaultProjectKey = "default";
+
 // Mock the dataStore module to control database interactions
 jest.mock('../src/database/database');
 
@@ -85,9 +88,11 @@ describe('issueService - Error Handling', () => {
       parentId: 'ISSUE-999', // An ID that won't be in the initialDb
     };
 
-    // Expecting a specific IssueCreationError
+    // Expecting a specific IssueCreationError including projectKey and the missing parentKey
     await expect(createIssue(input)).rejects.toThrowError(
-      new IssueCreationError(IssueErrorCodes.PARENT_NOT_FOUND, `Parent issue 'ISSUE-999' not found.`)
+      // Asserting against IssueCreationError with specific code and properties
+      // Assumes IssueCreationError constructor is (code, message, projectKey, issueKey)
+      new IssueCreationError(IssueErrorCodes.PARENT_NOT_FOUND, `Parent issue 'ISSUE-999' not found.`, defaultProjectKey, input.parentId),
     );
 
     expect(mockLoadDatabase).toHaveBeenCalledTimes(1);

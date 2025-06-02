@@ -23,7 +23,7 @@ export const deleteIssueEndpoint = async (req: Request, res: Response): Promise<
       res.status(500).json({ message: 'Internal server error' });
       return;
     }
-    const issueIndex = db.issues.findIndex(issue => issue.id === id);
+    const issueIndex = db.issues.findIndex((issue) => issue.id === id);
     if (issueIndex === -1) {
       res.status(404).json({ message: 'Issue not found' });
       return;

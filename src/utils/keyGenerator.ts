@@ -9,11 +9,11 @@
  */
 export function generateIssueKey(counter: number, issueType: string): string {
   const prefixMap: { [key: string]: string } = {
-    'Task': 'TASK',
-    'Story': 'STOR',
-    'Bug': 'BUG',
-    'Epic': 'EPIC',
-    'Subtask': 'SUBT',
+    Task: 'TASK',
+    Story: 'STOR',
+    Bug: 'BUG',
+    Epic: 'EPIC',
+    Subtask: 'SUBT',
   };
 
   // The issueType is expected to be one of the keys in prefixMap due to

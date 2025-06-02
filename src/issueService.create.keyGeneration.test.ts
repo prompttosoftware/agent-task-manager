@@ -33,7 +33,6 @@ describe('issueService - Create Operations - Key Generation', () => {
     issueKeyCounter: 1,
   };
 
-
   let savedDbState: DbSchema | null = null;
   let mockDate: Date;
 
@@ -49,9 +48,8 @@ describe('issueService - Create Operations - Key Generation', () => {
 
     // Default mock for loadDatabase, will be overridden in the specific test
     mockLoadDatabaseFunction.mockImplementation(async () => {
-        return Promise.resolve(JSON.parse(JSON.stringify(defaultInitialDb)));
+      return Promise.resolve(JSON.parse(JSON.stringify(defaultInitialDb)));
     });
-
 
     mockSaveDatabaseFunction.mockImplementation(async (db: DbSchema) => {
       savedDbState = db;
@@ -90,7 +88,7 @@ describe('issueService - Create Operations - Key Generation', () => {
           createdAt: '2023-01-01T11:00:00.000Z',
           updatedAt: '2023-01-01T11:00:00.000Z', // Use specific ISO strings for existing issues
           parentKey: null,
-        } as Story
+        } as Story,
       ],
       issueKeyCounter: 10,
     };
@@ -117,10 +115,10 @@ describe('issueService - Create Operations - Key Generation', () => {
     expect(createdIssue.issueType).toBe('Task');
     expect(createdIssue.status).toBe('Todo');
 
-    const newSavedIssue = savedDbState!.issues.find(issue => issue.id === createdIssue.id);
+    const newSavedIssue = savedDbState!.issues.find((issue) => issue.id === createdIssue.id);
     expect(newSavedIssue).toEqual(createdIssue);
 
-    const savedExistingTask = savedDbState!.issues.find(issue => issue.key === 'TASK-8') as Task;
+    const savedExistingTask = savedDbState!.issues.find((issue) => issue.key === 'TASK-8') as Task;
     expect(savedExistingTask).toBeDefined();
     expect(savedExistingTask.summary).toBe('Existing Task 8'); // Verify properties of existing issue
     // Check createdAt/updatedAt of existing issues aren't affected by new issue creation
@@ -128,10 +126,10 @@ describe('issueService - Create Operations - Key Generation', () => {
     expect(savedExistingTask.createdAt).toEqual('2023-01-01T10:00:00.000Z');
     expect(savedExistingTask.updatedAt).toEqual('2023-01-01T10:00:00.000Z');
 
-    const savedExistingStory = savedDbState!.issues.find(issue => issue.key === 'STOR-9') as Story;
+    const savedExistingStory = savedDbState!.issues.find((issue) => issue.key === 'STOR-9') as Story;
     expect(savedExistingStory).toBeDefined();
     expect(savedExistingStory.summary).toBe('Existing Story 9');
-     // Use hardcoded ISO strings for comparison instead of new Date() affected by mock
+    // Use hardcoded ISO strings for comparison instead of new Date() affected by mock
     expect(savedExistingStory.createdAt).toEqual('2023-01-01T11:00:00.000Z');
     expect(savedExistingStory.updatedAt).toEqual('2023-01-01T11:00:00.000Z');
   });

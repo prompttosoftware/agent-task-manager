@@ -75,15 +75,15 @@ describe('DataStore', () => {
       return Promise.reject(new Error(`Mock: Unexpected writeFile to ${filePath} with encoding ${encoding}`));
     });
 
-     // Mock fs.promises.mkdir
-     mockFsPromises.mkdir.mockImplementation((dirPath, options) => {
-       if (dirPath === DB_DIR_PATH_FOR_TEST && options?.recursive === true) {
-           // Simulate directory creation
-           return Promise.resolve();
-       }
-       // Reject for any other unexpected mkdir call
-       return Promise.reject(new Error(`Mock: Unexpected mkdir to ${dirPath}`));
-     });
+    // Mock fs.promises.mkdir
+    mockFsPromises.mkdir.mockImplementation((dirPath, options) => {
+      if (dirPath === DB_DIR_PATH_FOR_TEST && options?.recursive === true) {
+        // Simulate directory creation
+        return Promise.resolve();
+      }
+      // Reject for any other unexpected mkdir call
+      return Promise.reject(new Error(`Mock: Unexpected mkdir to ${dirPath}`));
+    });
   });
 
   test('loadDatabase should create directory and file with default data if file does not exist', async () => {
@@ -126,7 +126,17 @@ describe('DataStore', () => {
   test('loadDatabase should load data correctly when file exists and contains valid JSON', async () => {
     // Simulate file existing with valid JSON content
     const mockExistingData = {
-      issues: [{ id: 'ISSUE-1', key: 'ISSUE-1', issueType: 'Task', summary: 'Test issue', status: 'Todo', createdAt: '2023-01-01T00:00:00.000Z', updatedAt: '2023-01-01T00:00:00.000Z' }],
+      issues: [
+        {
+          id: 'ISSUE-1',
+          key: 'ISSUE-1',
+          issueType: 'Task',
+          summary: 'Test issue',
+          status: 'Todo',
+          createdAt: '2023-01-01T00:00:00.000Z',
+          updatedAt: '2023-01-01T00:00:00.000Z',
+        },
+      ],
       issueKeyCounter: 1,
     };
     mockFileContent = JSON.stringify(mockExistingData);
@@ -163,7 +173,16 @@ describe('DataStore', () => {
 
     const dataToSave = {
       issues: [
-        { id: 'ISSUE-A', key: 'ISSUE-A', issueType: 'Task', summary: 'First issue', status: 'Todo', createdAt: '2023-01-01T00:00:00.000Z', updatedAt: '2023-01-01T00:00:00.000Z', parentIssueKey: undefined } as any,
+        {
+          id: 'ISSUE-A',
+          key: 'ISSUE-A',
+          issueType: 'Task',
+          summary: 'First issue',
+          status: 'Todo',
+          createdAt: '2023-01-01T00:00:00.000Z',
+          updatedAt: '2023-01-01T00:00:00.000Z',
+          parentIssueKey: undefined,
+        } as any,
       ],
       issueKeyCounter: 10,
     };
@@ -219,7 +238,7 @@ describe('DataStore', () => {
     expect(fileExists).toBe(true);
   });
 
-    test('loadDatabase should initialize with default data if readFile throws an error (not ENOENT)', async () => {
+  test('loadDatabase should initialize with default data if readFile throws an error (not ENOENT)', async () => {
     // Simulate file existing
     fileExists = true;
     mockFileContent = 'Some content'; // Content doesn't matter if readFile fails

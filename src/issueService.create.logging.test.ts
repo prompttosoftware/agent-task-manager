@@ -9,19 +9,22 @@ import { DbSchema, CreateIssueInput, Task, Story, Epic, AnyIssue } from './model
 import { IssueCreationError } from './utils/errorHandling'; // Corrected path
 
 // Mock definitions
-jest.mock('./utils/logger', () => ({ // Corrected path
+jest.mock('./utils/logger', () => ({
+  // Corrected path
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
 }));
 
-jest.mock('./database/database', () => ({ // Corrected path
+jest.mock('./database/database', () => ({
+  // Corrected path
   loadDatabase: jest.fn(),
   saveDatabase: jest.fn(),
   DB_FILE_PATH: '/test/db.json', // Mocked, though not directly used by createIssue
 }));
 
-jest.mock('./utils/keyGenerator', () => ({ // Corrected path
+jest.mock('./utils/keyGenerator', () => ({
+  // Corrected path
   generateIssueKey: jest.fn(),
 }));
 
@@ -37,7 +40,6 @@ const mockLoadDatabase = loadDatabase as jest.Mock;
 const mockSaveDatabase = saveDatabase as jest.Mock;
 const mockGenerateIssueKey = keyGenerator.generateIssueKey as jest.Mock;
 const mockUuidv4 = uuidv4 as jest.Mock;
-
 
 describe('createIssue Logging', () => {
   const baseDbSchema: DbSchema = {
@@ -85,12 +87,18 @@ describe('createIssue Logging', () => {
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue: Database loaded successfully.');
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(4, 'createIssue: Generating issue key', { issueType: 'Story' });
     expect(keyGenerator.generateIssueKey).toHaveBeenCalledWith(baseDbSchema.issueKeyCounter, 'Story');
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue: Issue key generated successfully', { newIssueKey: generatedKey });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue: Issue key generated successfully', {
+      newIssueKey: generatedKey,
+    });
     expect(mockUuidv4).toHaveBeenCalledTimes(1);
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(6, 'createIssue: Saving database', { issueKey: generatedKey });
     expect(mockSaveDatabase).toHaveBeenCalledTimes(1);
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(7, 'createIssue: Database saved successfully', { issueKey: generatedKey });
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(8, 'createIssue: Issue created successfully', { issueKey: generatedKey });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(7, 'createIssue: Database saved successfully', {
+      issueKey: generatedKey,
+    });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(8, 'createIssue: Issue created successfully', {
+      issueKey: generatedKey,
+    });
 
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
@@ -115,7 +123,7 @@ describe('createIssue Logging', () => {
         message: expectedError.message,
         errorCode: expectedError.errorCode,
         statusCode: expectedError.statusCode,
-      })
+      }),
     });
   });
 
@@ -135,7 +143,9 @@ describe('createIssue Logging', () => {
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue: Database loaded successfully.');
 
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-    expect(mockLoggerWarn).toHaveBeenCalledWith('createIssue: Validation failed - Missing parentKey for subtask', { input });
+    expect(mockLoggerWarn).toHaveBeenCalledWith('createIssue: Validation failed - Missing parentKey for subtask', {
+      input,
+    });
 
     expect(mockLoggerError).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith('createIssue: Error during issue creation', {
@@ -144,7 +154,7 @@ describe('createIssue Logging', () => {
         message: expectedError.message,
         errorCode: expectedError.errorCode,
         statusCode: expectedError.statusCode,
-      })
+      }),
     });
   });
 
@@ -156,7 +166,11 @@ describe('createIssue Logging', () => {
       parentKey: parentKey,
     };
     // loadDatabase returns baseDbSchema (empty issues array) by default
-    const expectedError = new IssueCreationError(`Parent issue with key '${parentKey}' not found.`, 'PARENT_NOT_FOUND', 404);
+    const expectedError = new IssueCreationError(
+      `Parent issue with key '${parentKey}' not found.`,
+      'PARENT_NOT_FOUND',
+      404,
+    );
 
     await expect(createIssue(input)).rejects.toThrow(expectedError);
 
@@ -174,7 +188,7 @@ describe('createIssue Logging', () => {
         message: expectedError.message,
         errorCode: expectedError.errorCode, // Matches 'PARENT_NOT_FOUND' string from service
         statusCode: expectedError.statusCode,
-      })
+      }),
     });
   });
 
@@ -212,7 +226,10 @@ describe('createIssue Logging', () => {
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue: Database loaded successfully.');
 
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-    expect(mockLoggerWarn).toHaveBeenCalledWith('createIssue: Validation failed - Invalid parent type', { parentKey: parentTaskKey, parentType: 'Task' });
+    expect(mockLoggerWarn).toHaveBeenCalledWith('createIssue: Validation failed - Invalid parent type', {
+      parentKey: parentTaskKey,
+      parentType: 'Task',
+    });
     expect(mockLoggerError).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith('createIssue: Error during issue creation', {
       error: expect.objectContaining({
@@ -220,10 +237,9 @@ describe('createIssue Logging', () => {
         message: expectedError.message,
         errorCode: expectedError.errorCode,
         statusCode: expectedError.statusCode,
-      })
+      }),
     });
   });
-
 
   it('should log error correctly for a generic error during database load', async () => {
     const dbError = new Error('Database load failure');
@@ -233,7 +249,9 @@ describe('createIssue Logging', () => {
     await expect(createIssue(defaultIssueInput)).rejects.toThrow(expectedWrappedError);
 
     expect(mockLoggerInfo).toHaveBeenCalledTimes(2); // Start, Load DB
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue: Starting issue creation process', { input: defaultIssueInput });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue: Starting issue creation process', {
+      input: defaultIssueInput,
+    });
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue: Loading database...');
 
     expect(mockLoggerWarn).not.toHaveBeenCalled();
@@ -252,11 +270,17 @@ describe('createIssue Logging', () => {
 
     // Logs up to "Saving database"
     expect(mockLoggerInfo).toHaveBeenCalledTimes(6); // Start, Load, Loaded, Gen Key, Key Gen Success, Saving DB
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue: Starting issue creation process', { input: defaultIssueInput });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue: Starting issue creation process', {
+      input: defaultIssueInput,
+    });
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue: Loading database...');
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue: Database loaded successfully.');
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(4, 'createIssue: Generating issue key', { issueType: defaultIssueInput.issueTypeName }); // 'Task'
-    expect(mockLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue: Issue key generated successfully', { newIssueKey: generatedKey });
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(4, 'createIssue: Generating issue key', {
+      issueType: defaultIssueInput.issueTypeName,
+    }); // 'Task'
+    expect(mockLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue: Issue key generated successfully', {
+      newIssueKey: generatedKey,
+    });
     expect(mockLoggerInfo).toHaveBeenNthCalledWith(6, 'createIssue: Saving database', { issueKey: generatedKey });
 
     expect(mockLoggerWarn).not.toHaveBeenCalled();
