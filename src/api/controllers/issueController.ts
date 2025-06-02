@@ -7,11 +7,4 @@ import { deleteIssueEndpoint } from './deleteIssue';
 // Helper functions like getAllIssues, getIssueById, getIssueByKey are exported from readIssues.ts
 // but not re-exported here, as they are intended for internal use or direct import if needed,
 // and are slated for refactoring into a service layer.
-export {
-  createIssue,
-  getIssues,
-  getIssue,
-  getIssueByKeyEndpoint,
-  updateIssueEndpoint,
-  deleteIssueEndpoint,
-};
+export { createIssue, getIssues, getIssue, getIssueByKeyEndpoint, updateIssueEndpoint, deleteIssueEndpoint };

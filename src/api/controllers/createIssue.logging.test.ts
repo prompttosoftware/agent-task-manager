@@ -59,7 +59,6 @@ interface IncomingCreateIssueRequestBody {
   [key: string]: any;
 }
 
-
 describe('createIssue Controller - Logging', () => {
   let mockReq: Request;
   let mockRes: Response;
@@ -122,11 +121,19 @@ describe('createIssue Controller - Logging', () => {
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(6);
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', { input: expectedServiceInput });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', {
+        input: expectedServiceInput,
+      });
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(4, 'createIssue Controller: Service call successful.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue Controller: Constructed Response Body:', { response: expectedResponseBody });
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(6, 'createIssue Controller: Successfully created issue.', { issueKey: mockCreatedIssue.key });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(5, 'createIssue Controller: Constructed Response Body:', {
+        response: expectedResponseBody,
+      });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(6, 'createIssue Controller: Successfully created issue.', {
+        issueKey: mockCreatedIssue.key,
+      });
 
       expect(mockedLoggerError).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(201);
@@ -144,23 +151,23 @@ describe('createIssue Controller - Logging', () => {
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(2);
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
 
       expect(mockedLoggerError).toHaveBeenCalledTimes(2);
       // First error log: Validation specific
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(1,
-        "IssueCreationError during validation: Invalid request body format.",
-        { error: IssueErrorCodes.INVALID_INPUT, statusCode: 400, body: requestBody }
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(
+        1,
+        'IssueCreationError during validation: Invalid request body format.',
+        { error: IssueErrorCodes.INVALID_INPUT, statusCode: 400, body: requestBody },
       );
       // Second error log: From the catch block
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(2,
-        "Caught IssueCreationError:",
-        {
-          error: "Invalid request body format.", // Message from the thrown IssueCreationError
-          code: IssueErrorCodes.INVALID_INPUT,
-          status: 400,
-        }
-      );
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(2, 'Caught IssueCreationError:', {
+        error: 'Invalid request body format.', // Message from the thrown IssueCreationError
+        code: IssueErrorCodes.INVALID_INPUT,
+        status: 400,
+      });
       expect(mockRes.status).toHaveBeenCalledWith(400);
     });
   });
@@ -179,21 +186,21 @@ describe('createIssue Controller - Logging', () => {
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(2);
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
 
       expect(mockedLoggerError).toHaveBeenCalledTimes(2);
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(1,
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(
+        1,
         "IssueCreationError during validation: Missing or invalid 'summary'.",
-        { error: IssueErrorCodes.MISSING_TITLE, statusCode: 400, body: requestBody }
+        { error: IssueErrorCodes.MISSING_TITLE, statusCode: 400, body: requestBody },
       );
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(2,
-        "Caught IssueCreationError:",
-        {
-          error: "Missing or invalid 'summary' in request fields.",
-          code: IssueErrorCodes.MISSING_TITLE,
-          status: 400,
-        }
-      );
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(2, 'Caught IssueCreationError:', {
+        error: "Missing or invalid 'summary' in request fields.",
+        code: IssueErrorCodes.MISSING_TITLE,
+        status: 400,
+      });
       expect(mockRes.status).toHaveBeenCalledWith(400);
     });
   });
@@ -203,7 +210,9 @@ describe('createIssue Controller - Logging', () => {
       const requestBody = {
         fields: {
           summary: 'A valid summary',
-          issuetype: { /* name is missing */ },
+          issuetype: {
+            /* name is missing */
+          },
         },
       };
       mockReq = { body: requestBody, params: {}, query: {} } as any; // Cast for test purposes
@@ -212,21 +221,21 @@ describe('createIssue Controller - Logging', () => {
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(2);
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
 
       expect(mockedLoggerError).toHaveBeenCalledTimes(2);
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(1,
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(
+        1,
         "IssueCreationError during validation: Missing or invalid 'issuetype' name.",
-        { error: IssueErrorCodes.INVALID_ISSUE_TYPE, statusCode: 400, body: requestBody }
+        { error: IssueErrorCodes.INVALID_ISSUE_TYPE, statusCode: 400, body: requestBody },
       );
-      expect(mockedLoggerError).toHaveBeenNthCalledWith(2,
-        "Caught IssueCreationError:",
-        {
-          error: "Missing or invalid 'issuetype' name in request fields.",
-          code: IssueErrorCodes.INVALID_ISSUE_TYPE,
-          status: 400,
-        }
-      );
+      expect(mockedLoggerError).toHaveBeenNthCalledWith(2, 'Caught IssueCreationError:', {
+        error: "Missing or invalid 'issuetype' name in request fields.",
+        code: IssueErrorCodes.INVALID_ISSUE_TYPE,
+        status: 400,
+      });
       expect(mockRes.status).toHaveBeenCalledWith(400);
     });
   });
@@ -245,28 +254,29 @@ describe('createIssue Controller - Logging', () => {
         title: requestBody.fields.summary,
         issueTypeName: requestBody.fields.issuetype.name,
         description: undefined, // No description provided in this requestBody
-        parentKey: undefined,   // No parent provided in this requestBody
+        parentKey: undefined, // No parent provided in this requestBody
       };
 
-      const serviceError = new IssueCreationError("Service layer error", "SERVICE_FAIL_CODE", 409);
+      const serviceError = new IssueCreationError('Service layer error', 'SERVICE_FAIL_CODE', 409);
       mockedServiceCreateIssue.mockRejectedValue(serviceError);
 
       await createIssueController(mockReq, mockRes);
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(3); // Start, Received body, Input to service
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', { input: expectedServiceInput });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', {
+        input: expectedServiceInput,
+      });
 
       expect(mockedLoggerError).toHaveBeenCalledTimes(1);
-      expect(mockedLoggerError).toHaveBeenCalledWith(
-        "Caught IssueCreationError:",
-        {
-          error: serviceError.message,
-          code: serviceError.errorCode,
-          status: serviceError.statusCode,
-        }
-      );
+      expect(mockedLoggerError).toHaveBeenCalledWith('Caught IssueCreationError:', {
+        error: serviceError.message,
+        code: serviceError.errorCode,
+        status: serviceError.statusCode,
+      });
       expect(mockRes.status).toHaveBeenCalledWith(409);
     });
   });
@@ -285,23 +295,27 @@ describe('createIssue Controller - Logging', () => {
         title: requestBody.fields.summary,
         issueTypeName: requestBody.fields.issuetype.name,
         description: undefined, // No description provided
-        parentKey: undefined,   // No parent provided
+        parentKey: undefined, // No parent provided
       };
 
-      const unexpectedError = new Error("Something went very wrong!");
+      const unexpectedError = new Error('Something went very wrong!');
       mockedServiceCreateIssue.mockRejectedValue(unexpectedError);
 
       await createIssueController(mockReq, mockRes);
 
       expect(mockedLoggerInfo).toHaveBeenCalledTimes(3); // Start, Received body, Input to service
       expect(mockedLoggerInfo).toHaveBeenNthCalledWith(1, 'createIssue Controller: Start processing request.');
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', { body: requestBody });
-      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', { input: expectedServiceInput });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(2, 'createIssue Controller: Received body:', {
+        body: requestBody,
+      });
+      expect(mockedLoggerInfo).toHaveBeenNthCalledWith(3, 'createIssue Controller: Input passed to service:', {
+        input: expectedServiceInput,
+      });
 
       expect(mockedLoggerError).toHaveBeenCalledTimes(1);
       expect(mockedLoggerError).toHaveBeenCalledWith(
-        "Unexpected error in createIssue controller:",
-        unexpectedError // The actual error object is expected here
+        'Unexpected error in createIssue controller:',
+        unexpectedError, // The actual error object is expected here
       );
       expect(mockRes.status).toHaveBeenCalledWith(500);
     });

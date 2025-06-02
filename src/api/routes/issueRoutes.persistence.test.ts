@@ -15,10 +15,12 @@ app.use(express.json()); // Use express.json() middleware to parse request bodie
 app.use('/rest/api/2', issueRoutes); // Mount the issueRoutes router under the correct path
 
 // Add a new describe block for persistence verification tests
-describe('POST /rest/api/2/issues - Persistence Verification', () => { // Updated describe block name
+describe('POST /rest/api/2/issues - Persistence Verification', () => {
+  // Updated describe block name
 
   // Ensure db.json is cleared before each test in this block
-  beforeEach(async () => { // Made beforeEach async because fs.promises methods return Promises
+  beforeEach(async () => {
+    // Made beforeEach async because fs.promises methods return Promises
     try {
       // Ensure the directory exists before writing
       await fs.promises.mkdir(path.dirname(dbPath), { recursive: true });
@@ -41,7 +43,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
   //   }
   // });
 
-
   // Test Case 1: Successful creation with all required fields and some extra fields (Task)
   it('should return 201 and persist the Task issue correctly in db.json', async () => {
     // Arrange
@@ -53,7 +54,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores, but keep structure)
         description: 'Detailed description here for persistence test',
         assignee: { name: 'user-xyz' }, // Changed assignee structure (controller ignores)
-      }
+      },
     };
 
     // Act
@@ -79,7 +80,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     // expect(response.body).toHaveProperty('parentKey', null); // Removed as controller doesn't add this for non-subtasks
 
     expect(response.body).not.toHaveProperty('parentIssueKey'); // Request field should not be in response (nor parent object)
-     expect(response.body).not.toHaveProperty('parent'); // Ensure the request 'parent' object is not in the response
+    expect(response.body).not.toHaveProperty('parent'); // Ensure the request 'parent' object is not in the response
 
     // ASSERTION FOR 'self' FIELD
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
@@ -117,7 +118,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-    // Test Case 1c: Successful creation for 'Story' issue type - Persistence
+  // Test Case 1c: Successful creation for 'Story' issue type - Persistence
   it('should return 201 and persist the Story issue correctly in db.json', async () => {
     // Arrange
     // FIX: Updated reqBody structure to match controller's expectation (Jira API format)
@@ -127,7 +128,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'As a user, I want... (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
         description: 'Detailed description here for persistence test.',
-      }
+      },
     };
 
     // Act
@@ -146,7 +147,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     // expect(response.body).toHaveProperty('parentKey', null); // Removed
 
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
-
 
     // Now verify persistence by reading db.json
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
@@ -186,7 +186,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'Implement feature X (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
         description: 'Description of the epic persistence.',
-      }
+      },
     };
 
     // Act
@@ -217,7 +217,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
     const dbData = JSON.parse(dbContent);
 
-     // --- Add Logging Here ---
+    // --- Add Logging Here ---
     // console.log(`Test 'Epic persistence': Looking for key '${createdIssueKey}'`);
     // console.log(`Test 'Epic persistence': dbData.issues count: ${dbData.issues.length}`);
     //  if (dbData.issues.length > 0) {
@@ -245,7 +245,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-    // Test Case 1e: Successful creation for 'Bug' issue type - Persistence
+  // Test Case 1e: Successful creation for 'Bug' issue type - Persistence
   it('should return 201 and persist the Bug issue correctly in db.json', async () => {
     // Arrange
     // FIX: Updated reqBody structure to match controller's expectation (Jira API format)
@@ -255,7 +255,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         summary: 'Fix critical error (persistence)',
         status: { name: 'Todo' }, // Changed status to status.name - Note: Service overrides this to 'In Progress'
         description: 'Steps to reproduce the bug persistence.',
-      }
+      },
     };
 
     // Act
@@ -306,9 +306,9 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
     expect(dbData.issues.length).toBe(1);
   });
 
-
   // Test Case 1b: Successful creation of a Subtask - Persistence
-  it('should return 201 and persist the Subtask issue correctly in db.json (under an Epic)', async () => { // Updated test description
+  it('should return 201 and persist the Subtask issue correctly in db.json (under an Epic)', async () => {
+    // Updated test description
     // Arrange: Need a parent issue first. Create an EPIC parent for childIssueKeys testing.
     // FIX: Updated parentReqBody structure to match controller's expectation (Jira API format)
     // Changed parent type to Epic
@@ -317,7 +317,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         issuetype: { name: 'Epic' }, // Changed issueType to issuetype.name - **Changed from Task to Epic**
         summary: 'Parent Epic for subtask persistence test',
         status: { name: 'Todo' }, // Changed status to status.name (controller ignores)
-      }
+      },
     };
     const parentResponse = await request(app).post('/rest/api/2/issues').send(parentReqBody); // Updated path
     expect(parentResponse.status).toBe(201); // Assert parent creation success
@@ -333,7 +333,7 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
         status: { name: 'Todo' }, // Changed status to status.name - Service sets initial status based on default
         parent: { key: parentKey }, // Added parent object with key
         // description is intentionally omitted to test default handling
-      }
+      },
     };
 
     // Act
@@ -359,7 +359,6 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
 
     // ASSERTION FOR 'self' FIELD
     expect(response.body).toHaveProperty('self', `/rest/api/2/issue/${createdIssueKey}`);
-
 
     // Now verify persistence by reading db.json
     const dbContent = await fs.promises.readFile(dbPath, 'utf8');
@@ -414,163 +413,167 @@ describe('POST /rest/api/2/issues - Persistence Verification', () => { // Update
 
   // Test Case 2: Create Subtask with Non-Existent Parent Key - Persistence Verification
   it('should return 404 and not persist the Subtask issue when parent key does not exist', async () => {
-      // Arrange
-      const nonExistentParentKey = 'NON-EXISTENT-123';
-      const reqBody = {
-          fields: {
-              issuetype: { name: 'Subtask' },
-              summary: 'Subtask with non-existent parent',
-              parent: { key: nonExistentParentKey },
-          }
-      };
+    // Arrange
+    const nonExistentParentKey = 'NON-EXISTENT-123';
+    const reqBody = {
+      fields: {
+        issuetype: { name: 'Subtask' },
+        summary: 'Subtask with non-existent parent',
+        parent: { key: nonExistentParentKey },
+      },
+    };
 
-      // Act
-      const response = await request(app).post('/rest/api/2/issues').send(reqBody);
+    // Act
+    const response = await request(app).post('/rest/api/2/issues').send(reqBody);
 
-      // Assert (API response)
-      expect(response.status).toBe(404); // Expecting 404 if parent key is not found
-      expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
-      expect(response.body.error).toContain(`Parent issue with key '${nonExistentParentKey}' not found`); // More specific error message check
+    // Assert (API response)
+    expect(response.status).toBe(404); // Expecting 404 if parent key is not found
+    expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
+    expect(response.body.error).toContain(`Parent issue with key '${nonExistentParentKey}' not found`); // More specific error message check
 
-      // Assert (Persistence)
-      const dbContent = await fs.promises.readFile(dbPath, 'utf8');
-      const dbData = JSON.parse(dbContent);
+    // Assert (Persistence)
+    const dbContent = await fs.promises.readFile(dbPath, 'utf8');
+    const dbData = JSON.parse(dbContent);
 
-      // Check that no issue was added to the database
-      expect(dbData.issues.length).toBe(0);
-      // Check that the issue key counter hasn't increased (it should still be 0 because beforeEach sets it)
-      expect(dbData.issueKeyCounter).toBe(0);
+    // Check that no issue was added to the database
+    expect(dbData.issues.length).toBe(0);
+    // Check that the issue key counter hasn't increased (it should still be 0 because beforeEach sets it)
+    expect(dbData.issueKeyCounter).toBe(0);
   });
 
   // Test Case 3: Create Subtask with Parent of Invalid Type (e.g., Bug) - Persistence Verification
   it('should return 400 and not persist the Subtask issue when parent is a Bug', async () => {
-      // Arrange: Create a Bug issue first
-      const bugReqBody = {
-          fields: {
-              issuetype: { name: 'Bug' },
-              summary: 'Invalid parent Bug',
-          }
-      };
-      const bugResponse = await request(app).post('/rest/api/2/issues').send(bugReqBody);
-      expect(bugResponse.status).toBe(201);
-      const bugKey = bugResponse.body.key;
-      expect(bugKey).toBeDefined();
+    // Arrange: Create a Bug issue first
+    const bugReqBody = {
+      fields: {
+        issuetype: { name: 'Bug' },
+        summary: 'Invalid parent Bug',
+      },
+    };
+    const bugResponse = await request(app).post('/rest/api/2/issues').send(bugReqBody);
+    expect(bugResponse.status).toBe(201);
+    const bugKey = bugResponse.body.key;
+    expect(bugKey).toBeDefined();
 
-      // Construct Subtask request body pointing to the Bug parent
-      const subtaskReqBody = {
-          fields: {
-              issuetype: { name: 'Subtask' },
-              summary: 'Subtask with Bug parent',
-              parent: { key: bugKey },
-          }
-      };
+    // Construct Subtask request body pointing to the Bug parent
+    const subtaskReqBody = {
+      fields: {
+        issuetype: { name: 'Subtask' },
+        summary: 'Subtask with Bug parent',
+        parent: { key: bugKey },
+      },
+    };
 
-      // Act
-      const response = await request(app).post('/rest/api/2/issues').send(subtaskReqBody);
+    // Act
+    const response = await request(app).post('/rest/api/2/issues').send(subtaskReqBody);
 
-      // Assert (API response)
-      expect(response.status).toBe(400); // Expecting 400 for invalid parent type
-      expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
-      expect(response.body.error).toContain(`Issue with key '${bugKey}' has type 'Bug', which cannot be a parent of a Subtask`); // Specific error message check
+    // Assert (API response)
+    expect(response.status).toBe(400); // Expecting 400 for invalid parent type
+    expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
+    expect(response.body.error).toContain(
+      `Issue with key '${bugKey}' has type 'Bug', which cannot be a parent of a Subtask`,
+    ); // Specific error message check
 
-      // Assert (Persistence)
-      const dbContent = await fs.promises.readFile(dbPath, 'utf8');
-      const dbData = JSON.parse(dbContent);
+    // Assert (Persistence)
+    const dbContent = await fs.promises.readFile(dbPath, 'utf8');
+    const dbData = JSON.parse(dbContent);
 
-      // Check that only the original Bug issue exists
-      expect(dbData.issues.length).toBe(1);
-      const persistedBug = dbData.issues.find((issue: AnyIssue) => issue.key === bugKey);
-      expect(persistedBug).toBeDefined(); // The Bug should still be there
-      expect(persistedBug.issueType).toBe('Bug'); // Check its type
-      // Check that the Bug issue's childIssueKeys was NOT updated (it's not an Epic, so it likely remains empty or undefined)
-      // The createIssueService sets childIssueKeys to [] for non-Epics initially.
-      expect(persistedBug).toHaveProperty('childIssueKeys');
-      expect(Array.isArray(persistedBug.childIssueKeys)).toBe(true);
-      expect(persistedBug.childIssueKeys.length).toBe(0); // Should still be empty
+    // Check that only the original Bug issue exists
+    expect(dbData.issues.length).toBe(1);
+    const persistedBug = dbData.issues.find((issue: AnyIssue) => issue.key === bugKey);
+    expect(persistedBug).toBeDefined(); // The Bug should still be there
+    expect(persistedBug.issueType).toBe('Bug'); // Check its type
+    // Check that the Bug issue's childIssueKeys was NOT updated (it's not an Epic, so it likely remains empty or undefined)
+    // The createIssueService sets childIssueKeys to [] for non-Epics initially.
+    expect(persistedBug).toHaveProperty('childIssueKeys');
+    expect(Array.isArray(persistedBug.childIssueKeys)).toBe(true);
+    expect(persistedBug.childIssueKeys.length).toBe(0); // Should still be empty
 
-      // Check that the Subtask was NOT added
-      const persistedSubtask = dbData.issues.find((issue: AnyIssue) => issue.summary === 'Subtask with Bug parent');
-      expect(persistedSubtask).toBeUndefined(); // The subtask should NOT be found
+    // Check that the Subtask was NOT added
+    const persistedSubtask = dbData.issues.find((issue: AnyIssue) => issue.summary === 'Subtask with Bug parent');
+    expect(persistedSubtask).toBeUndefined(); // The subtask should NOT be found
 
-      // Check that the issue key counter reflects only the created Bug issue
-      expect(dbData.issueKeyCounter).toBe(1); // Assumes the counter started at 0 and incremented once for the Bug
+    // Check that the issue key counter reflects only the created Bug issue
+    expect(dbData.issueKeyCounter).toBe(1); // Assumes the counter started at 0 and incremented once for the Bug
   });
 
   // Test Case 4: Create Subtask with Parent of Invalid Type (e.g., Subtask) - Persistence Verification
-   it('should return 400 and not persist the second Subtask issue when parent is another Subtask', async () => {
-      // Arrange: Create a valid parent (e.g., Epic) and a first Subtask linked to it
-      const epicReqBody = {
-          fields: {
-              issuetype: { name: 'Epic' },
-              summary: 'Valid parent Epic',
-          }
-      };
-      const epicResponse = await request(app).post('/rest/api/2/issues').send(epicReqBody);
-      expect(epicResponse.status).toBe(201);
-      const epicKey = epicResponse.body.key;
-      expect(epicKey).toBeDefined();
+  it('should return 400 and not persist the second Subtask issue when parent is another Subtask', async () => {
+    // Arrange: Create a valid parent (e.g., Epic) and a first Subtask linked to it
+    const epicReqBody = {
+      fields: {
+        issuetype: { name: 'Epic' },
+        summary: 'Valid parent Epic',
+      },
+    };
+    const epicResponse = await request(app).post('/rest/api/2/issues').send(epicReqBody);
+    expect(epicResponse.status).toBe(201);
+    const epicKey = epicResponse.body.key;
+    expect(epicKey).toBeDefined();
 
-      const firstSubtaskReqBody = {
-          fields: {
-              issuetype: { name: 'Subtask' },
-              summary: 'First Subtask under Epic',
-              parent: { key: epicKey },
-          }
-      };
-      const firstSubtaskResponse = await request(app).post('/rest/api/2/issues').send(firstSubtaskReqBody);
-      expect(firstSubtaskResponse.status).toBe(201);
-      const firstSubtaskKey = firstSubtaskResponse.body.key;
-      expect(firstSubtaskKey).toBeDefined();
+    const firstSubtaskReqBody = {
+      fields: {
+        issuetype: { name: 'Subtask' },
+        summary: 'First Subtask under Epic',
+        parent: { key: epicKey },
+      },
+    };
+    const firstSubtaskResponse = await request(app).post('/rest/api/2/issues').send(firstSubtaskReqBody);
+    expect(firstSubtaskResponse.status).toBe(201);
+    const firstSubtaskKey = firstSubtaskResponse.body.key;
+    expect(firstSubtaskKey).toBeDefined();
 
-      // Verify initial state: Epic and First Subtask exist, Epic has First Subtask as child
-      let dbContentInitial = await fs.promises.readFile(dbPath, 'utf8');
-      let dbDataInitial = JSON.parse(dbContentInitial);
-      expect(dbDataInitial.issues.length).toBe(2);
-      const persistedEpicInitial = dbDataInitial.issues.find((issue: AnyIssue) => issue.key === epicKey);
-      expect(persistedEpicInitial).toBeDefined();
-      expect(persistedEpicInitial.childIssueKeys).toContain(firstSubtaskKey);
-      expect(dbDataInitial.issueKeyCounter).toBe(2); // Counter incremented twice
+    // Verify initial state: Epic and First Subtask exist, Epic has First Subtask as child
+    let dbContentInitial = await fs.promises.readFile(dbPath, 'utf8');
+    let dbDataInitial = JSON.parse(dbContentInitial);
+    expect(dbDataInitial.issues.length).toBe(2);
+    const persistedEpicInitial = dbDataInitial.issues.find((issue: AnyIssue) => issue.key === epicKey);
+    expect(persistedEpicInitial).toBeDefined();
+    expect(persistedEpicInitial.childIssueKeys).toContain(firstSubtaskKey);
+    expect(dbDataInitial.issueKeyCounter).toBe(2); // Counter incremented twice
 
-      // Construct the second Subtask request body, pointing to the first Subtask as parent
-      const secondSubtaskReqBody = {
-          fields: {
-              issuetype: { name: 'Subtask' },
-              summary: 'Second Subtask under First Subtask (Invalid Parent)',
-              parent: { key: firstSubtaskKey }, // Invalid parent key (a Subtask)
-          }
-      };
+    // Construct the second Subtask request body, pointing to the first Subtask as parent
+    const secondSubtaskReqBody = {
+      fields: {
+        issuetype: { name: 'Subtask' },
+        summary: 'Second Subtask under First Subtask (Invalid Parent)',
+        parent: { key: firstSubtaskKey }, // Invalid parent key (a Subtask)
+      },
+    };
 
-      // Act
-      const response = await request(app).post('/rest/api/2/issues').send(secondSubtaskReqBody);
+    // Act
+    const response = await request(app).post('/rest/api/2/issues').send(secondSubtaskReqBody);
 
-      // Assert (API response)
-      expect(response.status).toBe(400); // Expecting 400 for invalid parent type
-      expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
-      expect(response.body.error).toContain(`Issue with key '${firstSubtaskKey}' has type 'Subtask', which cannot be a parent of a Subtask`); // Specific error message check
+    // Assert (API response)
+    expect(response.status).toBe(400); // Expecting 400 for invalid parent type
+    expect(response.body).toHaveProperty('error'); // Expecting an error message in the body
+    expect(response.body.error).toContain(
+      `Issue with key '${firstSubtaskKey}' has type 'Subtask', which cannot be a parent of a Subtask`,
+    ); // Specific error message check
 
-      // Assert (Persistence)
-      const dbContent = await fs.promises.readFile(dbPath, 'utf8');
-      const dbData = JSON.parse(dbContent);
+    // Assert (Persistence)
+    const dbContent = await fs.promises.readFile(dbPath, 'utf8');
+    const dbData = JSON.parse(dbContent);
 
-      // Check that the database state is unchanged from the initial state (before the failed creation attempt)
-      expect(dbData.issues.length).toBe(2); // Still only the Epic and the first Subtask
-      const persistedEpic = dbData.issues.find((issue: AnyIssue) => issue.key === epicKey);
-      expect(persistedEpic).toBeDefined();
-      expect(persistedEpic.childIssueKeys).toContain(firstSubtaskKey);
-      expect(persistedEpic.childIssueKeys.length).toBe(1); // Epic still only has the first Subtask as child
+    // Check that the database state is unchanged from the initial state (before the failed creation attempt)
+    expect(dbData.issues.length).toBe(2); // Still only the Epic and the first Subtask
+    const persistedEpic = dbData.issues.find((issue: AnyIssue) => issue.key === epicKey);
+    expect(persistedEpic).toBeDefined();
+    expect(persistedEpic.childIssueKeys).toContain(firstSubtaskKey);
+    expect(persistedEpic.childIssueKeys.length).toBe(1); // Epic still only has the first Subtask as child
 
-      const persistedFirstSubtask = dbData.issues.find((issue: AnyIssue) => issue.key === firstSubtaskKey);
-      expect(persistedFirstSubtask).toBeDefined();
-      expect(persistedFirstSubtask.issueType).toBe('Subtask');
-      expect(persistedFirstSubtask.parentKey).toBe(epicKey); // First Subtask still points to Epic
+    const persistedFirstSubtask = dbData.issues.find((issue: AnyIssue) => issue.key === firstSubtaskKey);
+    expect(persistedFirstSubtask).toBeDefined();
+    expect(persistedFirstSubtask.issueType).toBe('Subtask');
+    expect(persistedFirstSubtask.parentKey).toBe(epicKey); // First Subtask still points to Epic
 
-      // Check that the second Subtask was NOT added
-      const persistedSecondSubtask = dbData.issues.find((issue: AnyIssue) => issue.summary === 'Second Subtask under First Subtask (Invalid Parent)');
-      expect(persistedSecondSubtask).toBeUndefined(); // The second subtask should NOT be found
+    // Check that the second Subtask was NOT added
+    const persistedSecondSubtask = dbData.issues.find(
+      (issue: AnyIssue) => issue.summary === 'Second Subtask under First Subtask (Invalid Parent)',
+    );
+    expect(persistedSecondSubtask).toBeUndefined(); // The second subtask should NOT be found
 
-      // Check that the issue key counter has not increased further
-      expect(dbData.issueKeyCounter).toBe(2); // Counter should still be 2
+    // Check that the issue key counter has not increased further
+    expect(dbData.issueKeyCounter).toBe(2); // Counter should still be 2
   });
-
-
 }); // End of describe Persistence Verification

@@ -18,7 +18,7 @@ const ISSUE_PATH = '/issues';
 // We set a small windowMs and max value to quickly hit the limit in tests.
 const testRateLimitConfig = {
   windowMs: 1000, // 1 second window
-  max: 3,         // Allow 3 requests per window
+  max: 3, // Allow 3 requests per window
   message: 'Too many requests, please try again later.', // Custom message for 429 response
   // The express-rate-limit middleware automatically sets the 429 status code
   // and the 'Retry-After' header by default when the limit is exceeded.
@@ -32,14 +32,14 @@ const limiter = rateLimit(testRateLimitConfig);
 // the actual route handler for POST /issues when a request is *not* rate-limited.
 // It should return a 201 status code for a valid request body.
 const mockIssueCreationHandler = (req: Request, res: Response) => {
-    // Simulate basic validation for a POST request body.
-    if (!req.body || typeof req.body.title !== 'string' || typeof req.body.description !== 'string') {
-        // If validation fails, return a 400 error (this runs before rate limit if placed before it,
-        // but after if placed after. Here it's after, so it only runs on non-rate-limited requests).
-        return res.status(400).send({ message: 'Title and description are required' });
-    }
-    // Simulate a successful issue creation response with a 201 status.
-    res.status(201).send({ id: 'mock-issue-id-12345', title: req.body.title, description: req.body.description });
+  // Simulate basic validation for a POST request body.
+  if (!req.body || typeof req.body.title !== 'string' || typeof req.body.description !== 'string') {
+    // If validation fails, return a 400 error (this runs before rate limit if placed before it,
+    // but after if placed after. Here it's after, so it only runs on non-rate-limited requests).
+    return res.status(400).send({ message: 'Title and description are required' });
+  }
+  // Simulate a successful issue creation response with a 201 status.
+  res.status(201).send({ id: 'mock-issue-id-12345', title: req.body.title, description: req.body.description });
 };
 
 // --- Create a test Express application ---
@@ -54,13 +54,12 @@ app.post(ISSUE_PATH, limiter, mockIssueCreationHandler);
 
 // --- Test Suite for POST /issues Rate Limiting ---
 describe('POST /issues Rate Limiting', () => {
-
   // Helper function to create a standard request using supertest.
   const makeIssueRequest = () => {
     // Provide a valid request body according to the mock handler's expectation.
     return request(app)
-        .post(ISSUE_PATH)
-        .send({ title: 'Test Issue Title', description: 'Test Issue Description for rate limit test.' });
+      .post(ISSUE_PATH)
+      .send({ title: 'Test Issue Title', description: 'Test Issue Description for rate limit test.' });
   };
 
   // Test Case 1: Verify that requests within the configured rate limit are successful.
@@ -135,8 +134,7 @@ describe('POST /issues Rate Limiting', () => {
   // This helps prevent interference between tests if the test runner
   // reuses resources or runs other test files immediately after this one.
   afterAll(async () => {
-      // Wait slightly longer than the configured rate limit window duration.
-      await new Promise(resolve => setTimeout(resolve, testRateLimitConfig.windowMs + 200)); // Add a small buffer
+    // Wait slightly longer than the configured rate limit window duration.
+    await new Promise((resolve) => setTimeout(resolve, testRateLimitConfig.windowMs + 200)); // Add a small buffer
   });
-
 });

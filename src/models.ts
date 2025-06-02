@@ -3,7 +3,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 // Define the union type for issue types
-type IssueType = "Task" | "Story" | "Epic" | "Bug" | "Subtask";
+type IssueType = 'Task' | 'Story' | 'Epic' | 'Bug' | 'Subtask';
 
 // BaseIssue interface
 interface BaseIssue {
@@ -13,7 +13,7 @@ interface BaseIssue {
   issueType: IssueType;
   summary: string;
   description?: string;
-  status: "Todo" | "In Progress" | "Done";
+  status: 'Todo' | 'In Progress' | 'Done';
   createdAt: string; // ISO8601
   updatedAt: string; // ISO8601
   parentKey?: string | null; // Optional reference to a parent issue key - Use this for Subtasks
@@ -46,7 +46,6 @@ type EpicIssue = Epic;
 type BugIssue = Bug;
 type SubtaskIssue = Subtask;
 
-
 // AnyIssue union type
 type AnyIssue = Task | Story | Epic | Bug | Subtask;
 
@@ -69,21 +68,21 @@ interface CreateIssueInput {
 }
 
 export {
-    IssueType,
-    BaseIssue,
-    EpicSpecifics,
-    SubtaskSpecifics,
-    Task,
-    Story,
-    Bug,
-    Epic,
-    Subtask,
-    TaskIssue, // Export specific types
-    StoryIssue,
-    EpicIssue,
-    BugIssue,
-    SubtaskIssue,
-    AnyIssue,
-    DbSchema,
-    CreateIssueInput
+  IssueType,
+  BaseIssue,
+  EpicSpecifics,
+  SubtaskSpecifics,
+  Task,
+  Story,
+  Bug,
+  Epic,
+  Subtask,
+  TaskIssue, // Export specific types
+  StoryIssue,
+  EpicIssue,
+  BugIssue,
+  SubtaskIssue,
+  AnyIssue,
+  DbSchema,
+  CreateIssueInput,
 };

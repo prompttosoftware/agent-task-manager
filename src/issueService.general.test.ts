@@ -10,8 +10,8 @@ jest.mock('./database', () => mockDatabase); // This mocks './database' to retur
 
 // Get the mocked functions by casting them to Jest Mocks for type safety
 // We now access the mocks directly from the mockDatabase object
-const mockLoadDatabase = mockDatabase.loadDatabase as jest.Mock;
-const mockSaveDatabase = mockDatabase.saveDatabase as jest.Mock;
+const mockLoadDatabase = mockDatabase.loadDatabase;
+const mockSaveDatabase = mockDatabase.saveDatabase;
 
 describe('issueService - Basic Functionality', () => {
   beforeEach(() => {
@@ -22,7 +22,8 @@ describe('issueService - Basic Functionality', () => {
     // mockLoadDatabase.mockResolvedValue([]); // e.g., return an empty array of issues for async functions
   });
 
-  test('createIssue function should be defined and call database functions', async () => { // Use async if createIssue is async
+  test('createIssue function should be defined and call database functions', async () => {
+    // Use async if createIssue is async
     // Check if createIssue is defined
     expect(createIssue).toBeDefined();
 

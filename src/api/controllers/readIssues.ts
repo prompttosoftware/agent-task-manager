@@ -49,7 +49,7 @@ export const getIssue = async (req: Request, res: Response): Promise<void> => {
       res.status(500).json({ message: 'Internal server error' });
       return;
     }
-    const issue = db.issues.find(issue => issue.id === id);
+    const issue = db.issues.find((issue) => issue.id === id);
     if (issue) {
       res.status(200).json(issue);
     } else {
@@ -83,7 +83,7 @@ export const getIssueByKeyEndpoint = async (req: Request, res: Response): Promis
       res.status(500).json({ message: 'Internal server error' });
       return;
     }
-    const issue = db.issues.find(issue => issue.key === key);
+    const issue = db.issues.find((issue) => issue.key === key);
     if (issue) {
       res.status(200).json(issue);
     } else {
@@ -114,7 +114,7 @@ export const getAllIssues = async (): Promise<AnyIssue[]> => {
  */
 export const getIssueById = async (id: string): Promise<AnyIssue | undefined> => {
   const db = await loadDatabase();
-  return db.issues.find(issue => issue.id === id);
+  return db.issues.find((issue) => issue.id === id);
 };
 
 /**
@@ -125,5 +125,5 @@ export const getIssueById = async (id: string): Promise<AnyIssue | undefined> =>
  */
 export const getIssueByKey = async (key: string): Promise<AnyIssue | undefined> => {
   const db = await loadDatabase();
-  return db.issues.find(issue => issue.key === key);
+  return db.issues.find((issue) => issue.key === key);
 };

@@ -26,7 +26,6 @@ let savedDbState: DbSchema | null = null;
 let mockDate: Date;
 let mockUuidV4: jest.Mock;
 
-
 beforeEach(() => {
   mockLoadDatabaseFunction.mockClear();
   mockSaveDatabaseFunction.mockClear();
@@ -56,7 +55,6 @@ afterEach(() => {
 });
 
 describe('issueService - Create Operations - Issue Types', () => {
-
   it('should create a Story issue with status Todo when issueTypeName is feature', async () => {
     const input = {
       title: 'Feature Title',
@@ -109,7 +107,7 @@ describe('issueService - Create Operations - Issue Types', () => {
     expect(createdIssue).toEqual(savedIssue);
   });
 
-   it('should create a Bug issue with status In Progress when issueTypeName is bug', async () => {
+  it('should create a Bug issue with status In Progress when issueTypeName is bug', async () => {
     const input = {
       title: 'Bug Title',
       description: 'This is a bug report.',
@@ -187,5 +185,4 @@ describe('issueService - Create Operations - Issue Types', () => {
     expect(createdIssue.parentKey).toBeNull();
     expect(createdIssue).toEqual(savedIssue);
   });
-
 });

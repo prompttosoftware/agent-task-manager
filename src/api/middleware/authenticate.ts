@@ -6,7 +6,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
   if (!authHeader) {
     return res.status(401).json({
-      errorMessages: ["Authorization header missing."]
+      errorMessages: ['Authorization header missing.'],
     });
   }
 
@@ -15,7 +15,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   // Check if the header is in the expected "Basic <credentials>" format
   if (authHeaderParts.length !== 2 || authHeaderParts[0].toLowerCase() !== 'basic') {
     return res.status(401).json({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   }
 
@@ -25,10 +25,10 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
     // Decode the Base64 string
     decodedCredentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-  } catch (error) {
-    // Handle potential decoding errors
+  } catch (_e) { // Handle potential decoding errors - intentionally ignoring error details
+    // We don't log the error details here to prevent leaking information
     return res.status(401).json({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   }
 
@@ -37,7 +37,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   // Ensure the decoded string is in the "username:password" format
   if (credentialsParts.length !== 2) {
     return res.status(401).json({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   }
 
@@ -51,9 +51,9 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   // Check if environment variables are set. If not, authentication cannot proceed.
   // This indicates a server misconfiguration, but we report it as an authentication failure to the client.
   if (!expectedUsername || !expectedPassword) {
-    console.error("Server misconfiguration: AUTH_USERNAME or AUTH_PASSWORD environment variable not set.");
+    console.error('Server misconfiguration: AUTH_USERNAME or AUTH_PASSWORD environment variable not set.');
     return res.status(401).json({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   }
 
@@ -64,7 +64,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   } else {
     // Authentication failed (invalid username or password)
     return res.status(401).json({
-      errorMessages: ["Authentication failed."]
+      errorMessages: ['Authentication failed.'],
     });
   }
 }

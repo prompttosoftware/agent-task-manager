@@ -3,7 +3,7 @@ import { DbSchema } from '../../models';
 import { loadDatabase, saveDatabase } from '../../dataStore';
 
 // Define allowed values for statuses for validation within this controller
-const allowedStatuses = ["Todo", "In Progress", "Done"];
+const allowedStatuses = ['Todo', 'In Progress', 'Done'];
 
 /**
  * Updates an existing issue.
@@ -22,8 +22,13 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
     const updateData = req.body;
 
     if (updateData.status !== undefined && !allowedStatuses.includes(updateData.status)) {
-         res.status(400).json({ errorMessages: [`Invalid status: "${updateData.status}". Must be one of ${allowedStatuses.join(', ')}.`] , errors: {}});
-         return;
+      res
+        .status(400)
+        .json({
+          errorMessages: [`Invalid status: "${updateData.status}". Must be one of ${allowedStatuses.join(', ')}.`],
+          errors: {},
+        });
+      return;
     }
 
     let db: DbSchema;
@@ -35,15 +40,17 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
       return;
     }
 
-    const issueIndex = db.issues.findIndex(issue => issue.id === id);
+    const issueIndex = db.issues.findIndex((issue) => issue.id === id);
     if (issueIndex === -1) {
       res.status(404).json({ message: 'Issue not found' });
       return;
     }
 
     if (updateData.key !== undefined || updateData.id !== undefined || updateData.issueType !== undefined) {
-      const forbiddenFields = ['key', 'id', 'issueType'].filter(field => updateData[field] !== undefined);
-      res.status(400).json({ errorMessages: [`Cannot update forbidden fields: ${forbiddenFields.join(', ')}`] , errors: {}});
+      const forbiddenFields = ['key', 'id', 'issueType'].filter((field) => updateData[field] !== undefined);
+      res
+        .status(400)
+        .json({ errorMessages: [`Cannot update forbidden fields: ${forbiddenFields.join(', ')}`], errors: {} });
       return;
     }
 
@@ -56,7 +63,6 @@ export const updateIssueEndpoint = async (req: Request, res: Response): Promise<
       return;
     }
     res.status(200).json(db.issues[issueIndex]);
-
   } catch (error) {
     console.error('Error updating issue:', error);
     res.status(500).json({ message: 'Internal server error' });
