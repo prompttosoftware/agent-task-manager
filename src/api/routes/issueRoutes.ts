@@ -1,14 +1,23 @@
 import { Router, RequestHandler } from 'express';
+import rateLimit from 'express-rate-limit'; // Added import
 import { createIssue } from '../controllers/createIssue';
 import { getIssues, getIssue, getIssueByKeyEndpoint } from '../controllers/readIssues';
 import { updateIssueEndpoint } from '../controllers/updateIssue';
 import { deleteIssueEndpoint } from '../controllers/deleteIssue';
 import { authenticate } from '../middleware/authenticate';
 
+// Define the rate limit middleware
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+
 const router = Router();
 
 // Route to create a new issue
-router.post('/issues', authenticate, createIssue as RequestHandler);
+// Apply the rate limiter specifically to the POST /issues route
+router.post('/issues', apiLimiter, authenticate, createIssue as RequestHandler);
 
 // Route to get all issues
 router.get('/issues', getIssues);
