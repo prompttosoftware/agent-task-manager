@@ -4,6 +4,7 @@ import issueRoutes from './issueRoutes';
 import * as issueService from '../../services/issueService'; // Import the service to mock it if needed
 import { IssueCreationError } from '../../utils/errorHandling'; // Import custom error type
 import { AnyIssue } from '../../models'; // Import types
+import rateLimit from 'express-rate-limit'; // Import rate limiter
 
 
 // Mock the issueService to control its behavior during testing
@@ -16,7 +17,25 @@ jest.mock('../../services/issueService', () => ({
 // Create a simple Express app instance for testing
 const app: Application = express();
 app.use(express.json()); // Use express.json() middleware to parse request bodies
-app.use('/rest/api/2', issueRoutes); // Mount the issueRoutes router under the correct path
+
+// Define a test-specific rate limiter
+// It's crucial to make this short and with a low max for testing rapid requests
+const testRateLimiter = rateLimit({
+  windowMs: 15 * 1000, // 15 seconds window
+  max: 1, // Allow only 1 request per window
+  message: 'Too many requests, please try again later.', // Custom message for predictable testing
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Apply the rate limiter specifically to the POST /rest/api/2/issue route
+// This middleware will run *before* the issueRoutes router handles the /issue path for POST requests.
+app.post('/rest/api/2/issue', testRateLimiter, issueRoutes);
+
+// Mount the issueRoutes router under the correct path for *all* methods and other paths
+// (POST /issue is now handled by the specific route above which includes the limiter)
+app.use('/rest/api/2', issueRoutes); // Keep the original mount for other potential routes in issueRoutes (though this test only uses POST /issue)
+
 
 describe('POST /rest/api/2/issue - issueRoutes', () => {
 
@@ -621,3 +640,106 @@ describe('POST /rest/api/2/issue - issueRoutes', () => {
   // to fail specifically on parent validation for those types.
 
 }); // End of describe POST /rest/api/2/issue (Mocked Service)
+
+
+// --- New Test Cases for Rate Limiting ---
+describe('POST /rest/api/2/issue - Rate Limiting', () => {
+    const reqBody = { // Use a valid request body for successful calls
+        issueType: 'Task',
+        summary: 'Rate Limited Test Task',
+    };
+    const mockCreatedIssue: AnyIssue = { // Mock successful response
+        id: 'rate-limit-test-id',
+        key: 'ATM-RL',
+        issueType: 'Task',
+        summary: 'Rate Limited Test Task',
+        description: undefined,
+        status: 'Todo',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        parentKey: null,
+    };
+
+    // Need to mock the service for successful calls within the limit
+    // This beforeEach applies only to this describe block
+    beforeEach(() => {
+        mockedCreateIssueService.mockReset(); // Ensure mocks are reset for these tests too
+        // Default mock for successful calls within the limit
+        mockedCreateIssueService.mockResolvedValue(mockCreatedIssue);
+    });
+
+    // Test 1: Successful issue creation within the rate limit.
+    it('should allow issue creation within the rate limit', async () => {
+        // Arrange - mockedCreateIssueService is already set up in beforeEach
+
+        // Act
+        const response = await request(app).post('/rest/api/2/issue').send(reqBody);
+
+        // Assert
+        expect(response.status).toBe(201);
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        // Optionally check rate limit headers if standardHeaders is true
+        expect(response.headers).toHaveProperty('ratelimit-limit');
+        expect(response.headers).toHaveProperty('ratelimit-remaining');
+        expect(response.headers).toHaveProperty('ratelimit-reset'); // Timestamp in seconds
+        expect(parseInt(response.headers['ratelimit-limit'], 10)).toBe(testRateLimiter.options.max);
+        expect(parseInt(response.headers['ratelimit-remaining'], 10)).toBe(testRateLimiter.options.max - 1); // Remaining after 1 request
+    });
+
+    // Test 2 & 3: Issue creation fails with 429 after exceeding the limit and verifies error details.
+    it('should fail subsequent issue creation requests with 429 after exceeding the rate limit and return correct error details', async () => {
+        // Arrange - mockedCreateIssueService is already set up in beforeEach
+
+        // Act 1: Make the first request (within limit)
+        const response1 = await request(app).post('/rest/api/2/issue').send(reqBody);
+
+        // Assert 1: First request should be successful
+        expect(response1.status).toBe(201);
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1);
+        expect(response1.headers).toHaveProperty('ratelimit-remaining', '0'); // No remaining requests
+
+        // Act 2: Make the second request (exceeding limit)
+        const response2 = await request(app).post('/rest/api/2/issue').send(reqBody);
+
+        // Assert 2: Second request should fail with 429
+        expect(response2.status).toBe(429);
+        // Service should NOT be called again for the rate-limited request
+        expect(mockedCreateIssueService).toHaveBeenCalledTimes(1); // Still only 1 call from the first request
+
+        // Assert 3: Verify 429 error details
+        // Assuming the controller wraps the rate limit message in the standard error format
+        expect(response2.body).toHaveProperty('errorMessages');
+        expect(Array.isArray(response2.body.errorMessages)).toBe(true);
+        expect(response2.body.errorMessages.length).toBe(1); // Expect only one error message
+        expect(response2.body.errorMessages[0]).toBe(testRateLimiter.options.message); // Expect the exact custom message
+        expect(response2.body).toHaveProperty('errors');
+        expect(response2.body.errors).toEqual({}); // Expect errors object to be empty
+
+        // Check rate limit headers on the 429 response
+        expect(response2.headers).toHaveProperty('ratelimit-limit');
+        expect(response2.headers).toHaveProperty('ratelimit-remaining', '0'); // Still 0 remaining
+        expect(response2.headers).toHaveProperty('ratelimit-reset'); // Should be the same reset time as response1
+    });
+
+    // Optional: Explicitly test for headers on the 429 response
+    it('should include rate limit headers in the 429 response after exceeding the limit', async () => {
+        // Arrange
+        mockedCreateIssueService.mockResolvedValue(mockCreatedIssue);
+
+        // Act 1: Use up the limit
+        await request(app).post('/rest/api/2/issue').send(reqBody);
+
+        // Act 2: Make the request that exceeds the limit
+        const response = await request(app).post('/rest/api/2/issue').send(reqBody);
+
+        // Assert
+        expect(response.status).toBe(429);
+        expect(response.headers).toHaveProperty('ratelimit-limit');
+        expect(response.headers).toHaveProperty('ratelimit-remaining', '0');
+        expect(response.headers).toHaveProperty('ratelimit-reset');
+        // Check format/type if possible
+        expect(parseInt(response.headers['ratelimit-limit'], 10)).toBeGreaterThan(0);
+        expect(parseInt(response.headers['ratelimit-remaining'], 10)).toBe(0);
+        expect(parseInt(response.headers['ratelimit-reset'], 10)).toBeGreaterThan(0); // Timestamp in seconds
+    });
+});

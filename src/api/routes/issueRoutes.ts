@@ -17,7 +17,7 @@ const router = Router();
 
 // Route to create a new issue
 // Apply the rate limiter specifically to the POST /issues route
-router.post('/issues', apiLimiter, authenticate, createIssue as RequestHandler);
+router.post('/rest/api/2/issue', apiLimiter, authenticate, createIssue as RequestHandler);
 
 // Route to get all issues
 router.get('/issues', getIssues);
