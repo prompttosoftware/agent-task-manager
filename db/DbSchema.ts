@@ -1,4 +1,4 @@
-import { AnyIssue } from '../types';
+import { AnyIssue } from '../models';
 
 export interface DbSchema {
   issues: AnyIssue[];
