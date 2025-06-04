@@ -10,7 +10,12 @@ export interface DbSchema {
   issues: AnyIssue[];
 
   /**
-   * A counter used to generate unique issue keys.
+   * A counter to generate unique keys for new issues.
    */
   issueKeyCounter: number;
+
+  /**
+   * The timestamp when the database was last updated (ISO 8601 string).
+   */
+  lastUpdated: string;
 }
