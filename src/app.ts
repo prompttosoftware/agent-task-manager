@@ -9,7 +9,7 @@ app.use(express.json());
 
 // Mount specific routers at dedicated paths
 // Mount issue routes. The route defined in issueRoutes.ts (POST /rest/api/2/issue)
-// is now mounted at the root path, making it accessible directly at POST /rest/api/2/issue.
+// is now mounted at the root path ('/'), making it accessible at POST /rest/api/2/issue.
 app.use('/', issueRoutes);
 
 // Define other application routes (optional, example routes)
