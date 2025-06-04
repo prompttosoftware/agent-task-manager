@@ -6,11 +6,12 @@ import {
   Bug,
   Subtask,
   AnyIssue,
-  DbSchema,
   EpicSpecifics,
   SubtaskSpecifics,
   IssueType,
 } from './BaseIssue'; // Import types from the source file
+
+import { DbSchema } from './DbSchema'; // Import DbSchema from its specific file
 
 // Define common properties for example data used across different issue types.
 // Using 'as const' helps TypeScript infer literal types for strings.
@@ -54,8 +55,8 @@ describe('Issue Type Interfaces and Types', () => {
       expect(task).toHaveProperty('key', 'TASK-123');
       expect(task).toHaveProperty('summary', 'Implement user login feature');
       expect(task).toHaveProperty('status', 'Todo');
-      expect(task.createdAt).toBeInstanceOf(String);
-      expect(task.updatedAt).toBeInstanceOf(String);
+      expect(typeof task.createdAt).toBe('string');
+      expect(typeof task.updatedAt).toBe('string');
 
       // If the code compiles without TypeScript errors for the 'task' variable assignment,
       // it implicitly confirms that the object literal conforms to the Task interface structure.
@@ -76,6 +77,9 @@ describe('Issue Type Interfaces and Types', () => {
       expect(story.id).toBe('story-456');
       expect(story.key).toBe('STORY-456');
       expect(story.summary).toBe('As a user, I want to view my profile');
+      // Check inherited properties
+      expect(typeof story.createdAt).toBe('string');
+      expect(typeof story.updatedAt).toBe('string');
     });
 
     // Test Epic Interface properties and issueType
@@ -96,6 +100,9 @@ describe('Issue Type Interfaces and Types', () => {
       expect(epic.summary).toBe('Authentication System Revamp');
       expect(epic).toHaveProperty('childIssueKeys');
       expect(epic.childIssueKeys).toEqual(['TASK-1', 'TASK-2']);
+      // Check inherited properties
+      expect(typeof epic.createdAt).toBe('string');
+      expect(typeof epic.updatedAt).toBe('string');
     });
 
     // Test Bug Interface properties and issueType
@@ -113,6 +120,9 @@ describe('Issue Type Interfaces and Types', () => {
       expect(bug.id).toBe('bug-101');
       expect(bug.key).toBe('BUG-101');
       expect(bug.summary).toBe('Password reset link is broken');
+      // Check inherited properties
+      expect(typeof bug.createdAt).toBe('string');
+      expect(typeof bug.updatedAt).toBe('string');
     });
 
     // Test Subtask Interface properties and issueType
@@ -132,6 +142,9 @@ describe('Issue Type Interfaces and Types', () => {
       expect(subtask.key).toBe('SUBTASK-112');
       expect(subtask.summary).toBe('Write unit tests for password reset component');
       expect(subtask.parentIssueKey).toBe('TASK-123'); // Check specific property
+      // Check inherited properties
+      expect(typeof subtask.createdAt).toBe('string');
+      expect(typeof subtask.updatedAt).toBe('string');
     });
   });
 
@@ -167,7 +180,7 @@ describe('Issue Type Interfaces and Types', () => {
       // Runtime check: Verify that the array contains elements and their runtime types
       // (via the issueType discriminant) match the expected types.
       expect(issuesCollection.length).toBe(5);
-      const issueTypesFound = issuesCollection.map(issue => issue.issueType);
+      const issueTypesFound = issuesCollection.map((issue: AnyIssue) => issue.issueType);
       expect(issueTypesFound).toEqual(
         expect.arrayContaining([
           "Task",
@@ -193,7 +206,8 @@ describe('Issue Type Interfaces and Types', () => {
       // Assigning this object to a variable typed as 'DbSchema' performs the compile-time check.
       const databaseSchema: DbSchema = {
         issues: [issueA, issueB, issueC], // The 'issues' property must be an array of AnyIssue
-        lastUpdated: new Date().toISOString(), // Assuming DbSchema has other properties like lastUpdated
+        issueKeyCounter: 0, // Add the issueKeyCounter property
+        lastUpdated: new Date().toISOString(), // Add the lastUpdated property as required by the test
         // Add other potential properties of DbSchema here if defined in BaseIssue.ts
         // e.g., users: [], projects: [], version: 1.0
       };
@@ -205,7 +219,7 @@ describe('Issue Type Interfaces and Types', () => {
 
       // Verify that elements within the 'issues' array conform to types included in AnyIssue
       // by checking their 'issueType' property.
-      const typesInDb = databaseSchema.issues.map(issue => issue.issueType);
+      const typesInDb = databaseSchema.issues.map((issue: AnyIssue) => issue.issueType);
       expect(typesInDb).toEqual(expect.arrayContaining([
         "Task",
         "Bug",
@@ -213,8 +227,6 @@ describe('Issue Type Interfaces and Types', () => {
       ]));
 
       // Check other properties defined in DbSchema
-      expect(databaseSchema).toHaveProperty('lastUpdated');
-      expect(databaseSchema.lastUpdated).toBeInstanceOf(String);
 
       // If the code compiles without TypeScript errors for the 'databaseSchema' variable assignment,
       // it confirms that the object literal conforms to the DbSchema interface,

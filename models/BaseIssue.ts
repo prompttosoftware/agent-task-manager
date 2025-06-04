@@ -59,6 +59,11 @@ export interface BaseIssue {
 }
 
 /**
+ * A union type representing all possible issue type values.
+ */
+export type IssueType = BaseIssue['issueType'];
+
+/**
  * Represents a Task issue, inheriting common properties from BaseIssue.
  */
 export interface Task extends BaseIssue {
