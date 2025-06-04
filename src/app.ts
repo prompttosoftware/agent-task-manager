@@ -1,11 +1,26 @@
-import express, { Request, Response } from 'express';
+import express, { Express, Request, Response } from 'express';
+import bodyParser from 'body-parser';
+import setupIssueRoutes from './api/routes/issueRoutes'; // Corrected import
+import { errorHandler } from './utils/errorHandler';
 
-// Create a new express application instance
-const app: express.Application = express();
+const app: Express = express();
+const port = process.env.PORT || 3000;
 
-// Define a route handler for the default home page
+// Middleware
+app.use(bodyParser.json());
+
+// Routes
+setupIssueRoutes(app);
+
+// Error handling middleware (must be after routes)
+app.use(errorHandler);
+
 app.get('/', (req: Request, res: Response) => {
-  res.send('Hello, world!');
+  res.send('Agent Task Manager API');
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
 
 export default app;
