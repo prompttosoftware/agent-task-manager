@@ -6,6 +6,7 @@ import app from '../../app';
 describe('Issue Routes', () => {
   // Test for POST /rest/api/2/issue
   it('should return 201 upon successful issue creation via POST /rest/api/2/issue', async () => {
+    console.log('TEST: Starting issue creation test...'); // Log start of test
     // Define a realistic request body for creating an issue.
     // This structure mimics a typical Jira API request body for issue creation.
     // You might need to adjust the values (e.g., project key, issue type name)
@@ -32,6 +33,9 @@ describe('Issue Routes', () => {
       .post('/rest/api/2/issue')
       .send(issueData)
       .set('Accept', 'application/json'); // Optional: Set headers
+
+    console.log('TEST: Received response status:', response.status); // Log response status
+    console.log('TEST: Received response body:', JSON.stringify(response.body, null, 2)); // Log response body
 
     // Assert that the response status code is 201 (Created)
     expect(response.status).toBe(201);
