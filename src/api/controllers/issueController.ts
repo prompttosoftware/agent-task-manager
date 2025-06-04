@@ -26,6 +26,16 @@ export const createIssue = (req: any, res: any): void => {
     return res.status(400).send({ message: 'Invalid request body: missing issue type name.' });
   }
 
+  // Validate parent issue key if provided
+  if (fields.parent) {
+    if (typeof fields.parent !== 'object' || fields.parent === null) {
+      return res.status(400).send({ message: 'Invalid request body: parent field must be an object if provided.' });
+    }
+    if (!fields.parent.key || typeof fields.parent.key !== 'string' || fields.parent.key.trim() === '') {
+      return res.status(400).send({ message: 'Invalid request body: parent key is required if parent field is provided.' });
+    }
+  }
+
   // Log the validated issue data
   console.log('Received issue data:', JSON.stringify(issueData, null, 2));
 
