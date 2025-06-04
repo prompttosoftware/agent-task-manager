@@ -6,9 +6,27 @@ import {
   Bug,
   Subtask,
   AnyIssue,
-  DbSchema,
+  DbSchema as IssueDbSchema, // Rename to avoid conflict with db.ts DbSchema
 } from './models/issue';
-import { describe, expect, it } from '@jest/globals';
+import {
+  loadDatabase,
+  saveDatabase,
+  DbSchema as DbSchemaFromDb, // Import DbSchema from db.ts
+  Issue as IssueFromDb, // Import Issue from db.ts
+} from '../db/db'; // Import functions from db.ts
+import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals';
+import fs from 'fs/promises';
+import path from 'path';
+
+// Mock the fs/promises and path modules
+jest.mock('fs/promises');
+jest.mock('path');
+
+const mockFs = fs as jest.Mocked<typeof fs>;
+const mockPath = path as jest.Mocked<typeof path>;
+
+const MOCK_DB_FILE_PATH = "/usr/src/agent-task-manager/.data/db.json";
+const MOCK_DB_DIR_PATH = "/usr/src/agent-task-manager/.data";
 
 /**
  * Basic helper function to check if a string is in a plausible ISO 8601 format.
@@ -401,4 +419,157 @@ describe('Issue Models', () => {
       expect(emptyDbSchema.issueKeyCounter).toBe(0);
     });
   });
+});
+
+
+// Start of Database Operations tests
+describe('Database Operations (db.ts)', () => {
+    // Reset mocks before each test
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Configure path.dirname mock
+        mockPath.dirname.mockReturnValue(MOCK_DB_DIR_PATH);
+    });
+
+    // --- loadDatabase Tests ---
+    describe('loadDatabase', () => {
+        const validDbContent: DbSchemaFromDb = {
+            issues: [
+                { key: 'TEST-1', summary: 'Test Issue 1', description: 'Desc 1', status: 'open' },
+                { key: 'TEST-2', summary: 'Test Issue 2', description: 'Desc 2', status: 'closed' },
+            ],
+            issueKeyCounter: 2,
+        };
+        const validJsonString = JSON.stringify(validDbContent, null, 2);
+
+        it('should load database successfully if file exists and is valid JSON', async () => {
+            mockFs.readFile.mockResolvedValue(validJsonString);
+
+            const db = await loadDatabase();
+
+            expect(mockFs.readFile).toHaveBeenCalledWith(MOCK_DB_FILE_PATH, 'utf-8');
+            // Use the DbSchema type from db.ts for comparison
+            expect(db).toEqual(validDbContent);
+        });
+
+        it('should initialize database if file does not exist (ENOENT)', async () => {
+            const error = new Error("ENOENT: no such file or directory");
+            (error as any).code = 'ENOENT'; // Simulate ENOENT error
+            mockFs.readFile.mockRejectedValue(error);
+            mockFs.mkdir.mockResolvedValue(undefined); // Mock successful directory creation
+            mockFs.writeFile.mockResolvedValue(undefined); // Mock successful file writing
+
+            const db = await loadDatabase();
+
+            expect(mockFs.readFile).toHaveBeenCalledWith(MOCK_DB_FILE_PATH, 'utf-8');
+            expect(mockPath.dirname).toHaveBeenCalledWith(MOCK_DB_FILE_PATH);
+            expect(mockFs.mkdir).toHaveBeenCalledWith(MOCK_DB_DIR_PATH, { recursive: true });
+            expect(mockFs.writeFile).toHaveBeenCalledWith(
+                MOCK_DB_FILE_PATH,
+                JSON.stringify({ issues: [], issueKeyCounter: 0 }, null, 2),
+                'utf-8'
+            );
+            // Should return an empty schema as defined in initializeDatabase
+            expect(db).toEqual({ issues: [], issueKeyCounter: 0 });
+        });
+
+        it('should initialize database if file contains invalid JSON (SyntaxError)', async () => {
+            mockFs.readFile.mockResolvedValue('{"issues": [... invalid json'); // Invalid JSON
+            mockFs.mkdir.mockResolvedValue(undefined);
+            mockFs.writeFile.mockResolvedValue(undefined);
+
+            // Suppress console.error for this test
+            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+            const db = await loadDatabase();
+
+            expect(mockFs.readFile).toHaveBeenCalledWith(MOCK_DB_FILE_PATH, 'utf-8');
+            expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Error parsing JSON in db.json"), expect.any(SyntaxError));
+            expect(mockPath.dirname).toHaveBeenCalledWith(MOCK_DB_FILE_PATH);
+            expect(mockFs.mkdir).toHaveBeenCalledWith(MOCK_DB_DIR_PATH, { recursive: true });
+             expect(mockFs.writeFile).toHaveBeenCalledWith(
+                MOCK_DB_FILE_PATH,
+                JSON.stringify({ issues: [], issueKeyCounter: 0 }, null, 2),
+                'utf-8'
+            );
+            // Should return an empty schema as defined in initializeDatabase
+            expect(db).toEqual({ issues: [], issueKeyCounter: 0 });
+
+            consoleErrorSpy.mockRestore(); // Restore console.error
+        });
+
+        it('should re-throw other errors during file reading', async () => {
+            const error = new Error("Permission denied");
+            (error as any).code = 'EACCES'; // Simulate a different error
+            mockFs.readFile.mockRejectedValue(error);
+
+            await expect(loadDatabase()).rejects.toThrow("Permission denied");
+            expect(mockFs.readFile).toHaveBeenCalledWith(MOCK_DB_FILE_PATH, 'utf-8');
+            // Ensure initializeDatabase was NOT called
+            expect(mockFs.mkdir).not.toHaveBeenCalled();
+            expect(mockFs.writeFile).not.toHaveBeenCalled();
+        });
+
+        // Test initialization errors
+        it('should re-throw errors during directory creation when initializing', async () => {
+            const readFileError = new Error("ENOENT");
+            (readFileError as any).code = 'ENOENT';
+            mockFs.readFile.mockRejectedValue(readFileError);
+
+            const mkdirError = new Error("mkdir failed");
+            mockFs.mkdir.mockRejectedValue(mkdirError);
+
+            await expect(loadDatabase()).rejects.toThrow("mkdir failed");
+            expect(mockFs.readFile).toHaveBeenCalled();
+            expect(mockFs.mkdir).toHaveBeenCalled();
+            expect(mockFs.writeFile).not.toHaveBeenCalled(); // Write should not be called
+        });
+
+         it('should re-throw errors during file writing when initializing', async () => {
+            const readFileError = new Error("ENOENT");
+            (readFileError as any).code = 'ENOENT';
+            mockFs.readFile.mockRejectedValue(readFileError);
+
+            mockFs.mkdir.mockResolvedValue(undefined);
+
+            const writeFileError = new Error("write failed");
+            mockFs.writeFile.mockRejectedValue(writeFileError);
+
+
+            await expect(loadDatabase()).rejects.toThrow("write failed");
+            expect(mockFs.readFile).toHaveBeenCalled();
+            expect(mockFs.mkdir).toHaveBeenCalled();
+            expect(mockFs.writeFile).toHaveBeenCalled();
+        });
+    });
+
+    // --- saveDatabase Tests ---
+    describe('saveDatabase', () => {
+        it('should save the database object to the file system as JSON', async () => {
+             const dbToSave: DbSchemaFromDb = {
+                issues: [
+                    { key: 'SAVE-1', summary: 'Save Test', description: 'Save desc', status: 'in progress' },
+                ],
+                issueKeyCounter: 1,
+            };
+            const expectedJsonString = JSON.stringify(dbToSave, null, 2);
+
+            mockFs.writeFile.mockResolvedValue(undefined); // Mock successful write
+
+            await saveDatabase(dbToSave);
+
+            expect(mockFs.writeFile).toHaveBeenCalledWith(MOCK_DB_FILE_PATH, expectedJsonString, 'utf-8');
+        });
+
+         it('should handle and re-throw errors during file writing', async () => {
+            const dbToSave: DbSchemaFromDb = { issues: [], issueKeyCounter: 0 };
+            const writeError = new Error("Disk full");
+            (writeError as any).code = 'ENOSPC'; // Simulate a write error
+
+            mockFs.writeFile.mockRejectedValue(writeError);
+
+            await expect(saveDatabase(dbToSave)).rejects.toThrow("Disk full");
+            expect(mockFs.writeFile).toHaveBeenCalled();
+        });
+    });
 });
