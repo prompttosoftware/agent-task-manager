@@ -1,12 +1,11 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { createIssue } from '../controllers/issueController';
+import { Request, Response } from 'express';
 
 const router = express.Router();
 
-router.post('/rest/api/2/issue', (req, res) => {
-  // In a real application, you'd handle issue creation logic here
-  // For now, we'll just return a success message
-  res.status(200).json({ message: 'Issue created successfully' });
+router.post('/rest/api/2/issue', (req: Request, res: Response) => {
+    createIssue(req, res);
 });
 
 export default router;

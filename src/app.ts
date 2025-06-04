@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import issueRoutes from './api/routes/issueRoutes';
-
+import { createIssue } from './api/controllers/issueController';
 const app = express();
 
 // Apply middleware
