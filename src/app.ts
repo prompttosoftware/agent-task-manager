@@ -4,7 +4,10 @@ import issueRoutes from './api/routes/issueRoutes';
 const app = express();
 
 app.use(express.json()); // Middleware to parse JSON request bodies
-app.use('/api', issueRoutes); // Mount the issue routes at /api
+// Mount the issue routes at the specific API path /rest/api/2/issue
+// Note: The issueRoutes router defines routes with the full path /rest/api/2/issue,
+// so it is mounted at the root level here.
+app.use(issueRoutes);
 
 /**
  * GET /
