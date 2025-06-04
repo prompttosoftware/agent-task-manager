@@ -1,12 +1,4 @@
-import express from 'express';
+import server from './server';
 
-const app = express();
-const port = 3000;
-
-app.get('/', (req, res) => {
-  res.send('Hello, world!');
-});
-
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+// The server is started when imported due to the top-level app.listen call in server.ts
+// This file serves purely as the entry point
