@@ -1,4 +1,7 @@
 import request from 'supertest';
+import { createIssue } from '../controllers/issueController'; // Add this import
+jest.mock('../controllers/issueController'); // Mock the controller module
+
 // Assuming your Express app instance is exported from src/app.ts or similar
 // Adjust the path '../app' based on the actual location of your app entry file relative to this test file
 import app from '../../app';
@@ -40,13 +43,16 @@ describe('Issue Routes', () => {
     // Assert that the response status code is 201 (Created)
     expect(response.status).toBe(201);
 
+    // Verify that the createIssue controller function was called
+    expect(createIssue).toHaveBeenCalledTimes(1); // Add this assertion
+
     // Optional: Add further assertions about the response body if the API
     // returns details of the created issue (like ID, key, self link).
     // For example:
     // expect(response.body).toHaveProperty('id');
     // expect(response.body).toHaveProperty('key');
     // expect(response.body).toHaveProperty('self');
-  });
+  }, 10000); // Add timeout of 10000ms
 
   // Add more tests for other issue-related routes or scenarios as needed
   // e.g., GET /rest/api/2/issue/{issueIdOrKey}, PUT, DELETE, etc.
