@@ -1,20 +1,18 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
-export class IssueController {
-  constructor() {
-  }
+/**
+ * Handles the creation of a new issue.
+ * This is a basic placeholder implementation.
+ * @param req - The Express request object.
+ * @param res - The Express response object.
+ * @param next - The Express next middleware function.
+ */
+const createIssue = (req: Request, res: Response, next: NextFunction) => {
+  // Basic implementation: just return a 201 status code
+  // In a real application, this would contain logic to
+  // validate input, interact with a database, etc.
 
-  /**
-   * Handles fetching all issues.
-   * @param req - The Express request object.
-   * @param res - The Express response object.
-   */
-  public async getAllIssues(req: Request, res: Response): Promise<void> {
-    try {
-      res.status(200).json({ message: 'Issues fetched successfully!' });
+  res.sendStatus(201);
+};
 
-    } catch (error) {
-      res.status(500).json({ message: 'Internal Server Error' });
-    }
-  }
-}
+export { createIssue }; // Exporting using named export as is common for controller functions
