@@ -15,9 +15,9 @@ describe('GET /', () => {
   });
 });
 
-describe('POST /rest/api/2/issue', () => {
+describe('POST /api/issues', () => {
   it('should return 200 and success message', async () => {
-    const res = await request(app).post('/rest/api/2/issue');
+    const res = await request(app).post('/api/issues');
     expect(res.statusCode).toBe(200);
     expect(res.body.message).toBe('Issue created successfully');
   });
