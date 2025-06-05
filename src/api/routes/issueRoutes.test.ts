@@ -77,6 +77,63 @@ describe('issueRoutes', () => {
     // expect(mockCreateIssue).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
   });
 
-  // Add more test cases here for other scenarios, like validation errors (400), etc.
-  // once the controller implements that logic.
+  test('should call createIssue controller and return 400 status with error message for validation failure', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      // Missing required fields or invalid data to simulate validation failure
+      summary: '', // Example of invalid data
+      description: 'This should fail validation.',
+      project: 'INVALID', // Example of potentially invalid project key
+      issueType: 'Task',
+    };
+    const errorMessage = 'Validation failed: summary is required'; // Example error message
+
+    // Mock the controller function implementation to simulate a 400 response
+    mockCreateIssue.mockImplementationOnce((req, res) => {
+      res.status(400).json({ message: errorMessage });
+    });
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: errorMessage });
+    expect(mockCreateIssue).toHaveBeenCalledTimes(1);
+    // Optional: Check if the controller was called with the specific request body if needed
+    // expect(mockCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ body: sampleRequestBody }), expect.any(Object));
+  });
+
+  test('should call createIssue controller and return 500 status with error message for internal server error', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      summary: 'Test Issue for 500',
+      description: 'This issue should trigger a server error.',
+      project: 'ERROR', // Example project key that might cause an error
+      issueType: 'Bug',
+    };
+    const errorMessage = 'An unexpected error occurred'; // Example server error message
+
+    // Mock the controller function implementation to simulate a 500 response
+    mockCreateIssue.mockImplementationOnce((req, res) => {
+      // In a real controller, this might be triggered by a thrown error or a database failure
+      res.status(500).json({ message: errorMessage });
+    });
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: errorMessage });
+    expect(mockCreateIssue).toHaveBeenCalledTimes(1);
+    // Optional: Check if the controller was called with the specific request body if needed
+    // expect(mockCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ body: sampleRequestBody }), expect.any(Object));
+  });
 });
