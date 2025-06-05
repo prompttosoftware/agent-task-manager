@@ -1,0 +1,62 @@
+import { Router } from 'express';
+import { createIssue } from '../controllers/issueController';
+
+const router = Router();
+
+/**
+ * @swagger
+ * /rest/api/2/issue:
+ *   post:
+ *     summary: Creates a new issue
+ *     description: Creates a new issue resource.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             # Add detailed schema properties based on your issue structure
+ *             properties:
+ *               # Example properties (adjust as needed)
+ *               title:
+ *                 type: string
+ *                 description: The title of the issue.
+ *                 example: "Bug in login flow"
+ *               description:
+ *                 type: string
+ *                 description: A detailed description of the issue.
+ *                 example: "Users are unable to log in after password reset."
+ *               type:
+ *                 type: string
+ *                 description: The type of issue (e.g., Bug, Task, Story).
+ *                 example: "Bug"
+ *               projectId:
+ *                 type: string
+ *                 description: The ID of the project the issue belongs to.
+ *                 example: "proj-123"
+ *             required:
+ *               - title
+ *               - description
+ *               - type
+ *               - projectId
+ *     responses:
+ *       201:
+ *         description: Issue created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   description: The ID of the newly created issue.
+ *                   example: "issue-456"
+ *                 # Add other relevant properties of the created issue
+ *       400:
+ *         description: Invalid input
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/rest/api/2/issue', createIssue);
+
+export default router;
