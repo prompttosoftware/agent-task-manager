@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { TaskService } from '../../services/task.service';
+import { IssueService } from '../../services/issueService';
 import { AnyIssue, IssueType, Subtask } from '../../models/issue';
 import { Database } from '../../db/database';
 
@@ -55,14 +55,14 @@ export const createIssue = async (req: Request, res: Response) => {
     }
 
     const db = new Database(); // Assuming Database is initialized here or injected
-    const taskService = new TaskService(db);
-    const createdIssue = await taskService.createTask({
-      title: newIssue.summary,
-      description: newIssue.description,
-      issueType: newIssue.issueType,
-      status: newIssue.status,
-      parentIssueKey: (newIssue as Subtask).parentIssueKey, // Cast to Subtask to access parentIssueKey safely
-    });
+    const issueService = new IssueService(db); // Use IssueService
+    // Pass the newIssue object directly to issueService.createIssue
+    const createdIssue = await issueService.createIssue(newIssue);
+
+    // If the service returns an array of strings, it indicates validation errors.
+    if (Array.isArray(createdIssue)) {
+      return res.status(400).json({ errors: createdIssue });
+    }
 
     res.status(201).json(createdIssue);
   } catch (error: any) {
