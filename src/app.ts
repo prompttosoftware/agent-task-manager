@@ -1,14 +1,49 @@
 import express from 'express';
-import { Task } from './models/task';
+import issueRoutes from './api/routes/issueRoutes';
 
 const app = express();
 
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
-// In-memory task storage
-let tasks: Task[] = [];
-let nextTaskId = 1;
+// Error handling middleware specifically for JSON parsing errors
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Check if the error is a SyntaxError and has a status of 400, which is common for bad JSON
+  if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
+    console.error('JSON parsing error:', err.message);
+    // Optionally send a specific error response to the client
+    // res.status(400).send({ message: 'Bad Request: Invalid JSON' });
+    // Pass the error along if you have other error handlers, or just call next()
+    next(err); // Call next without err to signal handled error, or next(err) to pass it
+  } else {
+    // Pass other errors to the next error handler
+    next(err);
+  }
+});
+
+// Log request details before hitting the issue routes
+app.use('/rest/api', (req, res, next) => {
+  console.log('--- Incoming Request (before issueRoutes) ---');
+  console.log('Method:', req.method);
+  console.log('URL:', req.originalUrl); // Use originalUrl to show the full path
+  console.log('Headers:', req.headers);
+  console.log('------------------------------------------');
+  next();
+});
+
+// Use issue routes
+app.use('/rest/api', issueRoutes);
+
+// Log that the request has passed through the '/rest/api' middleware section
+// This middleware is reached for paths starting with '/rest/api' if the
+// 'issueRoutes' handler did not send a response.
+app.use('/rest/api', (req, res, next) => {
+  console.log('--- Request passed through /rest/api handler chain ---');
+  console.log(`Method: ${req.method}, URL: ${req.originalUrl}`); // Use originalUrl to show the full path
+  console.log('Note: This log appears if issueRoutes did not send a response for this path.');
+  console.log('----------------------------------------------------');
+  next(); // Continue to the next middleware/route handler (e.g., global error handler or 404 if applicable)
+});
 
 /**
  * Defines the root route.
@@ -18,70 +53,12 @@ app.get('/', (req, res) => {
   res.json({ message: 'Hello, world!' });
 });
 
-// --- Task Routes ---
 
-// GET all tasks
-app.get('/tasks', (req, res) => {
-  res.json(tasks);
+// Global error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err.stack); // Log the error stack trace
+  // You can add more specific error handling here if needed
+  res.status(500).send({ message: 'Internal Server Error' });
 });
-
-// GET task by ID
-app.get('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const task = tasks.find(t => t.id === taskId);
-
-  if (task) {
-    res.json(task);
-  } else {
-    res.status(404).json({ message: 'Task not found' });
-  }
-});
-
-// POST create new task
-app.post('/tasks', (req, res) => {
-  const { title, description } = req.body;
-
-  if (!title || !description) {
-    return res.status(400).json({ message: 'Title and description are required' });
-  }
-
-  const newTask: Task = {
-    id: nextTaskId++,
-    title,
-    description,
-    completed: false,
-  };
-
-  tasks.push(newTask);
-  res.status(201).json(newTask);
-});
-
-// PUT update task by ID
-app.put('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
-
-  if (taskIndex > -1) {
-    const updatedTask = { ...tasks[taskIndex], ...req.body };
-    tasks[taskIndex] = updatedTask;
-    res.json(updatedTask);
-  } else {
-    res.status(404).json({ message: 'Task not found' });
-  }
-});
-
-// DELETE task by ID
-app.delete('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const initialLength = tasks.length;
-  tasks = tasks.filter(t => t.id !== taskId);
-
-  if (tasks.length < initialLength) {
-    res.status(204).send(); // No content
-  } else {
-    res.status(404).json({ message: 'Task not found' });
-  }
-});
-
 
 export default app;

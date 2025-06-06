@@ -1,5 +1,14 @@
-import { Task as TaskModel } from '../models/issue';
+import { Task, AnyIssue, DbSchema, Subtask } from '../models/issue';
+import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../db/database';
+
+interface CreateTaskParams {
+  title: string;
+  description?: string;
+  issueType: 'TASK' | 'STOR' | 'EPIC' | 'BUG' | 'SUBT';
+  status: 'Todo' | 'In Progress' | 'Done';
+  parentIssueKey?: string;
+}
 
 export class TaskService {
   private db: Database;
@@ -8,61 +17,54 @@ export class TaskService {
     this.db = db;
   }
 
-  async getAllTasks(): Promise<TaskModel[]> {
-    return this.db.getAllTasks();
-  }
-
-  async getTaskById(id: string): Promise<TaskModel | undefined> {
-    return this.db.getTaskById(id);
-  }
-
-  async createTask(task: {title: string, description?: string}): Promise<TaskModel> {
-    // Setting default values for createTask
-    const newTask = {
-        ...task,
-        key: this.generateIssueKey('TASK',1),
-        issueType: 'Task',
-        status: 'Todo',
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-    return this.db.createTask(newTask);
-  }
-
-  async updateTask(id: string, updates: Partial<Omit<TaskModel, 'id' | 'key' | 'issueType' | 'createdAt' | 'updatedAt' | 'status'>>): Promise<TaskModel | undefined> {
-    return this.db.updateTask(id, updates);
-  }
-
-  async deleteTask(id: string): Promise<TaskModel | undefined> {
-    return this.db.deleteTask(id);
-  }
-
   /**
-   * Generates a unique issue key based on the issue type and counter.
-   * @param issueType The type of the issue (e.g., 'TASK', 'STOR', 'EPIC', 'BUG', 'SUBT').
-   * @param counter A counter for the issue type.
-   * @returns The generated issue key string (e.g., 'TASK-001').
-   * @throws {Error} If the issueType is unknown.
+   * Creates a new task.
+   * @param params The parameters for creating a task.
+   * @returns The created task.
    */
-  generateIssueKey(issueType: string, counter: number): string {
-    const prefixes: { [key: string]: string } = {
-      'TASK': 'TASK',
-      'STOR': 'STOR',
-      'EPIC': 'EPIC',
-      'BUG': 'BUG',
-      'SUBT': 'SUBT',
-    };
+  async createTask(params: CreateTaskParams): Promise<AnyIssue> {
+    const { title, description, issueType, status, parentIssueKey } = params;
 
-    const prefix = prefixes[issueType];
+    // Generate a unique ID
+    const id = uuidv4();
 
-    if (!prefix) {
-      throw new Error(`Unknown issue type: ${issueType}`);
+    // Generate a key (This is a simplified version. Will improve later.)
+    const issueKeyCounter = this.db.getIssueKeyCounter();
+    const key = `TEST-${issueKeyCounter + 1}`; // Simple key generation for now.
+
+    let newTask: AnyIssue;
+
+    if (issueType === 'SUBT') {
+        if (!parentIssueKey) {
+            throw new Error('parentIssueKey is required for Subtask');
+        }
+        newTask = {
+            id,
+            key,
+            issueType,
+            summary: title,
+            description: description,
+            status: status,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            parentIssueKey: parentIssueKey,
+        } as Subtask; // Cast to Subtask
+    } else {
+        newTask = {
+            id,
+            key,
+            issueType,
+            summary: title,
+            description: description,
+            status: status,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
     }
 
-    // Pad the counter with leading zeros to ensure it's 3 digits
-    const paddedCounter = String(counter).padStart(3, '0');
+    await this.db.addIssue(newTask);
+    this.db.incrementIssueKeyCounter(); // Increment the counter.
 
-    return `${prefix}-${paddedCounter}`;
+    return newTask;
   }
 }
