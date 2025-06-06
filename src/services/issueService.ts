@@ -12,6 +12,18 @@ export interface Issue {
   createdAt: string; // ISO string
 }
 
+/**
+ * Creates a new issue with a unique ID and default status.
+ * Saves the new issue and returns it.
+ *
+ * @param {object} issueData - The data for the new issue.
+ * @param {string} issueData.summary - A brief summary of the issue.
+ * @param {string} issueData.description - A detailed description of the issue.
+ * @param {string} issueData.project - The project the issue belongs to.
+ * @param {string} issueData.issueType - The type of the issue (e.g., Bug, Task, Story).
+ * @param {string} [issueData.parent] - The optional ID of a parent issue.
+ * @returns {Issue} The newly created Issue object.
+ */
 export const createIssue = (issueData: {
   summary: string;
   description: string;
