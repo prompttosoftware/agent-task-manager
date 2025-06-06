@@ -63,3 +63,5 @@ export interface DbSchema {
   issues: AnyIssue[];
   issueKeyCounter: number;
 }
+
+export type IssueType = 'TASK' | 'STOR' | 'EPIC' | 'BUG' | 'SUBT';
