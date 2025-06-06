@@ -1,4 +1,4 @@
-import { Task as TaskModel } from '../models/issue';
+import { Task as TaskModel, DbSchema } from '../models/issue';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -24,11 +24,6 @@ interface UpdateTaskData {
   completed?: boolean;
 }
 
-interface DbSchema {
-  issues: TaskModel[];
-  issueKeyCounter: number;
-}
-
 /**
  * A basic in-memory database implementation for tasks.
  * Currently uses dummy data and simple array operations.
@@ -36,15 +31,27 @@ interface DbSchema {
 export class Database {
   private tasks: TaskModel[] = []; // In-memory storage
   private issueKeyCounter: number = 0;
+  private ready: Promise<void>; // Promise that resolves when the database is loaded
 
   constructor() {
-    this.loadDatabase().then(() => {
+    this.ready = this.loadDatabase().then(() => {
       console.log('Database loaded');
     }).catch(err => {
       console.error('Failed to load database:', err);
+      // Rethrow the error so the 'ready' promise rejects if loading fails
+      throw err;
     });
   }
 
+  /**
+   * Loads the database state from the file system specified by `DB_FILE_PATH`.
+   * If the file does not exist (`ENOENT`), it initializes the database with an empty state ({ issues: [], issueKeyCounter: 0 })
+   * and saves it to the file.
+   * If the file contains invalid JSON (`SyntaxError`), it also initializes to an empty state and saves it.
+   * Any other errors during loading are caught, logged, and re-thrown.
+   * @returns A promise that resolves when the database has been successfully loaded or initialized.
+   * @throws {Error} If an error other than `ENOENT` or `SyntaxError` occurs during file reading or writing.
+   */
   async loadDatabase(): Promise<void> {
     try {
       const data = await fs.readFile(DB_FILE_PATH, 'utf-8');
@@ -74,6 +81,15 @@ export class Database {
     }
   }
 
+  /**
+   * Saves the provided database state (`DbSchema`) to the file system at `DB_FILE_PATH`.
+   * It ensures the directory containing the file exists by creating it recursively if necessary.
+   * The data is written as JSON with a 2-space indentation for readability.
+   * Errors during directory creation or file writing are caught, logged, and re-thrown.
+   * @param data The database schema object (`DbSchema`) representing the current state (issues and issueKeyCounter) to save.
+   * @returns A promise that resolves when the database has been successfully saved to the file.
+   * @throws {Error} If an error occurs during directory creation or file writing.
+   */
   async saveDatabase(data: DbSchema): Promise<void> {
     try {
       const dirPath = path.dirname(DB_FILE_PATH);
@@ -91,6 +107,7 @@ export class Database {
    * @returns A promise resolving to an array of tasks.
    */
   async getAllTasks(): Promise<TaskModel[]> {
+    await this.ready; // Ensure database is loaded
     // Simulate asynchronous operation
     return Promise.resolve([...this.tasks]);
   }
@@ -101,6 +118,7 @@ export class Database {
    * @returns A promise resolving to the task if found, otherwise undefined.
    */
   async getTaskById(id: string): Promise<TaskModel | undefined> {
+    await this.ready; // Ensure database is loaded
     // Simulate asynchronous operation
     const task = this.tasks.find((task) => task.id === id);
     return Promise.resolve(task ? { ...task } : undefined);
@@ -112,6 +130,7 @@ export class Database {
    * @returns A promise resolving to the newly created task.
    */
   async createTask(data: CreateTaskData): Promise<TaskModel> {
+    await this.ready; // Ensure database is loaded
     // Simulate asynchronous operation and database-like ID generation
     const newTask: TaskModel = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 5), // Simple unique ID
@@ -135,6 +154,7 @@ export class Database {
    * @returns A promise resolving to the updated task if found, otherwise undefined.
    */
   async updateTask(id: string, data: UpdateTaskData): Promise<TaskModel | undefined> {
+    await this.ready; // Ensure database is loaded
     // Simulate asynchronous operation
     const index = this.tasks.findIndex((task) => task.id === id);
 
@@ -162,6 +182,7 @@ export class Database {
    * @returns A promise resolving to the deleted task if found, otherwise undefined.
    */
   async deleteTask(id: string): Promise<TaskModel | undefined> {
+    await this.ready; // Ensure database is loaded
     // Simulate asynchronous operation
     const index = this.tasks.findIndex((task) => task.id === id);
 
