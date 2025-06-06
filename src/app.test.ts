@@ -148,3 +148,30 @@ describe('Data Model Tests', () => {
     expect(dbSchema.issueKeyCounter).toBe(0);
   });
 });
+
+import { TaskService } from './services/task.service';
+
+describe('TaskService Tests', () => {
+  let taskService: TaskService;
+  const dummyDb: any = {}; // Simple dummy since generateIssueKey doesn't use db
+
+  beforeAll(() => {
+    taskService = new TaskService(dummyDb as any);
+  });
+
+  describe('generateIssueKey', () => {
+    it('should generate keys for valid issue types with correct padding', () => {
+      expect(taskService.generateIssueKey('TASK', 1)).toBe('TASK-001');
+      expect(taskService.generateIssueKey('STOR', 10)).toBe('STOR-010');
+      expect(taskService.generateIssueKey('EPIC', 99)).toBe('EPIC-099');
+      expect(taskService.generateIssueKey('BUG', 100)).toBe('BUG-100');
+      expect(taskService.generateIssueKey('SUBT', 999)).toBe('SUBT-999');
+      expect(taskService.generateIssueKey('TASK', 1234)).toBe('TASK-1234'); // Test padding >= 3 digits
+    });
+
+    it('should throw an error for an invalid issue type', () => {
+      expect(() => taskService.generateIssueKey('INVALID', 1)).toThrow('Unknown issue type: INVALID');
+      expect(() => taskService.generateIssueKey('TASKK', 5)).toThrow('Unknown issue type: TASKK'); // Misspelled type
+    });
+  });
+});
