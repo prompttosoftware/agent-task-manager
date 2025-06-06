@@ -2,13 +2,14 @@ import express from 'express';
 import request from 'supertest';
 import issueRoutes from './issueRoutes';
 import * as issueController from '../controllers/issueController';
+import * as issueService from '../../services/issueService';
 
-// Mock the issueController module
-jest.mock('../controllers/issueController');
+// Mock the issueService module
+jest.mock('../../services/issueService');
 
 describe('issueRoutes', () => {
   let app: express.Application;
-  const mockCreateIssue = issueController.createIssue as jest.Mock;
+  const mockCreateIssueService = issueService.createIssue as jest.Mock;
 
   // Set up the Express app before each test
   beforeEach(() => {
@@ -19,79 +20,39 @@ describe('issueRoutes', () => {
     app.use('/', issueRoutes);
 
     // Reset mocks before each test
-    mockCreateIssue.mockClear();
+    mockCreateIssueService.mockClear();
   });
 
-  // Test case for POST /rest/api/2/issue
-  test('should call createIssue controller and return 201 status with success message', async () => {
+  // Test case for POST /rest/api/2/issue using the real controller and mocked service
+  test('POST /rest/api/2/issue should create issue and return 201 with issue data', async () => {
     // Arrange
+    // The request body now follows a nested structure { fields: { ... }, parent: { ... } }
     const sampleRequestBody = {
-      summary: 'Test Issue',
-      description: 'This is a test issue description.',
-      project: 'TEST',
-      issueType: 'Task',
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { name: 'Task' },
+      }
+      // You could add parent here like:
+      // parent: { key: 'PROJECT-123' }
+      // if you wanted to test the controller's handling of parent,
+      // but the service currently doesn't use it.
     };
 
-    // Mock the controller function implementation
-    // Since the controller is already a placeholder returning 201,
-    // we can mock its behavior to just resolve or not throw,
-    // and then check if it was called.
-    // If we wanted to test a specific return value from the controller,
-    // we would mock it here. For this test, we just need to verify call and status.
-    // The controller's current implementation directly sets the status and body.
-    // We can mock it to simply call next() or end() if needed, but
-    // for verifying the route handler correctly maps the request to the controller,
-    // the main assertion is that the controller function is called.
-    // However, to test the route correctly handling the controller's *response*,
-    // we need the controller to *actually* execute its `res.status(201).json(...)` logic.
-    // Therefore, instead of mocking the *implementation*, we just mock the function
-    // reference to spy on it, but let the real controller logic run.
-
-    // We need to restore the original implementation for this specific test
-    // so that `res.status(201).json(...)` is actually called.
-    // Alternatively, mock the implementation to perform the same action.
-    // Let's mock the implementation to explicitly return the expected response.
-    // This makes the test less dependent on the internal controller implementation detail (like using res.status directly)
-    // and more focused on the route calling the controller and the *response* being correct.
-    mockCreateIssue.mockImplementationOnce((req, res) => {
-      res.status(201).json({ message: 'Issue created successfully (placeholder)' });
-    });
-
-
-    // Act
-    const response = await request(app)
-      .post('/rest/api/2/issue')
-      .send(sampleRequestBody)
-      .set('Accept', 'application/json'); // Set Accept header if needed
-
-    // Assert
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual({ message: 'Issue created successfully (placeholder)' });
-
-    // Verify that the controller function was called exactly once
-    expect(mockCreateIssue).toHaveBeenCalledTimes(1);
-
-    // Optionally, verify that the controller was called with the correct request and response objects
-    // This level of detail is often omitted as it couples the test tightly to Express internals,
-    // but can be useful in complex scenarios. For this case, checking the call count is sufficient.
-    // expect(mockCreateIssue).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
-  });
-
-  test('should call createIssue controller and return 400 status with error message for validation failure', async () => {
-    // Arrange
-    const sampleRequestBody = {
-      // Missing required fields or invalid data to simulate validation failure
-      summary: '', // Example of invalid data
-      description: 'This should fail validation.',
-      project: 'INVALID', // Example of potentially invalid project key
-      issueType: 'Task',
+    // Expected data that the service mock will return (flat structure as per service definition)
+    // The controller extracts these fields from the nested request body.
+    const expectedCreatedIssue = {
+      id: 'mock-issue-id-123', // Service mock will return a fixed ID
+      summary: sampleRequestBody.fields.summary,
+      description: sampleRequestBody.fields.description,
+      project: sampleRequestBody.fields.project.key,
+      issueType: sampleRequestBody.fields.issuetype.name,
+      // Add any other fields the service is expected to add/return (e.g., status, key, etc.)
     };
-    const errorMessage = 'Validation failed: summary is required'; // Example error message
 
-    // Mock the controller function implementation to simulate a 400 response
-    mockCreateIssue.mockImplementationOnce((req, res) => {
-      res.status(400).json({ message: errorMessage });
-    });
+    // Mock the service function implementation to return the expected data
+    mockCreateIssueService.mockResolvedValueOnce(expectedCreatedIssue);
 
     // Act
     const response = await request(app)
@@ -100,28 +61,40 @@ describe('issueRoutes', () => {
       .set('Accept', 'application/json');
 
     // Assert
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({ message: errorMessage });
-    expect(mockCreateIssue).toHaveBeenCalledTimes(1);
-    // Optional: Check if the controller was called with the specific request body if needed
-    // expect(mockCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ body: sampleRequestBody }), expect.any(Object));
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(expectedCreatedIssue);
+
+    // Verify that the service function was called exactly once
+    expect(mockCreateIssueService).toHaveBeenCalledTimes(1);
+
+    // Verify that the service function was called with the flat data extracted by the controller
+    // from the request body, plus the generated UUID.
+    expect(mockCreateIssueService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.any(String), // Expecting a UUID generated by the controller
+        summary: sampleRequestBody.fields.summary,
+        description: sampleRequestBody.fields.description,
+        project: sampleRequestBody.fields.project.key,
+        issueType: sampleRequestBody.fields.issuetype.name,
+      })
+    );
   });
 
-  test('should call createIssue controller and return 500 status with error message for internal server error', async () => {
+  // Test case for POST /rest/api/2/issue handling 500 from service
+  test('POST /rest/api/2/issue should return 500 status for service error', async () => {
     // Arrange
     const sampleRequestBody = {
-      summary: 'Test Issue for 500',
-      description: 'This issue should trigger a server error.',
-      project: 'ERROR', // Example project key that might cause an error
-      issueType: 'Bug',
+      fields: {
+        summary: 'Test Issue for 500',
+        description: 'This issue should trigger a service error.',
+        project: { key: 'ERROR' }, // Example project key that might cause an error in service
+        issuetype: { name: 'Bug' },
+      },
     };
-    const errorMessage = 'An unexpected error occurred'; // Example server error message
+    const serviceErrorMessage = 'Database connection failed'; // Simulate an error from the service
 
-    // Mock the controller function implementation to simulate a 500 response
-    mockCreateIssue.mockImplementationOnce((req, res) => {
-      // In a real controller, this might be triggered by a thrown error or a database failure
-      res.status(500).json({ message: errorMessage });
-    });
+    // Mock the service function implementation to throw an error
+    mockCreateIssueService.mockRejectedValueOnce(new Error(serviceErrorMessage));
 
     // Act
     const response = await request(app)
@@ -131,9 +104,345 @@ describe('issueRoutes', () => {
 
     // Assert
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ message: errorMessage });
-    expect(mockCreateIssue).toHaveBeenCalledTimes(1);
-    // Optional: Check if the controller was called with the specific request body if needed
-    // expect(mockCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ body: sampleRequestBody }), expect.any(Object));
+    // The controller wraps the service error message
+    expect(response.body).toEqual({ message: 'Failed to create issue', error: serviceErrorMessage });
+
+    // Verify that the service function was called exactly once with the correct data
+    expect(mockCreateIssueService).toHaveBeenCalledTimes(1);
+    expect(mockCreateIssueService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.any(String),
+        summary: sampleRequestBody.fields.summary,
+        description: sampleRequestBody.fields.description,
+        project: sampleRequestBody.fields.project.key,
+        issueType: sampleRequestBody.fields.issuetype.name,
+      })
+    );
+  });
+
+  // --- New test cases for validation errors (400 status) ---
+
+  test('POST /rest/api/2/issue should return 400 for missing "fields"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      // Missing the required 'fields' object
+      parent: { key: 'PROJECT-123' }
+    };
+    const expectedErrorMessage = 'Missing required field: "fields".';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled(); // Service should not be called on validation failure
+  });
+
+  test('POST /rest/api/2/issue should return 400 for missing "fields.summary"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        // summary is missing
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { name: 'Task' },
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.summary". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for empty "fields.summary"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: '   ', // empty summary
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { name: 'Task' },
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.summary". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for empty "fields.issuetype.name"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { name: '   ' }, // Empty issue type name
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.issuetype.name". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for missing "fields.issuetype.name"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { /* name is missing */ },
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.issuetype.name". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for invalid "fields.issuetype.name"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        project: { key: 'TEST' },
+        issuetype: { name: 'InvalidType' }, // Invalid issue type
+      },
+    };
+    const expectedErrorMessage = 'Invalid value for "fields.issuetype.name". Allowed values are: Bug, Task, Story.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for empty "fields.project.key"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        project: { key: '   ' }, // Empty project key
+        issuetype: { name: 'Task' },
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.project.key". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for missing "fields.project.key"', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Test Issue',
+        description: 'This is a test issue description.',
+        // project is missing
+        issuetype: { name: 'Task' },
+      },
+    };
+    const expectedErrorMessage = 'Invalid or missing field: "fields.project.key". It must be a non-empty string.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for missing "parent.key" when "parent" is present', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Sub-task',
+        description: 'This is a sub-task description.',
+        project: { key: 'PROJECT' },
+        issuetype: { name: 'Task' }, // Assuming Sub-task is allowed if parent is provided
+      },
+      parent: {
+        // key is missing
+      }
+    };
+    // Note: Controller currently only checks for Bug, Task, Story. Sub-task would fail validation
+    // first. Let's adjust issuetype or the test expectation. Use a valid type.
+    // sampleRequestBody.fields.issuetype.name = 'Task';
+
+    const expectedErrorMessage = 'Invalid or missing field: "parent.key". It must be a non-empty string if "parent" is provided.';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 400 for invalid "parent.key" format', async () => {
+    // Arrange
+    const invalidParentKey = 'PROJECT123'; // Missing hyphen
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Sub-task',
+        description: 'This is a sub-task description.',
+        project: { key: 'PROJECT' },
+        issuetype: { name: 'Task' }, // Use a valid type
+      },
+      parent: {
+        key: invalidParentKey,
+      }
+    };
+    const expectedErrorMessage = `Invalid format for "parent.key": "${invalidParentKey}". Expected format like "PROJECT-123".`;
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+   test('POST /rest/api/2/issue should return 400 for parent key project mismatch', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Sub-task',
+        description: 'This is a sub-task description.',
+        project: { key: 'PROJ' }, // Project key PROJ
+        issuetype: { name: 'Task' }, // Use a valid type
+      },
+      parent: {
+        key: 'ANOTHER-123', // Parent key from ANOTHER project
+      }
+    };
+    const expectedErrorMessage = 'Project key "PROJ" must match the project prefix of the parent key "ANOTHER-123". Expected "ANOTHER".';
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: expectedErrorMessage });
+    expect(mockCreateIssueService).not.toHaveBeenCalled();
+  });
+
+  test('POST /rest/api/2/issue should return 201 with valid parent key', async () => {
+    // Arrange
+    const sampleRequestBody = {
+      fields: {
+        summary: 'Sub-task',
+        description: 'This is a sub-task description.',
+        project: { key: 'PROJECT' },
+        issuetype: { name: 'Task' }, // Use a valid type
+      },
+      parent: {
+        key: 'PROJECT-123',
+      }
+    };
+
+    const expectedCreatedIssue = {
+      id: 'mock-issue-id-123',
+      summary: sampleRequestBody.fields.summary,
+      description: sampleRequestBody.fields.description,
+      project: sampleRequestBody.fields.project.key,
+      issueType: sampleRequestBody.fields.issuetype.name,
+      parentKey: sampleRequestBody.parent.key // Correct key for parent
+    };
+
+
+    mockCreateIssueService.mockResolvedValueOnce(expectedCreatedIssue);
+
+    // Act
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(sampleRequestBody)
+      .set('Accept', 'application/json');
+
+    // Assert
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(expectedCreatedIssue);
+    // Explicitly assert the parentKey in the response body
+    expect(response.body.parentKey).toBe(sampleRequestBody.parent.key);
+    expect(mockCreateIssueService).toHaveBeenCalledTimes(1);
+    expect(mockCreateIssueService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.any(String),
+        summary: sampleRequestBody.fields.summary,
+        description: sampleRequestBody.fields.description,
+        project: sampleRequestBody.fields.project.key,
+        issueType: sampleRequestBody.fields.issuetype.name,
+        parentKey: sampleRequestBody.parent.key, // Verify parent key is passed
+      })
+    );
   });
 });
