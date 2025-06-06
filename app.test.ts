@@ -84,5 +84,6 @@ describe('POST /rest/api/2/issue', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toBe('Missing required field: fields.parentIssueKey for subtask');
     });
 });

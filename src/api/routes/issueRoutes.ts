@@ -69,6 +69,6 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.post('/2/issue', createIssue);
+router.post('/rest/api/2/issue', createIssue);
 
 export default router;
