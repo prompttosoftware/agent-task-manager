@@ -146,12 +146,13 @@ describe('API Endpoint Tests', () => {
   // This test is simplified to check basic POST request handling,
   // specifically status code 201 and JSON content type.
   it('POST /rest/api/2/issue should return 201 and Content-Type JSON', async () => {
-    // Send a basic issue creation request
+    // Send a basic issue creation request in Jira-like format
     const basicIssue = {
-      summary: "Basic Test Issue",
-      issueType: "TASK",
-      status: "Todo",
-      // Other fields are not required for this simplified test
+      fields: { // Wrap fields in 'fields' property
+        summary: "Basic Test Issue",
+        issuetype: { name: "TASK" }, // Modified to match controller expectation
+        status: "Todo",
+      }
     };
 
     const response = await request(app)
@@ -161,9 +162,201 @@ describe('API Endpoint Tests', () => {
     // Assert status code and content type
     expect(response.status).toBe(201);
     expect(response.headers['content-type']).toMatch(/json/);
+    // Optional: Add basic checks for response body format
+    expect(response.body).toHaveProperty('id');
+    expect(response.body).toHaveProperty('key');
+    expect(response.body).toHaveProperty('summary', basicIssue.fields.summary);
+    expect(response.body).toHaveProperty('issueType', basicIssue.fields.issuetype.name); // Assert against the name property
+    expect(response.body).toHaveProperty('status', basicIssue.fields.status);
+    expect(response.body).toHaveProperty('createdAt');
+    expect(response.body).toHaveProperty('updatedAt');
   });
 
   // Add more API tests here as needed for other endpoints
   // e.g., GET /rest/api/2/issue/{issueIdOrKey}, PUT, DELETE, etc.
 
+  // Detailed tests for POST /rest/api/2/issue
+  it('POST /rest/api/2/issue should create a task issue successfully with valid fields', async () => {
+    const validIssueData = {
+      fields: {
+        summary: "Test Task Issue",
+        issuetype: { name: "TASK" }, // Modified to match controller expectation
+        status: "Todo",
+        description: "This is a test description."
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(validIssueData);
+
+    expect(response.status).toBe(201);
+    expect(response.headers['content-type']).toMatch(/json/);
+    expect(response.body).toHaveProperty('id');
+    expect(response.body).toHaveProperty('key');
+    expect(response.body.summary).toBe(validIssueData.fields.summary);
+    expect(response.body.issueType).toBe(validIssueData.fields.issuetype.name); // Assert against the name property
+    expect(response.body.status).toBe(validIssueData.fields.status);
+    expect(response.body.description).toBe(validIssueData.fields.description);
+    expect(response.body).toHaveProperty('createdAt');
+    expect(response.body).toHaveProperty('updatedAt');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if fields is missing', async () => {
+    const issueDataMissingFields = {
+      summary: "Test Issue",
+      issueType: "TASK",
+      status: "Todo"
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataMissingFields);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if summary is missing within fields', async () => {
+    const issueDataMissingSummary = {
+      fields: {
+        issueType: "TASK",
+        status: "Todo"
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataMissingSummary);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Required field fields.summary cannot be empty');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if issueType is missing within fields', async () => {
+    const issueDataMissingIssueType = {
+      fields: {
+        summary: "Test Issue",
+        status: "Todo"
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataMissingIssueType);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype'); // Error message updated
+  });
+
+  it('POST /rest/api/2/issue should return 400 if status is missing within fields', async () => {
+    const issueDataMissingStatus = {
+      fields: {
+        summary: "Test Issue",
+        issuetype: { name: "TASK" } // Modified to match controller expectation
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataMissingStatus);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.status');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if summary is empty', async () => {
+    const issueDataEmptySummary = {
+      fields: {
+        summary: "", // Empty summary
+        issuetype: { name: "TASK" }, // Modified to match controller expectation
+        status: "Todo"
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataEmptySummary);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Required field fields.summary cannot be empty');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if issueType is empty', async () => {
+    const issueDataEmptyIssueType = {
+      fields: {
+        summary: "Test Issue",
+        issuetype: { name: "" }, // Modified to match controller expectation
+        status: "Todo"
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataEmptyIssueType);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype.name'); // Error message updated
+  });
+
+  it('POST /rest/api/2/issue should return 400 if issueType is invalid', async () => {
+    const issueDataInvalidIssueType = {
+      fields: {
+        summary: "Test Issue",
+        issuetype: { name: "INVALID" }, // Modified to match controller expectation
+        status: "Todo"
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(issueDataInvalidIssueType);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Invalid issueType. Must be one of: TASK, STOR, EPIC, BUG, SUBT');
+  });
+
+  it('POST /rest/api/2/issue should return 400 if parentIssueKey is missing for SUBT issueType', async () => {
+    const subtaskDataMissingParent = {
+      fields: {
+        summary: "Test Subtask",
+        issuetype: { name: "SUBT" }, // Modified to match controller expectation
+        status: "Todo"
+        // parentIssueKey is missing
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(subtaskDataMissingParent);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.parentIssueKey for subtask');
+  });
+
+  it('POST /rest/api/2/issue should create a SUBT issue successfully with parentIssueKey', async () => {
+    const subtaskDataValid = {
+      fields: {
+        summary: "Test Subtask with Parent",
+        issuetype: { name: "SUBT" }, // Modified to match controller expectation
+        status: "Todo",
+        parentIssueKey: "PROJECT-1" // Assuming a parent key exists (or can be any string for validation test)
+      }
+    };
+
+    const response = await request(app)
+      .post('/rest/api/2/issue')
+      .send(subtaskDataValid);
+
+    expect(response.status).toBe(201);
+    expect(response.headers['content-type']).toMatch(/json/);
+    expect(response.body).toHaveProperty('id');
+    expect(response.body).toHaveProperty('key');
+    expect(response.body.summary).toBe(subtaskDataValid.fields.summary);
+    expect(response.body.issueType).toBe(subtaskDataValid.fields.issuetype.name); // Assert against the name property
+    expect(response.body.status).toBe(subtaskDataValid.fields.status);
+    expect(response.body.parentIssueKey).toBe(subtaskDataValid.fields.parentIssueKey);
+    expect(response.body).toHaveProperty('createdAt');
+    expect(response.body).toHaveProperty('updatedAt');
+  });
 });

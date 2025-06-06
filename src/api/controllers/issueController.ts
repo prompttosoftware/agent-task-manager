@@ -14,34 +14,64 @@ export const createIssue = async (req: Request, res: Response) => { // Make func
   try {
     console.log('createIssue: Received request body:', req.body); // Log request body
     console.log('createIssue: Request headers:', req.headers); // Log request headers
-    const { summary, description, issueType, status, parentIssueKey } = req.body; // Destructure to get required values, including parentIssueKey
+    const { fields } = req.body; // Expect Jira-like request body with 'fields' property
 
-    // Validate required fields
+    // Validate that 'fields' exists
+    if (!fields) {
+      console.warn('createIssue: Validation failed: Missing required field: fields');
+      return res.status(400).json({ error: 'Missing required field: fields' });
+    }
+    console.log('createIssue: Validation successful: fields exists.');
+
+    const { summary, description, issuetype, status, parentIssueKey } = fields; // Destructure required values from 'fields', expecting 'issuetype' object
+
+    // Validate required fields within 'fields'
     if (!summary) {
-      console.warn('createIssue: Missing required field: summary');
-      return res.status(400).json({ error: 'Missing required field: summary' });
+      console.warn('createIssue: Validation failed: fields.summary is required and cannot be empty');
+      return res.status(400).json({ error: 'Required field fields.summary cannot be empty' });
     }
-    if (!issueType) {
-      console.warn('createIssue: Missing required field: issueType');
-      return res.status(400).json({ error: 'Missing required field: issueType' });
-    }
-    if (!status) {
-      console.warn('createIssue: Missing required field: status');
-      return res.status(400).json({ error: 'Missing required field: status' });
-    }
+    console.log('createIssue: Validation successful: fields.summary exists.');
 
-    // Validate issueType value
+    // Validate issuetype object and its name property
+    if (!issuetype) {
+      console.warn('createIssue: Validation failed: Missing required field: fields.issuetype');
+      return res.status(400).json({ error: 'Missing required field: fields.issuetype' });
+    }
+    console.log('createIssue: Validation successful: fields.issuetype exists.');
+
+    if (!issuetype.name) {
+        console.warn('createIssue: Validation failed: Missing required field: fields.issuetype.name');
+        return res.status(400).json({ error: 'Missing required field: fields.issuetype.name' });
+    }
+    console.log('createIssue: Validation successful: fields.issuetype.name exists.');
+
+
+    if (!status) {
+      console.warn('createIssue: Validation failed: Missing required field: fields.status');
+      return res.status(400).json({ error: 'Missing required field: fields.status' });
+    }
+    console.log('createIssue: Validation successful: fields.status exists.');
+
+    // Validate issueType name value
     const validIssueTypes = ['TASK', 'STOR', 'EPIC', 'BUG', 'SUBT'];
-    if (!validIssueTypes.includes(issueType)) {
-        console.warn(`createIssue: Invalid issueType: ${issueType}`);
+    if (!validIssueTypes.includes(issuetype.name)) {
+        console.warn(`createIssue: Validation failed: Invalid issueType: ${issuetype.name}. Allowed: ${validIssueTypes.join(', ')}`);
         return res.status(400).json({ error: `Invalid issueType. Must be one of: ${validIssueTypes.join(', ')}` });
     }
+    console.log(`createIssue: Validation successful: issueType '${issuetype.name}' is valid.`);
 
     // Check for parentIssueKey if issueType is SUBT
-    if (issueType === 'SUBT' && !parentIssueKey) {
-        console.warn('createIssue: Missing required field: parentIssueKey for subtask');
-        return res.status(400).json({ error: 'Missing required field: parentIssueKey for subtask' });
+    if (issuetype.name === 'SUBT') {
+        console.log('createIssue: Issue type is SUBT, checking for parentIssueKey...');
+        if (!parentIssueKey) {
+            console.warn('createIssue: Validation failed: Missing required field: fields.parentIssueKey for subtask');
+            return res.status(400).json({ error: 'Missing required field: fields.parentIssueKey for subtask' });
+        }
+        console.log('createIssue: Validation successful: fields.parentIssueKey exists for subtask.');
+    } else {
+         console.log(`createIssue: Issue type is ${issuetype.name}, parentIssueKey is not required.`);
     }
+
 
     // Create new Database instance and wait for it to load
     const db = new Database();
@@ -51,11 +81,12 @@ export const createIssue = async (req: Request, res: Response) => { // Make func
     const taskService = new TaskService(db);
 
     console.log('createIssue: Calling taskService.createTask...'); // Log before createTask
+    console.log('createIssue: Calling taskService.createTask...'); // Log before createTask
     // Use summary as title and pass description, type, status, and parentIssueKey (if provided)
     const createdIssue = await taskService.createTask({
         title: summary,
         description: description,
-        issueType: issueType,
+        issueType: issuetype.name, // Use issuetype.name
         status: status,
         parentIssueKey: parentIssueKey // Pass parentIssueKey to createTask
     });
