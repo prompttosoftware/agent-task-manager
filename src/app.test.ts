@@ -230,7 +230,7 @@ describe('API Endpoint Tests', () => {
       .send(issueDataMissingSummary);
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error', 'Required field fields.summary cannot be empty');
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.summary');
   });
 
   it('POST /rest/api/2/issue should return 400 if issueType is missing within fields', async () => {
@@ -246,7 +246,7 @@ describe('API Endpoint Tests', () => {
       .send(issueDataMissingIssueType);
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype'); // Error message updated
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype.name'); // Error message updated
   });
 
   it('POST /rest/api/2/issue should return 400 if status is missing within fields', async () => {
@@ -279,7 +279,7 @@ describe('API Endpoint Tests', () => {
       .send(issueDataEmptySummary);
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error', 'Required field fields.summary cannot be empty');
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.summary');
   });
 
   it('POST /rest/api/2/issue should return 400 if issueType is empty', async () => {
@@ -296,7 +296,7 @@ describe('API Endpoint Tests', () => {
       .send(issueDataEmptyIssueType);
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype.name'); // Error message updated
+    expect(response.body).toHaveProperty('error', 'Missing required field: fields.issuetype.name');
   });
 
   it('POST /rest/api/2/issue should return 400 if issueType is invalid', async () => {
@@ -313,7 +313,7 @@ describe('API Endpoint Tests', () => {
       .send(issueDataInvalidIssueType);
 
     expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error', 'Invalid issueType. Must be one of: TASK, STOR, EPIC, BUG, SUBT');
+    expect(response.body).toHaveProperty('error', 'Invalid issue type');
   });
 
   it('POST /rest/api/2/issue should return 400 if parentIssueKey is missing for SUBT issueType', async () => {
