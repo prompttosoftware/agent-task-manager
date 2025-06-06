@@ -1,37 +1,37 @@
-/**
- * Represents the structure of an issue.
- */
-interface IssueData {
-  id?: string; // Add id to the interface
+import { saveIssue } from './inMemoryDatabase';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface Issue {
+  id: string;
   summary: string;
   description: string;
   project: string;
   issueType: string;
-  parent?: string; // Add parent key
-  // Add other potential issue properties here as needed
+  parent?: string;
+  status: 'Open' | 'In Progress' | 'Closed';
+  createdAt: string; // ISO string
 }
 
-import { saveIssue } from './inMemoryDatabase';
-
-let issueCounter = 0; // Simple counter for unique IDs
-
-/**
- * Creates a new issue based on the provided data.
- *
- * @param issueData The data for the issue to be created.
- * @returns The created issue data.
- */
-export function createIssue(issueData: IssueData): IssueData {
-  issueCounter++;
-  const id = `ISSUE-${issueCounter.toString().padStart(3, '0')}`; // Generate unique ID
-
-  const issueToSave = {
-    ...issueData,
+export const createIssue = (issueData: {
+  summary: string;
+  description: string;
+  project: string;
+  issueType: string;
+  parent?: string;
+}): Issue => {
+  const id = `ISSUE-${String(Math.floor(100 + Math.random() * 900)).padStart(3, '0')}`; // Generates ISSUE-000 to ISSUE-999
+  const now = new Date().toISOString();
+  const newIssue: Issue = {
     id,
+    summary: issueData.summary,
+    description: issueData.description || '',
+    project: issueData.project,
+    issueType: issueData.issueType,
+    parent: issueData.parent,
+    status: 'Open',
+    createdAt: now,
   };
 
-  const savedIssue = saveIssue(issueToSave);
-  console.log('Simulating issue creation with data:', issueToSave); // use the issueToSave, not the original issueData
-
-  return savedIssue;
-}
+  saveIssue(newIssue);
+  return newIssue;
+};

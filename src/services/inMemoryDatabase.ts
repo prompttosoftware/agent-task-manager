@@ -5,6 +5,8 @@ interface Issue {
   project: string;
   issueType: string;
   parent?: string;
+  status: 'Open' | 'In Progress' | 'Closed';
+  createdAt: string; // ISO string
 }
 
 const issues: Issue[] = [];
