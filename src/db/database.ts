@@ -1,4 +1,8 @@
 import { Task as TaskModel } from '../models/issue';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+const DB_FILE_PATH = '/usr/src/agent-task-manager/.data/db.json';
 
 /**
  * Represents the data needed to create a new task.
@@ -20,47 +24,66 @@ interface UpdateTaskData {
   completed?: boolean;
 }
 
+interface DbSchema {
+  issues: TaskModel[];
+  issueKeyCounter: number;
+}
+
 /**
  * A basic in-memory database implementation for tasks.
  * Currently uses dummy data and simple array operations.
  */
 export class Database {
   private tasks: TaskModel[] = []; // In-memory storage
+  private issueKeyCounter: number = 0;
 
   constructor() {
-    // Initialize with some dummy data
-    this.tasks = [
-      {
-        id: '1',
-        key: 'TASK-001',
-        issueType: 'Task',
-        summary: 'Learn TypeScript',
-        description: 'Understand the basics of TypeScript',
-        status: 'Todo',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        key: 'TASK-002',
-        issueType: 'Task',
-        summary: 'Build a REST API',
-        description: 'Create endpoints for task management',
-        status: 'In Progress',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: '3',
-        key: 'TASK-003',
-        issueType: 'Task',
-        summary: 'Write Unit Tests',
-        description: 'Ensure code quality with tests',
-        status: 'Done',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ];
+    this.loadDatabase().then(() => {
+      console.log('Database loaded');
+    }).catch(err => {
+      console.error('Failed to load database:', err);
+    });
+  }
+
+  async loadDatabase(): Promise<void> {
+    try {
+      const data = await fs.readFile(DB_FILE_PATH, 'utf-8');
+      const dbSchema: DbSchema = JSON.parse(data);
+      this.tasks = dbSchema.issues;
+      this.issueKeyCounter = dbSchema.issueKeyCounter;
+      console.log('Database loaded from file.');
+    } catch (error) {
+      if ((error as any).code === 'ENOENT') {
+        // File does not exist, initialize with default values
+        await this.saveDatabase({ issues: [], issueKeyCounter: 0 });
+        this.tasks = [];
+        this.issueKeyCounter = 0;
+        console.log('Database initialized.  File not found.');
+      } else if (error instanceof SyntaxError) {
+        // Handle invalid JSON
+        console.error('Invalid JSON in database file.  Initializing to empty.');
+        await this.saveDatabase({ issues: [], issueKeyCounter: 0 });
+        this.tasks = [];
+        this.issueKeyCounter = 0;
+
+      }
+      else {
+        console.error('Error loading database:', error);
+        throw error; // Re-throw to be caught in the constructor
+      }
+    }
+  }
+
+  async saveDatabase(data: DbSchema): Promise<void> {
+    try {
+      const dirPath = path.dirname(DB_FILE_PATH);
+      await fs.mkdir(dirPath, { recursive: true });
+      await fs.writeFile(DB_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      console.log('Database saved to file.');
+    } catch (error) {
+      console.error('Error saving database:', error);
+      throw error;
+    }
   }
 
   /**
@@ -92,7 +115,7 @@ export class Database {
     // Simulate asynchronous operation and database-like ID generation
     const newTask: TaskModel = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 5), // Simple unique ID
-      key: 'TASK-' + (this.tasks.length + 1).toString().padStart(3, '0'),
+      key: 'TASK-' + (++this.issueKeyCounter).toString().padStart(3, '0'),
       issueType: 'Task',
       summary: data.title,
       description: data.description,
@@ -101,6 +124,7 @@ export class Database {
       updatedAt: new Date().toISOString(),
     };
     this.tasks.push(newTask);
+    await this.saveDatabase({ issues: this.tasks, issueKeyCounter: this.issueKeyCounter });
     return Promise.resolve({ ...newTask });
   }
 
@@ -127,6 +151,8 @@ export class Database {
     };
 
     this.tasks[index] = updatedTask;
+    await this.saveDatabase({ issues: this.tasks, issueKeyCounter: this.issueKeyCounter });
+
     return Promise.resolve({ ...updatedTask });
   }
 
@@ -144,6 +170,7 @@ export class Database {
     }
 
     const [deletedTask] = this.tasks.splice(index, 1);
+    await this.saveDatabase({ issues: this.tasks, issueKeyCounter: this.issueKeyCounter });
     return Promise.resolve({ ...deletedTask });
   }
 }
