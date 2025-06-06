@@ -1,11 +1,17 @@
 import { Request, Response } from 'express';
 import { IssueService } from '../../services/issueService';
-import { AnyIssue, IssueType, Subtask } from '../../models/issue';
+import { AnyIssue, IssueType, Subtask, CreateIssueInput } from '../../models/issue';
 import { Database } from '../../db/database';
 
+/**
+ * Handles the HTTP request to create a new issue.
+ * Validates the request body and uses the IssueService to create the issue in the database.
+ *
+ * @param req - The Express Request object, expected to contain issue data in `req.body.fields`.
+ * @param res - The Express Response object used to send the response back to the client.
+ * @returns A JSON response containing the created issue (status 201) or an error message (status 400 or 500).
+ */
 export const createIssue = async (req: Request, res: Response) => {
-  console.log(req.body);
-  console.log("createIssue called");
   try {
     const { fields } = req.body;
 
@@ -39,34 +45,64 @@ export const createIssue = async (req: Request, res: Response) => {
       parentIssueKey = fields.parentIssueKey;
     }
 
-    let newIssue: AnyIssue = {
-      summary: fields.summary,
-      description: fields.description,
-      issueType,
-      status: fields.status,
-    } as AnyIssue; // Initial cast to AnyIssue
+    let createIssueInput: CreateIssueInput;
 
-    if (issueType === 'SUBT') {
-        newIssue = {
-            ...newIssue,
-            issueType,
-            parentIssueKey: parentIssueKey!, //Non-null assertion since it's already validated
-        } as Subtask;
+    switch (issueType) {
+      case 'TASK':
+        createIssueInput = {
+          issueType: 'TASK',
+          summary: fields.summary,
+          description: fields.description,
+          status: fields.status,
+        };
+        break;
+      case 'STOR':
+        createIssueInput = {
+          issueType: 'STOR',
+          summary: fields.summary,
+          description: fields.description,
+          status: fields.status,
+        };
+        break;
+      case 'EPIC':
+        createIssueInput = {
+          issueType: 'EPIC',
+          summary: fields.summary,
+          description: fields.description,
+          status: fields.status,
+        };
+        break;
+      case 'BUG':
+        createIssueInput = {
+          issueType: 'BUG',
+          summary: fields.summary,
+          description: fields.description,
+          status: fields.status,
+        };
+        break;
+      case 'SUBT':
+        createIssueInput = {
+          issueType: 'SUBT',
+          summary: fields.summary,
+          description: fields.description,
+          status: fields.status,
+          parentIssueKey: parentIssueKey!,
+        };
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid issue type' }); // Redundant, but good for safety
     }
 
-    const db = new Database(); // Assuming Database is initialized here or injected
-    const issueService = new IssueService(db); // Use IssueService
-    // Pass the newIssue object directly to issueService.createIssue
-    const createdIssue = await issueService.createIssue(newIssue);
+    const db = new Database();
+    const issueService = new IssueService(db);
+    const createdIssue = await issueService.createIssue(createIssueInput);
 
-    // If the service returns an array of strings, it indicates validation errors.
     if (Array.isArray(createdIssue)) {
       return res.status(400).json({ errors: createdIssue });
     }
 
     res.status(201).json(createdIssue);
   } catch (error: any) {
-    console.error('Error creating issue:', error);
     res.status(500).json({ error: error.message || 'Failed to create issue' });
   }
 };

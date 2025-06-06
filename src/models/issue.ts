@@ -58,8 +58,42 @@ export interface Subtask {
 // Union type for all issue types
 export type AnyIssue = Task | Story | Epic | Bug | Subtask;
 
-// Input type for creating a new issue
-export type CreateIssueInput = Omit<AnyIssue, 'id' | 'key' | 'createdAt' | 'updatedAt'>;
+// Base input type for creating a new issue (common properties)
+interface BaseCreateIssueInput {
+  summary: string;
+  description?: string;
+  status: 'Todo' | 'In Progress' | 'Done';
+}
+
+// Specific input types for each issue type
+interface CreateTaskInput extends BaseCreateIssueInput {
+  issueType: 'TASK';
+}
+
+interface CreateStoryInput extends BaseCreateIssueInput {
+  issueType: 'STOR';
+}
+
+interface CreateEpicInput extends BaseCreateIssueInput {
+  issueType: 'EPIC';
+}
+
+interface CreateBugInput extends BaseCreateIssueInput {
+  issueType: 'BUG';
+}
+
+interface CreateSubtaskInput extends BaseCreateIssueInput {
+  issueType: 'SUBT';
+  parentIssueKey: string; // Required for subtasks
+}
+
+// Input type for creating a new issue (discriminated union)
+export type CreateIssueInput =
+  | CreateTaskInput
+  | CreateStoryInput
+  | CreateEpicInput
+  | CreateBugInput
+  | CreateSubtaskInput;
 
 // Define a type for the database schema
 export interface DbSchema {
