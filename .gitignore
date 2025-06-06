@@ -70,3 +70,10 @@ plan.txt
 
 # Local database
 data/db.json
+
+# Database files
+data/*.db
+.data/db.json
+
+# Coverage directory
+coverage/
