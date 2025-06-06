@@ -1,61 +1,140 @@
-import { AnyIssue, IssueType, Subtask } from '../models/issue';
+import { AnyIssue, IssueType, CreateIssueInput } from '../models/issue';
 import { Database } from '../db/database';
+import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Service class for handling issue-related operations.
+ */
 export class IssueService {
   private db: Database;
 
+  /**
+   * Creates an instance of IssueService.
+   * @param db - The database instance to use for operations.
+   */
   constructor(db: Database) {
     this.db = db;
   }
 
-  async createIssue(issue: AnyIssue): Promise<AnyIssue | string[]> {
+  /**
+   * Creates a new issue.
+   *
+   * @param issue - The issue object (CreateIssueInput type) to create.
+   * @returns The created issue object or an array of validation errors.
+   */
+  async createIssue(issue: CreateIssueInput): Promise<AnyIssue | string[]> {
     const errors: string[] = [];
-    const allowedTypes: IssueType[] = ['TASK', 'STOR', 'EPIC', 'BUG', 'SUBT'];
 
-    // Validate summary
-    if (!issue.summary || issue.summary.trim() === '') {
-      errors.push('Summary is required.');
+    // Validation
+    if (!issue.summary) {
+      errors.push('Summary is required');
+    }
+    if (!issue.issueType) {
+      errors.push('Issue type is required');
+    }
+    if (issue.issueType === 'SUBT' && !issue.parentIssueKey) {
+      errors.push('Parent issue key is required for subtasks');
     }
 
-    // Validate issue type
-    if (!issue.issueType || !allowedTypes.includes(issue.issueType)) {
-      errors.push('Invalid or missing issue type. Allowed types are: TASK, STOR, EPIC, BUG, SUBT.');
-    } else if (issue.issueType === 'SUBT') {
-      // Validate parentIssueKey for subtasks
-      const subtaskIssue = issue as Subtask; // Type assertion to access parentIssueKey
-      if (!subtaskIssue.parentIssueKey || subtaskIssue.parentIssueKey.trim() === '') {
-        errors.push('Parent issue key is required for subtasks.');
-      }
-    }
-
-    // Return errors if any validation failed
     if (errors.length > 0) {
       return errors;
     }
 
-    // Generate a unique key
-    const issueType = issue.issueType; // issueType is guaranteed to be valid here
-    const keyPrefix = issueType === 'SUBT' ? 'SUBT' : (issueType === 'TASK' ? 'TASK' : (issueType === 'STOR' ? 'STOR' : (issueType === 'EPIC' ? 'EPIC' : 'BUG')));
-    const nextId = await this.db.getNextIssueId(issueType);
-    const key = `${keyPrefix}-${nextId}`;
-
-    // Set timestamps
     const now = new Date();
-    const createdAt = now.toISOString();
-    const updatedAt = now.toISOString();
+    const id = uuidv4();
+    const issueType = issue.issueType;
+    const issueKeyPrefix = this.getIssueKeyPrefix(issueType);
+    const nextIssueId = await this.db.getNextIssueId(issueType);
+    const issueKey = `${issueKeyPrefix}-${nextIssueId}`;
 
-    // Create the issue object with generated properties
-    const newIssue: AnyIssue = {
-      ...issue,
-      id: crypto.randomUUID(),
-      key,
-      createdAt,
-      updatedAt,
-    };
+    let newIssue: AnyIssue;
 
-    // Add the issue to the database
-    await this.db.addIssue(newIssue);
+    switch (issueType) {
+      case 'TASK':
+        newIssue = {
+          id,
+          key: issueKey,
+          issueType: 'TASK',
+          summary: issue.summary,
+          description: issue.description,
+          status: issue.status,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+        break;
+      case 'STOR':
+        newIssue = {
+          id,
+          key: issueKey,
+          issueType: 'STOR',
+          summary: issue.summary,
+          description: issue.description,
+          status: issue.status,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+        break;
+      case 'EPIC':
+        newIssue = {
+          id,
+          key: issueKey,
+          issueType: 'EPIC',
+          summary: issue.summary,
+          description: issue.description,
+          status: issue.status,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+        break;
+      case 'BUG':
+        newIssue = {
+          id,
+          key: issueKey,
+          issueType: 'BUG',
+          summary: issue.summary,
+          description: issue.description,
+          status: issue.status,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+        break;
+      case 'SUBT':
+        newIssue = {
+          id,
+          key: issueKey,
+          issueType: 'SUBT',
+          summary: issue.summary,
+          description: issue.description,
+          status: issue.status,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+          parentIssueKey: (issue as any).parentIssueKey, // Type assertion is safe since validation checks this
+        };
+        break;
+      default:
+        // This should never happen due to the validation, but handle it for safety
+        errors.push('Invalid issue type');
+        return errors;
+    }
 
-    return newIssue; // Validation passed, return the created issue
+    this.db.addIssue(newIssue);
+    return newIssue;
+  }
+
+  private getIssueKeyPrefix(issueType: IssueType): string {
+    switch (issueType) {
+      case 'TASK':
+        return 'TASK';
+      case 'STOR':
+        return 'STOR';
+      case 'EPIC':
+        return 'EPIC';
+      case 'BUG':
+        return 'BUG';
+      case 'SUBT':
+        return 'SUBT';
+      default:
+        return 'MISC'; // Or handle this case as needed. Should not happen due to validation.
+    }
   }
 }
