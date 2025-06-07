@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Agent Task Manager is a local, high-performance task management application designed to mimic a simplified Atlassian Jira API.  It provides a fast and reliable mock API server for local development and testing environments where a dependency on the live Jira API is undesirable or impractical.  This application is a self-contained backend service built on Node.js, Express, and TypeScript, serving JSON responses that are structurally aligned with the Jira REST API for a predefined set of features. It uses a local SQLite database for persistence, making it zero-configuration and easy to run on any developer machine.
+The Agent Task Manager is a local, high-performance task management application designed to mimic a simplified Atlassian Jira API. It provides a fast and reliable mock API server for local development and testing environments where a dependency on the live Jira API is undesirable or impractical.  This application is a self-contained backend service built on Node.js, Express, and TypeScript, serving JSON responses that are structurally aligned with the Jira REST API for a predefined set of features. It uses a local SQLite database for persistence, making it zero-configuration and easy to run on any developer machine.
 
 ## Project Structure
 
@@ -53,7 +53,7 @@ The Agent Task Manager is a local, high-performance task management application 
 
 ## Database Schema
 
-A local SQLite database is used.  TypeORM entities define the schema, and migrations manage schema changes.
+A local SQLite database is used. TypeORM entities define the schema, and migrations manage schema changes.
 
 ### user Table
 
@@ -232,14 +232,3 @@ All endpoints are versioned and prefixed with `/rest/api/2`. The host is configu
 *   **Integration Tests:** `npm run test:integration`.
 *   **All Tests:** `npm test`.
 *   **Code Coverage:** Minimum of 90%.
-
-## Potential Risks & Mitigations
-
-*   **Risk:** Jira API changes.
-    *   **Mitigation:** Clearly states it's a *simplified* subset and not a 1:1 replica.
-*   **Risk:** TypeORM complexity.
-    *   **Mitigation:** Clear `data-source.ts` and migrations for all schema changes.
-*   **Risk:** File handling security.
-    *   **Mitigation:** Strict upload policy with `multer`, UUID filenames.
-*   **Risk:**  Race conditions in unique `issueKey` generation.
-    *   **Mitigation:** Atomic creation logic.
