@@ -94,3 +94,29 @@ data/*.metadata.json
 # Multer temp files
 multer-*
 /uploads/.DS_Store
+
+# Additional entries based on project plan
+/src/**/*.log
+/src/**/*.tmp
+
+# Logs and temp files from development utilities
+/ts-node-dev.log
+*.pid
+
+# Prettier config
+.prettierrc
+
+# ESLint config
+.eslintrc
+
+# TSLint config (if used)
+tslint.json
+
+# TypeORM migration files
+data/migrations/*.js
+
+# NPM package lock file
+package-lock.json
+
+# Yarn lock file (if used)
+yarn.lock
