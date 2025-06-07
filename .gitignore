@@ -174,3 +174,11 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 Desktop/
+
+# Project specific
+uploads/.DS_Store
+multer-*
+data/migrations/*.sql
+data/seeds/*.sql
+src/**/logs/*.log
+src/**/tmp/*.tmp
