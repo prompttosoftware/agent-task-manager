@@ -1,0 +1,309 @@
+# Project Plan: Agent Task Manager
+
+## 1. Project Overview
+
+This document outlines the project plan for the "Agent Task Manager," a local, high-performance task management application designed to mimic a simplified Atlassian Jira API. The primary goal is to provide a fast and reliable mock API server for local development and testing environments where a dependency on the live Jira API is undesirable or impractical.
+
+The application will be a self-contained backend service built on Node.js, Express, and TypeScript, serving JSON responses that are structurally aligned with the Jira REST API for a predefined set of features. It will use a local SQLite database for persistence, making it zero-configuration and easy to run on any developer machine.
+
+---
+
+## 2. High-Level Architecture
+
+The system is designed as a single-service, monolithic backend application. It operates by receiving HTTP requests, processing them through a series of middleware and controllers, executing business logic in a service layer, interacting with a local database via an ORM, and returning a Jira-like JSON response.
+
+### 2.1. Architectural Diagram (Request Flow)
+
+```
+[API Client (e.g., curl, Postman, dev script)]
+       |
+       v
+[Node.js / Express Server] -- (Listens on HOST:PORT)
+       |
+       v
+[API Router & Controllers] -- (Routes requests, e.g., /rest/api/2/...)
+       |
+       v
+[Service Layer] -- (Contains all business logic, e.g., IssueService)
+       |
+       v
+[Data Access Layer (TypeORM)] -- (Manages database interaction and entities)
+       |
+       v
+[SQLite Database] -- (Single file-based storage: agent-task-manager.sqlite)
+```
+
+### 2.2. Technology Stack
+
+*   **Backend Framework:** Node.js with Express.js
+*   **Language:** TypeScript
+*   **Database:** SQLite (via `sqlite3` package) for simple, local, file-based storage.
+*   **ORM:** TypeORM for strongly-typed database interaction, schema management, and migrations.
+*   **Configuration:** `dotenv` for environment variable management (e.g., `PORT`).
+*   **File Uploads:** `multer` for handling `multipart/form-data`.
+*   **Testing:** Jest for unit and integration testing; `supertest` for HTTP integration tests.
+*   **Logging:** `pino` for structured, high-performance JSON logging.
+*   **Linting/Formatting:** ESLint and Prettier to ensure code quality and consistency.
+*   **Development Utility:** `ts-node-dev` for automatic recompilation and server restarts during development.
+*   **Validation:** A library like `zod` will be used for robust request body and parameter validation.
+
+### 2.3. Repository & Project Structure
+
+A single monorepo will be used. The project will be structured to promote separation of concerns and maintainability.
+
+```
+/
+├── .env                  # Local environment variables
+├── .env.example          # Example environment file
+├── .gitignore
+├── jest.config.ts        # Jest configuration
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── app.ts            # Express app setup, middleware, and router binding
+│   ├── server.ts         # Server startup logic (http.createServer)
+│   ├── config/           # Environment configuration loader
+│   ├── types/            # Core TypeScript interfaces (e.g., JiraAPI, custom types)
+│   ├── api/
+│   │   ├── index.ts      # Main API router (aggregates all v2 routes)
+│   │   ├── controllers/  # Request/response handlers (e.g., issue.controller.ts)
+│   │   └── routes/       # Route definitions (e.g., issue.routes.ts)
+│   ├── services/         # Business logic (e.g., issue.service.ts, attachment.service.ts)
+│   ├── db/
+│   │   ├── data-source.ts    # TypeORM DataSource configuration
+│   │   ├── entities/         # TypeORM entity classes (e.g., issue.entity.ts)
+│   │   └── migrations/       # Database migration scripts
+│   ├── middleware/       # Custom Express middleware (e.g., error handling, logging)
+│   └── utils/            # Helper functions (e.g., key generation, response formatters)
+├── tests/
+│   ├── fixtures/         # Test data (e.g., seed data for test DB)
+│   ├── integration/      # End-to-end API tests
+│   └── unit/             # Unit tests for services and utils
+└── uploads/              # Storage for issue attachments (.gitignored)
+```
+
+---
+
+## 3. Database Design
+
+A local SQLite database will be used for simplicity and ease of setup. TypeORM entities will define the schema, and migrations will manage schema changes.
+
+### 3.1. `user` Table
+Stores user information for assignees and reporters.
+- `id` (Primary Key, integer, auto-increment)
+- `userKey` (string, unique, indexed) - e.g., "jdoe"
+- `displayName` (string) - e.g., "John Doe"
+- `emailAddress` (string, unique)
+
+### 3.2. `issue` Table
+The central table for all tasks, stories, bugs, etc.
+- `id` (Primary Key, integer, auto-increment)
+- `issueKey` (string, unique, indexed) - e.g., "TASK-1"
+- `summary` (string)
+- `description` (text, nullable)
+- `statusId` (integer, indexed) - Refers to a hardcoded Status map
+- `issueTypeId` (integer, indexed) - Refers to a hardcoded IssueType map
+- `assigneeId` (integer, nullable, Foreign Key to `user.id`)
+- `reporterId` (integer, nullable, Foreign Key to `user.id`)
+- `parentId` (integer, nullable, Foreign Key to `issue.id` for sub-tasks)
+- `epicId` (integer, nullable, Foreign Key to `issue.id` for issues belonging to an epic)
+- `createdAt` (datetime, default current_timestamp)
+- `updatedAt` (datetime, on update current_timestamp)
+
+### 3.3. `attachment` Table
+Stores metadata for file attachments.
+- `id` (Primary Key, integer, auto-increment)
+- `issueId` (integer, Foreign Key to `issue.id`, indexed)
+- `filename` (string) - Original client-side filename
+- `storedFilename` (string, unique) - UUID-based name on disk
+- `mimetype` (string)
+- `size` (integer, in bytes)
+- `authorId` (integer, nullable, Foreign Key to `user.id`)
+- `createdAt` (datetime, default current_timestamp)
+
+### 3.4. `issue_link` Table
+Stores relationships between issues (e.g., "blocks", "relates to").
+- `id` (Primary Key, integer, auto-increment)
+- `linkTypeId` (integer) - Refers to a hardcoded LinkType map
+- `inwardIssueId` (integer, Foreign Key to `issue.id`)
+- `outwardIssueId` (integer, Foreign Key to `issue.id`)
+
+### 3.5. Static Data (Managed in Application Code)
+To increase performance and reduce complexity, the following Jira concepts will be managed as static maps/objects within the application code rather than in the database.
+
+*   **Statuses:**
+    *   `11`: { name: "To Do", statusCategory: { key: "new" } }
+    *   `21`: { name: "In Progress", statusCategory: { key: "indeterminate" } }
+    *   `31`: { name: "Done", statusCategory: { key: "done" } }
+*   **Issue Types:**
+    *   `1`: { name: "Bug" }
+    *   `2`: { name: "Story" }
+    *   `3`: { name: "Task" }
+    *   `4`: { name: "Sub-task" }
+    *   `5`: { name: "Epic" }
+*   **Issue Link Types:**
+    *   `1000`: { name: "Blocks", inward: "is blocked by", outward: "blocks" }
+    *   `1001`: { name: "Relates", inward: "relates to", outward: "relates to" }
+
+---
+
+## 4. API Endpoint Specifications
+
+All endpoints will be versioned and prefixed with `/rest/api/2`. The host will be configurable via environment variables.
+
+### 4.1. Get Issue (`GET /issue/{issueKey}`)
+- **Core Functionality:** Retrieves the details of a single issue by its key (e.g., "TASK-123").
+- **Technical Design:**
+    - Controller parses `issueKey`. The service layer (`IssueService.findByKey`) queries the `issue` table, joining `user` for assignee/reporter and aggregating data from `attachment` and `issue_link` to build a complete response object.
+    - The response structure will accurately mimic the Jira issue object format, including the nested `fields` object.
+- **User Experience:** N/A (API).
+- **Data Management:** Read-only operation. Utilizes database indexes on `issueKey`.
+- **Error Handling:** Returns HTTP `404 Not Found` if `issueKey` does not exist.
+- **Security:** N/A (read-only).
+- **Performance:** Should respond in <50ms for a single issue. The query will be optimized to fetch all required data in a minimal number of round trips.
+- **Testing:** Integration test to fetch a known issue and validate the entire JSON response structure. Unit test for service-layer logic.
+
+### 4.2. Create New Issue (`POST /issue`)
+- **Core Functionality:** Creates a new issue (Task, Bug, Story, etc.).
+- **Technical Design:**
+    - Controller validates the request body using `zod`. The service layer (`IssueService.create`) orchestrates the creation.
+    - Logic:
+        1. Validate input fields (`summary` and `issuetype` are mandatory).
+        2. Resolve `reporterKey` and `assigneeKey` to `user` IDs.
+        3. Atomically generate the next `issueKey` (e.g., prefix "TASK-" + max ID + 1).
+        4. Set default status to "To Do" (`statusId: 11`).
+        5. Insert a new record into the `issue` table.
+- **Request Payload:** `{"fields": {"summary": "...", "issuetype": {"id": "3"}, "reporter": {"key": "jdoe"}, ...}}`
+- **Response Payload (201 Created):** `{"id": "10002", "key": "TASK-2", "self": "http://localhost:3000/rest/api/2/issue/10002"}`
+- **Error Handling:** Returns `400 Bad Request` for invalid/missing data. Returns `404 Not Found` if a specified user (reporter, assignee) does not exist.
+- **Data Management:** Inserts one record into the `issue` table.
+- **Testing:** Integration test to create an issue with various field combinations and verify its state in the database.
+
+### 4.3. Delete Issue (`DELETE /issue/{issueKey}`)
+- **Core Functionality:** Permanently deletes an issue and its associated data.
+- **Technical Design:** The service layer (`IssueService.delete`) performs a cascading delete within a transaction:
+    1. Delete all attachments from the filesystem and `attachment` table.
+    2. Delete all links from the `issue_link` table.
+    3. Delete the issue record from the `issue` table.
+- **Response Payload:** `204 No Content` on success.
+- **Error Handling:** `404 Not Found` if the issue does not exist.
+- **Data Management:** Deletes records from `issue`, `attachment`, and `issue_link`, and files from the `uploads/` directory.
+- **Testing:** Integration test to create an issue with attachments, then delete it and confirm all associated data is removed.
+
+### 4.4. Transition Issue (`POST /issue/{issueKey}/transitions`)
+- **Core Functionality:** Changes the status of an issue (e.g., from "To Do" to "In Progress").
+- **Technical Design:** The service layer (`IssueService.transition`) takes the `issueKey` and a `transition.id` from the request body. It validates that the `transition.id` is a valid status ID and then updates the `statusId` field for the corresponding issue.
+- **Request Payload:** `{"transition": {"id": "21"}}`
+- **Response Payload:** `204 No Content`.
+- **Error Handling:** `400 Bad Request` if the transition ID is invalid or not in the static map. `404 Not Found` if the issue doesn't exist.
+- **Testing:** Integration test to create an issue, transition it, and verify the status update.
+
+### 4.5. List Transitions (`GET /issue/{issueKey}/transitions`)
+- **Core Functionality:** Lists the possible statuses an issue can be transitioned to from its current state.
+- **Technical Design:** The service layer (`IssueService.getAvailableTransitions`) retrieves the issue's current `statusId`. It then returns a list of all defined statuses *except* for the current one, formatted to match the Jira API response.
+- **Response Payload (200 OK):** `{"expand": "...", "transitions": [{"id": "21", "name": "In Progress"}, ...]}`
+- **Error Handling:** `404 Not Found` if the issue does not exist.
+- **Testing:** Test for an issue in each status to ensure the correct list of available transitions is returned.
+
+### 4.6. Find Issues (Search) (`GET /search`)
+- **Core Functionality:** Searches for issues based on a simplified set of query parameters. This endpoint will serve the needs of "Find Issue," "Get issues for board," and "Get epics."
+- **Technical Design:**
+    - **Query Parameters:** `status` (ID), `issuetype` (ID), `assignee` (userKey).
+    - The controller passes query parameters to the service layer (`IssueService.search`).
+    - The service uses TypeORM's `QueryBuilder` to dynamically construct a `SELECT` statement with `WHERE` clauses based on the provided, validated parameters.
+- **Response Payload (200 OK):** Mimics Jira search results: `{"total": 5, "issues": [ { /* full issue object */ }, ... ]}`
+- **Performance:** Indexes on `statusId`, `issueTypeId`, and `assigneeId` will be critical for performance.
+- **Testing:** Integration tests for various combinations of search parameters, including no parameters (return all), single parameters, and multiple parameters.
+
+### 4.7. Add Attachment (`POST /issue/{issueKey}/attachments`)
+- **Core Functionality:** Attaches one or more files to an issue.
+- **Technical Design:**
+    - The endpoint is protected by `multer` middleware configured to handle `multipart/form-data`, specifically looking for a field named `file`.
+    - The service layer (`AttachmentService.create`) receives the file objects from multer. For each file, it:
+        1. Generates a unique filename (e.g., using `uuidv4`).
+        2. Saves the file to the `./uploads` directory.
+        3. Creates a record in the `attachment` table linking the file metadata to the issue.
+- **Response Payload (200 OK):** An array of the created attachment metadata objects, matching Jira's format.
+- **Error Handling:** `404 Not Found` if issue doesn't exist. `400 Bad Request` if no files are provided. `413 Payload Too Large` if files exceed a configured size limit.
+- **Security:** `multer` will be configured with file size limits (~10MB). Stored filenames will be UUIDs to prevent directory traversal and information disclosure.
+
+### 4.8. Issue Link (`POST /rest/api/2/issueLink`)
+- **Core Functionality:** Creates a directional link between two issues.
+- **Technical Design:** The service (`IssueLinkService.create`) validates the request body, which specifies the `type` (e.g., "Blocks"), `inwardIssue` key, and `outwardIssue` key. It looks up both issues by their keys and creates a new record in the `issue_links` table.
+- **Request Payload:** `{"type": {"name": "Blocks"}, "inwardIssue": {"key": "TASK-2"}, "outwardIssue": {"key": "TASK-1"}}`
+- **Response Payload:** `201 Created` with an empty body.
+- **Error Handling:** `404 Not Found` if either issue key is invalid. `400 Bad Request` for invalid link type name.
+
+### 4.9. Update Assignee (`PUT /issue/{issueKey}/assignee`)
+- **Core Functionality:** Changes or sets the assignee of an issue.
+- **Technical Design:** The service (`IssueService.updateAssignee`) receives the `issueKey` and a request body containing the new assignee's `key`. It finds the user by `key` to get their ID, then updates the `assigneeId` on the specified issue.
+- **Request Payload:** `{"key": "new-assignee-key"}` or `{"key": null}` to unassign.
+- **Response Payload:** `204 No Content`.
+- **Error Handling:** `404 Not Found` if the issue or user does not exist.
+
+### 4.10. Get Issue Create Metadata (`GET /issue/createmeta`)
+- **Core Functionality:** Provides information on projects, issue types, and fields available for creating an issue.
+- **Technical Design:** This endpoint is handled by a `MetadataService`. It will return a static, hardcoded JSON structure that describes the single available project (defined in config), all available issue types (from the static map), and the fields required/available for them. This will not query the database.
+- **Response Payload (200 OK):** A simplified version of the complex Jira response, detailing projects and issue types with their fields.
+- **Testing:** A simple integration test to ensure the endpoint returns the expected static JSON structure with a `200 OK` status.
+
+---
+
+## 5. Non-Functional Requirements
+
+### 5.1. Security
+- **Authentication/Authorization:** Explicitly out of scope. All endpoints are open on the local network.
+- **Input Validation:** All incoming request bodies, query parameters, and URL parameters will be strictly validated using `zod` schemas to prevent malformed data from reaching the service layer.
+- **SQL Injection:** Mitigated by the exclusive use of TypeORM's query builder and repository methods, which parameterize queries.
+- **File Uploads:** `multer` will be configured with a strict file size limit. All uploaded files will be stored with a UUID-based filename to prevent directory traversal and filename collision attacks. The original filename is stored only as metadata.
+- **Dependencies:** The project will use `npm audit` and potentially Snyk/Dependabot to monitor for vulnerabilities in third-party libraries.
+
+### 5.2. Performance & Scalability
+- **Performance:** As a local tool, low latency is a primary goal. All database queries will be optimized. Indexes will be created on all foreign keys and frequently queried columns (`issueKey`, `statusId`, etc.).
+- **Scalability:** The application is designed for single-user or small-team local use. Horizontal scaling, load balancing, and multi-node deployments are not design goals. Its state is self-contained in the Node.js process and the SQLite file.
+
+### 5.3. Monitoring & Logging
+- **Logging:** Structured JSON logging will be implemented using `pino`.
+- **What to Log:**
+    - All incoming requests (method, URL, correlation ID).
+    - All outgoing responses (status code, duration).
+    - Application-level errors with stack traces.
+    - Key business logic events (e.g., "Issue TASK-5 created", "Transitioned TASK-6 to status 31").
+- **Log Levels:** `info` for standard operations, `warn` for non-critical issues, `error` for critical failures. Log level will be configurable.
+- **Log Output:** Logs will be written to `stdout`, allowing them to be redirected or processed as needed.
+
+---
+
+## 6. Development & Deployment Strategy
+
+### 6.1. Initial Setup
+1.  Clone the repository from source control.
+2.  Install dependencies: `npm install`.
+3.  Create a `.env` file from `.env.example`. The default values will be sufficient for most users (`PORT=3000`, `PROJECT_KEY=TASK`).
+4.  Run the database setup command: `npm run db:migrate`. This will create the `agent-task-manager.sqlite` file and run all TypeORM migrations to build the schema.
+5.  (Optional) Seed the database with initial data: `npm run db:seed`. This script will create a few sample users and issues.
+
+### 6.2. Running the Application
+- **Development Mode:** `npm run dev`. This uses `ts-node-dev` to automatically watch for file changes, re-compile TypeScript, and restart the server, providing a fast feedback loop.
+- **Production Build:** `npm run build`. This uses `tsc` to compile all TypeScript code into plain JavaScript in the `dist/` directory.
+- **Production Start:** `npm start`. This runs the compiled application from the `dist/` directory using `node`.
+
+### 6.3. Testing Strategy
+- **Framework:** `Jest` will be used as the test runner, assertion library, and mocking framework.
+- **Unit Tests:** These will test individual functions in services and utils in isolation. Dependencies (like TypeORM repositories) will be mocked using Jest's mocking capabilities. Command: `npm run test:unit`.
+- **Integration Tests:** These will test the full API endpoints from request to response. They will use `supertest` to make HTTP requests to the running application. These tests will connect to a separate, temporary test database (`test.sqlite`) which is created and destroyed for each test run to ensure test isolation. Command: `npm run test:integration`.
+- **All Tests:** A single command, `npm test`, will execute all unit and integration tests.
+- **Code Coverage:** A minimum code coverage of 90% will be enforced for all new code via Jest's coverage reporting.
+
+---
+
+## 7. Potential Risks & Mitigations
+
+- **Risk:** Significant changes in the official Jira API could make this mock outdated and less useful.
+  - **Mitigation:** The project's README will clearly state that it mimics a *simplified, structurally-compatible subset* of the Jira v2 API and is not a 1:1 replica. Its goal is to unblock local development, not to achieve full feature parity.
+- **Risk:** TypeORM setup and configuration can be complex, especially with migrations and different environments (dev vs. test).
+  - **Mitigation:** A clear `data-source.ts` file will be created with configurations for both the main and test databases. All schema changes, without exception, will be managed via TypeORM migration files to ensure a repeatable and version-controlled process.
+- **Risk:** File handling logic introduces security vulnerabilities (e.g., path traversal).
+  - **Mitigation:** A strict file upload policy will be implemented: use `multer`'s built-in limits, generate safe UUIDs for all stored filenames, and never use user-provided input to construct file paths.
+- **Risk:** The logic for generating unique `issueKey` values could have race conditions in a (hypothetical) multi-user scenario.
+  - **Mitigation:** While unlikely for this tool's intended use, the creation logic will be designed to be as atomic as possible, for instance by locking the table or using a transaction when fetching the max ID and inserting the new record.
