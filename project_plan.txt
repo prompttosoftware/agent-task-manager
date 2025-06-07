@@ -45,7 +45,7 @@ The system is designed as a single-service, monolithic backend application. It o
 *   **Logging:** `pino` for structured, high-performance JSON logging.
 *   **Linting/Formatting:** ESLint and Prettier to ensure code quality and consistency.
 *   **Development Utility:** `ts-node-dev` for automatic recompilation and server restarts during development.
-*   **Validation:** A library like `zod` will be used for robust request body and parameter validation.
+*   **Validation:** `zod` for robust request body and parameter validation.
 
 ### 2.3. Repository & Project Structure
 
@@ -225,9 +225,9 @@ All endpoints will be versioned and prefixed with `/rest/api/2`. The host will b
         3. Creates a record in the `attachment` table linking the file metadata to the issue.
 - **Response Payload (200 OK):** An array of the created attachment metadata objects, matching Jira's format.
 - **Error Handling:** `404 Not Found` if issue doesn't exist. `400 Bad Request` if no files are provided. `413 Payload Too Large` if files exceed a configured size limit.
-- **Security:** `multer` will be configured with file size limits (~10MB). Stored filenames will be UUIDs to prevent directory traversal and information disclosure.
+- **Security:** `multer` will be configured with file size limits (~10MB). Stored filenames will be UUIDs to prevent directory traversal and information disclosure. The original filename is stored only as metadata.
 
-### 4.8. Issue Link (`POST /rest/api/2/issueLink`)
+### 4.8. Issue Link (`POST /issueLink`)
 - **Core Functionality:** Creates a directional link between two issues.
 - **Technical Design:** The service (`IssueLinkService.create`) validates the request body, which specifies the `type` (e.g., "Blocks"), `inwardIssue` key, and `outwardIssue` key. It looks up both issues by their keys and creates a new record in the `issue_links` table.
 - **Request Payload:** `{"type": {"name": "Blocks"}, "inwardIssue": {"key": "TASK-2"}, "outwardIssue": {"key": "TASK-1"}}`
@@ -281,7 +281,7 @@ All endpoints will be versioned and prefixed with `/rest/api/2`. The host will b
 2.  Install dependencies: `npm install`.
 3.  Create a `.env` file from `.env.example`. The default values will be sufficient for most users (`PORT=3000`, `PROJECT_KEY=TASK`).
 4.  Run the database setup command: `npm run db:migrate`. This will create the `agent-task-manager.sqlite` file and run all TypeORM migrations to build the schema.
-5.  (Optional) Seed the database with initial data: `npm run db:seed`. This script will create a few sample users and issues.
+5.  (Optional) Seed the database with initial data: `npm run db:seed`. This script will create a few sample users (e.g., 'jdoe', 'asmith') and a sample of each issue type (Task, Bug, Epic) to ensure the API is immediately usable for testing.
 
 ### 6.2. Running the Application
 - **Development Mode:** `npm run dev`. This uses `ts-node-dev` to automatically watch for file changes, re-compile TypeScript, and restart the server, providing a fast feedback loop.

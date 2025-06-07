@@ -12,6 +12,8 @@ logs/*.log
 # SQLite database
 data/*.db
 .data/*.db
+agent-task-manager.sqlite
+test.sqlite
 
 # Test coverage
 coverage/
@@ -74,6 +76,7 @@ coverage/
 
 # Upload directory
 uploads/*
+!.gitkeep
 
 # Jest test results
 jest-report.xml
@@ -87,3 +90,7 @@ test.sqlite
 
 # TypeORM metadata
 data/*.metadata.json
+
+# Multer temp files
+multer-*
+/uploads/.DS_Store
