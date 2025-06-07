@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Agent Task Manager is a local, high-performance task management application designed to mimic a simplified Atlassian Jira API. It provides a fast and reliable mock API server for local development and testing environments where a dependency on the live Jira API is undesirable or impractical. This application is a self-contained backend service built on Node.js, Express, and TypeScript, serving JSON responses that are structurally aligned with the Jira REST API for a predefined set of features. It uses a local SQLite database for persistence, making it zero-configuration and easy to run on any developer machine.  This project aims to provide a useful, local, and easily managed tool for developers.
+The Agent Task Manager is a local, high-performance task management application designed to mimic a simplified Atlassian Jira API. It provides a fast and reliable mock API server for local development and testing environments where a dependency on the live Jira API is undesirable or impractical. This application is a self-contained backend service built on Node.js, Express, and TypeScript, serving JSON responses that are structurally aligned with the Jira REST API for a predefined set of features. It uses a local SQLite database for persistence, making it zero-configuration and easy to run on any developer machine. This project aims to provide a useful, local, and easily managed tool for developers.
 
 ## Project Structure
 
@@ -94,7 +94,7 @@ Stores metadata for file attachments.
 *   `authorId` (integer, nullable, Foreign Key to `user.id`)
 *   `createdAt` (datetime, default current_timestamp)
 
-### issue_link Table
+### issue\_link Table
 
 Stores relationships between issues.
 
