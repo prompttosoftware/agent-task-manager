@@ -11,6 +11,7 @@ logs/*.log
 
 # SQLite database
 data/*.db
+.data/*.db
 
 # Test coverage
 coverage/
@@ -36,22 +37,17 @@ coverage/
 
 # Environment files
 .env
+.env.example
+.env.local
 
 # Add build artifacts
-# Build artifacts
 /build
 
 # Add npm artifacts
-# npm artifacts
 /npm-debug.log
 /yarn-error.log
 .cache
 
-# Add .env.local file
-# .env.local file
-.env.local
-
-# Ignore all files in the 'docs' directory
 # Docs
 docs/*
 !docs/README.md
@@ -70,10 +66,24 @@ plan.txt
 
 # Local database
 data/db.json
-
-# Database files
-data/*.db
 .data/db.json
+data/*.sqlite
 
 # Coverage directory
 coverage/
+
+# Upload directory
+uploads/*
+
+# Jest test results
+jest-report.xml
+jest.config.ts
+
+# NodeJS debug files
+*.debug
+
+# Local test database
+test.sqlite
+
+# TypeORM metadata
+data/*.metadata.json
