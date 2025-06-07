@@ -120,3 +120,57 @@ package-lock.json
 
 # Yarn lock file (if used)
 yarn.lock
+
+# Development utilities
+node_modules/.bin/
+
+# Compiled JavaScript files
+dist/**/*.js
+
+# Test database
+test/**/*.sqlite
+
+# Logs from integration tests
+test/logs/*.log
+
+# Coverage reports
+coverage/lcov.info
+
+# IDE specific files
+*.vscode/*.json
+
+# Build folder
+/build
+
+# Output from package managers
+/yarn-error.log
+.npm-debug.log*
+
+# Operating System files
+.Thumbnails.db
+ehthumbs.db
+Desktop.ini
+
+# Editor config files
+.editorconfig
+
+# Other logs
+*.err
+*.out
+
+# OS X files
+.DS_Store
+.AppleDouble
+LSOverride
+
+# Linux files
+*~
+.fuse_hidden*
+.directory
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+Desktop/
