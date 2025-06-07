@@ -189,27 +189,6 @@ All endpoints are versioned and prefixed with `/rest/api/2`. The host is configu
 *   **Functionality:** Provides information for creating an issue.
 *   **Response (200 OK):** Static JSON detailing projects, issue types, and fields.
 
-## Non-Functional Requirements
-
-### Security
-
-*   **Authentication/Authorization:** Out of scope.  All endpoints are open on the local network.
-*   **Input Validation:**  Strict validation using `zod` for all requests.
-*   **SQL Injection:** Mitigated by TypeORM's query builder.
-*   **File Uploads:**  `multer` for size limits and UUID-based filenames.
-*   **Dependencies:**  `npm audit` and potential Snyk/Dependabot for vulnerability monitoring.
-
-### Performance & Scalability
-
-*   **Performance:** Low latency is a primary goal. Database queries are optimized, and indexes are created.
-*   **Scalability:** Designed for single-user or small-team local use. No horizontal scaling is planned.
-
-### Monitoring & Logging
-
-*   **Logging:** Structured JSON logging using `pino`.
-*   **Log Levels:** `info`, `warn`, `error`.
-*   **Log Output:** Written to `stdout`.
-
 ## Development & Deployment
 
 ### Initial Setup
