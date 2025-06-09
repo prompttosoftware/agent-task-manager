@@ -6,7 +6,8 @@
     "outDir": "dist",
     "baseUrl": "src",
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "src/**/*"
