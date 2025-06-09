@@ -35,6 +35,9 @@ test/logs/*.log
 LSOverrideAdd commentMore actions
 *~
 .fuse_hidden*
+node_modules
+dist
+.env
 .directory
 Thumbs.db
 ehthumbs.db
