@@ -1,4 +1,8 @@
-data/seeds/*.sqlAdd commentMore actions
+node_modules
+dist
+.env
+*.sqlite
+data/seeds/*.sql
 src/**/logs/*.log
 src/**/tmp/*.tmp
 
@@ -32,12 +36,9 @@ test/logs/*.log
 *.bak
 .DS_Store
 .AppleDouble
-LSOverrideAdd commentMore actions
+LSOverride
 *~
 .fuse_hidden*
-node_modules
-dist
-.env
 .directory
 Thumbs.db
 ehthumbs.db
