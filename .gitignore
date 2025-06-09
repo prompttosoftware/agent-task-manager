@@ -1,4 +1,43 @@
-node_modules
-dist
-.env
-*.sqlite
+data/seeds/*.sqlAdd commentMore actions
+src/**/logs/*.log
+src/**/tmp/*.tmp
+
+# New additions from Agent Task Manager project plan
+uploads/*
+!.gitkeep
+multer-*
+logs/*
+*.err
+*.out
+*.pid
+src/**/logs/*.log
+src/**/tmp/*.tmp
+/data/db.json
+/data/*.db
+/data/*.metadata.json
+/data/migrations/*.sql
+/data/migrations/*.js
+/data/seeds/*.sql
+coverage/lcov.info
+test/**/*.sqlite
+test/logs/*.log
+/dist
+/build
+/yarn-error.log
+.npm-debug.log*
+*.tsbuildinfo
+*.debug
+*.swp
+*.swo
+*.bak
+.DS_Store
+.AppleDouble
+LSOverrideAdd commentMore actions
+*~
+.fuse_hidden*
+.directory
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+Desktop/
