@@ -4,22 +4,22 @@ import { Issue } from './issue.entity';
 @Entity({ name: 'issue_link' })
 export class IssueLink {
   @PrimaryGeneratedColumn()
-  id: number = 0;
+  id: number;
 
   @Column()
-  linkTypeId: number = 0;
+  linkTypeId: number;
 
   @Column()
-  inwardIssueId: number = 0;
+  inwardIssueId: number;
 
   @ManyToOne(() => Issue, (issue) => issue.issueLinks)
   @JoinColumn({ name: 'inwardIssueId' })
-  inwardIssue: Issue | null = null;
+  inwardIssue: Issue | null;
 
   @Column()
-  outwardIssueId: number = 0;
+  outwardIssueId: number;
 
   @ManyToOne(() => Issue, (issue) => issue.issueLinks)
   @JoinColumn({ name: 'outwardIssueId' })
-  outwardIssue: Issue | null = null;
+  outwardIssue: Issue | null;
 }
