@@ -1,9 +1,14 @@
-import express from 'express';
+import express, { Application, Request, Response, Router } from 'express';
 
-const app = express();
+const app: Application = express();
+const router: Router = Router();
 
 app.use(express.json());
 
-app.get('/health', (req, res) => res.status(200).send('OK'));
+router.get('/health', (req: Request, res: Response): Response => {
+  return res.status(200).send('OK');
+});
+
+app.use('/api', router);
 
 export default app;
