@@ -15,4 +15,5 @@ const PORT: number | string = config.PORT;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Port confirmed: ${PORT}`);
 });
