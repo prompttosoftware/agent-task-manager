@@ -1,3 +1,4 @@
+import express, { Application } from 'express';
 import app from './app';
 
 // Placeholder for configuration - will be implemented in a later step.
@@ -10,7 +11,7 @@ const config: AppConfig = {
   PORT: process.env.PORT || 3000,
 };
 
-const PORT = config.PORT;
+const PORT: number | string = config.PORT;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
