@@ -15,51 +15,51 @@ import { IssueLink } from './issue_link.entity';
 @Entity()
 export class Issue {
   @PrimaryGeneratedColumn()
-  id: number = 0;
+  id: number;
 
   @Column({ unique: true })
-  issueKey: string = '';
+  issueKey: string;
 
   @Column()
-  summary: string = '';
+  summary: string;
 
   @Column({ type: 'text' })
-  description: string = '';
+  description: string;
 
   @Column()
-  statusId: number = 0;
+  statusId: number;
 
   @Column()
-  issueTypeId: number = 0;
+  issueTypeId: number;
 
   @CreateDateColumn()
-  createdAt: Date = new Date();
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date = new Date();
+  updatedAt: Date;
 
   @ManyToOne(() => User)
   @JoinColumn()
-  assignee: User | null = null;
+  assignee: User | null;
 
   @ManyToOne(() => User)
   @JoinColumn()
-  reporter: User | null = null;
+  reporter: User | null;
 
   @ManyToOne(() => Issue, issue => issue.children, { nullable: true })
   @JoinColumn()
-  parent: Issue | null = null;
+  parent: Issue | null;
 
   @ManyToOne(() => Issue, issue => issue.epic, { nullable: true })
   @JoinColumn()
-  epic: Issue | null = null;
+  epic: Issue | null;
 
   @OneToMany(() => Issue, issue => issue.parent)
-  children: Issue[] = [];
+  children: Issue[];
 
   @OneToMany(() => Attachment, attachment => attachment.issue)
-  attachments: Attachment[] = [];
+  attachments: Attachment[];
 
   @OneToMany(() => IssueLink, link => link.outwardIssue)
-  issueLinks: IssueLink[] = [];
+  issueLinks: IssueLink[];
 }
