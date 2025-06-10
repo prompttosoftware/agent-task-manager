@@ -13,7 +13,7 @@ const issueController = new IssueController();
 router.post('/rest/api/2/issue', /*authMiddleware.authenticate,*/ async (req: Request, res: Response, next: NextFunction) => {
     try {
         logger.info('POST /rest/api/2/issue called');
-        await issueController.createIssue(req, res, next);
+        await createIssue(req, res, next);
     } catch (error) {
         logger.error('Error creating issue:', error);
         next(error);
@@ -24,7 +24,7 @@ router.post('/rest/api/2/issue', /*authMiddleware.authenticate,*/ async (req: Re
 router.get('/rest/api/2/issue/:issueKey', /*authMiddleware.authenticate,*/ async (req: Request, res: Response, next: NextFunction) => {
     try {
         logger.info('GET /rest/api/2/issue/:issueKey called');
-        await issueController.getIssue(req, res, next);
+        await getIssue(req, res, next);
     } catch (error) {
         logger.error('Error getting issue:', error);
         next(error);
@@ -35,7 +35,7 @@ router.get('/rest/api/2/issue/:issueKey', /*authMiddleware.authenticate,*/ async
 router.delete('/rest/api/2/issue/:issueKey', /*authMiddleware.authenticate,*/ async (req: Request, res: Response, next: NextFunction) => {
     try {
         logger.info('DELETE /rest/api/2/issue/:issueKey called');
-        await issueController.deleteIssue(req, res, next);
+        await deleteIssue(req, res, next);
     } catch (error) {
         logger.error('Error deleting issue:', error);
         next(error);
