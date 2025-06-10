@@ -1,0 +1,10 @@
+import express from 'express';
+import app from './app';
+// Import application configuration (to be created in another task)
+// import config from './config';
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
