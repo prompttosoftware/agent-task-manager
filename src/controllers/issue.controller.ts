@@ -62,4 +62,9 @@ export class IssueController {
             return res.status(500).json({ message: 'Internal server error' });
         }
     }
+
+    static async createAttachment(req: Request, res: Response) {
+        logger.info('Handling attachment creation');
+        return res.status(200).send();
+    }
 }
