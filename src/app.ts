@@ -1,9 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import loggingMiddleware from './middleware/logging.middleware';
-import config from './config';
 import cors from 'cors';
 import logger from './utils/logger';
-import { PORT } from './config'; // Import PORT directly
+import config from './config';
 
 const app = express();
 
@@ -30,8 +29,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 const startServer = async () => {
   try {
-    app.listen(PORT, () => { // Use the imported PORT
-      logger.info(`Server is running on port ${PORT}`);
+    app.listen(config.PORT, () => { // Use the imported PORT
+      logger.info(`Server is running on port ${config.PORT}`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
