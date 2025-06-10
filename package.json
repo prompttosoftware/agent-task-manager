@@ -7,7 +7,10 @@
     "test": "jest",
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "start": "npm run build && node dist/server.js"
+    "start": "npm run build && node dist/server.js",
+    "typeorm": "typeorm-ts-node-commonjs",
+    "db:generate": "npm run typeorm -- -d src/db/data-source.ts migration:generate src/db/migrations/InitialSchema",
+    "db:migrate": "npm run typeorm -- -d src/db/data-source.ts migration:run"
   },
   "repository": {
     "type": "git",
