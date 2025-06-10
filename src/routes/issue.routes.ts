@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { IssueController } from '../controllers/issue.controller';
+import { createIssue, getIssue, deleteIssue } from '../controllers/issue.controller';
 import logger from '../utils/logger';
 
 const router = Router();
-const issueController = new IssueController();
+// const issueController = new IssueController(); // Remove the instantiation as we're importing functions
 
 // Placeholder for AuthMiddleware - Assuming it will be used for authentication
 // import { AuthMiddleware } from '../middleware/auth.middleware';
