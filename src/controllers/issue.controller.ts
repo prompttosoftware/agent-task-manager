@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { IssueService } from '../services/issue.service'; // Assuming this path
 import { logger } from '../utils/logger';
 import { z } from 'zod';
+import { AttachmentService } from '../services/attachment.service';
 
 // Define the schema for POST /rest/api/2/issue (Example - replace with actual schema)
 const createIssueSchema = z.object({
@@ -64,7 +65,22 @@ export class IssueController {
     }
 
     static async createAttachment(req: Request, res: Response) {
-        logger.info('Handling attachment creation');
-        return res.status(200).send();
+        try {
+            const { issueKey } = req.params;
+
+            if (!req.files || Object.keys(req.files).length === 0) {
+                return res.status(400).json({ message: 'No files were uploaded.' });
+            }
+
+            const attachments = await AttachmentService.create(issueKey, req.files);
+
+            return res.status(200).json(attachments);
+        } catch (error: any) {
+            if (error.name === 'NotFoundError') {
+                return res.status(404).json({ message: 'Issue not found' });
+            }
+            logger.error({ message: 'Error creating attachment', error });
+            return res.status(500).json({ message: 'Internal server error' });
+        }
     }
 }

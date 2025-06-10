@@ -2,16 +2,22 @@ import request from 'supertest';
 import express, { Application, Request, Response, NextFunction } from 'express';
 import issueRoutes from '../src/routes/issue.routes';
 import { IssueService } from '../src/services/issue.service';
+import { AttachmentService } from '../src/services/attachment.service';
 import path from 'path';
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
 
 // Mock the service layer
 jest.mock('../src/services/issue.service');
+jest.mock('../src/services/attachment.service'); // Mock AttachmentService
 
 const mockCreateIssue = jest.fn();
 const mockGetIssue = jest.fn();
 const mockDeleteIssue = jest.fn();
-const mockAddAttachment = jest.fn(); // This will be a service method later
+const mockAddAttachment = jest.fn();
+const mockCreate = jest.fn();
+const mockGetAttachments = jest.fn();
 
 (IssueService as jest.Mock).mockImplementation(() => {
   return {
@@ -19,6 +25,13 @@ const mockAddAttachment = jest.fn(); // This will be a service method later
     getIssue: mockGetIssue,
     deleteIssue: mockDeleteIssue,
     addAttachment: mockAddAttachment,
+  };
+});
+
+(AttachmentService as jest.Mock).mockImplementation(() => {
+  return {
+    create: mockCreate,
+    getAttachments: mockGetAttachments
   };
 });
 
@@ -39,31 +52,38 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   next(err);
 });
 
+// We need a temporary directory for uploads that the test can control
+const tempUploadsDir = path.join(__dirname, 'temp_uploads');
+
+// Mock multer configuration
+jest.mock('../src/middleware/upload.config', () => {
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, tempUploadsDir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, uuidv4() + path.extname(file.originalname));
+    },
+  });
+
+  return {
+    __esModule: true,
+    default: multer({
+      storage: storage,
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
+    }),
+  };
+});
 
 describe('Issue Attachment Routes', () => {
-  // We need a temporary directory for uploads that the test can control
-  const tempUploadsDir = path.join(__dirname, 'temp_uploads');
 
   beforeAll(() => {
     // Create a temporary upload directory for tests
     if (!fs.existsSync(tempUploadsDir)) {
       fs.mkdirSync(tempUploadsDir);
     }
-    // Temporarily modify the upload configuration to use this directory
-    // This is a bit of a workaround because the multer config is hardcoded.
-    // In a real app, the upload path might come from an env variable.
-    jest.mock('../src/middleware/upload.config', () => {
-      const multer = require('multer');
-      return {
-        __esModule: true,
-        default: multer({
-          dest: tempUploadsDir,
-          limits: {
-            fileSize: 10 * 1024 * 1024, // 10MB
-          },
-        }),
-      };
-    });
   });
 
   afterAll(() => {
@@ -76,7 +96,9 @@ describe('Issue Attachment Routes', () => {
       // Clear mocks and reset any temporary file system state if necessary
       jest.clearAllMocks();
       // Clean the temp directory before each test
-      fs.readdirSync(tempUploadsDir).forEach(f => fs.unlinkSync(path.join(tempUploadsDir, f)));
+      if (fs.existsSync(tempUploadsDir)) {
+          fs.readdirSync(tempUploadsDir).forEach(f => fs.unlinkSync(path.join(tempUploadsDir, f)));
+      }
   });
 
   it('should return 413 Payload Too Large for a file exceeding 10MB', async () => {
@@ -141,5 +163,82 @@ describe('Other Issue Routes', () => {
         mockDeleteIssue.mockResolvedValue(undefined);
         await request(app).delete(`/rest/api/2/issue/${issueKey}`).expect(204);
         expect(mockDeleteIssue).toHaveBeenCalledWith(issueKey);
+    });
+});
+
+describe('AttachmentService Tests', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('should return 404 if issue not found', async () => {
+        const issueKey = 'NON-EXISTENT-ISSUE';
+        mockGetIssue.mockResolvedValue(null); // Simulate issue not found
+
+        await request(app)
+            .post(`/rest/api/2/issue/${issueKey}/attachments`)
+            .attach('file', Buffer.from('test content'), 'test.txt')
+            .expect(404);
+
+        expect(mockGetIssue).toHaveBeenCalledWith(issueKey);
+    });
+
+    it('should create a file in the uploads directory', async () => {
+        const issueKey = 'TEST-ISSUE';
+        const fileContent = Buffer.from('test file content');
+        const filename = 'test.txt';
+        let storedFilename : string;
+
+        // Mock the AttachmentService.create method
+        mockCreate.mockImplementation(async (issueId: number, files: any) => {
+            // Simulate successful file upload
+            storedFilename = uuidv4() + path.extname(files[0].originalname);
+            return [{
+                issueId: issueId,
+                filename: files[0].originalname,
+                storedFilename: storedFilename,
+                mimetype: files[0].mimetype,
+                size: files[0].size,
+            }];
+        });
+        mockGetIssue.mockResolvedValue({id: 1, key: issueKey})
+
+        await request(app)
+            .post(`/rest/api/2/issue/${issueKey}/attachments`)
+            .attach('file', fileContent, filename)
+            .expect(200)
+            .expect(res => {
+                expect(res.body).toBeInstanceOf(Array);
+                expect(res.body.length).toBe(1);
+                expect(res.body[0].filename).toBe(filename);
+            });
+         // Verify that the file exists in the uploads directory
+        const uploadFilePath = path.join(tempUploadsDir, storedFilename!);
+        expect(fs.existsSync(uploadFilePath)).toBe(true);
+    });
+
+    it('should return attachment metadata on successful upload', async () => {
+        const issueKey = 'ATTACH-TEST';
+        const fileContent = Buffer.from('test content');
+        const filename = 'test.txt';
+        const mockAttachmentData = [{
+            issueId: 1,
+            filename: filename,
+            storedFilename: uuidv4() + path.extname(filename),
+            mimetype: 'text/plain',
+            size: fileContent.length,
+        }];
+
+        // Mock the AttachmentService.create method to return mock data.
+        mockCreate.mockResolvedValue(mockAttachmentData);
+        mockGetIssue.mockResolvedValue({id: 1, key: issueKey});
+
+        const response = await request(app)
+            .post(`/rest/api/2/issue/${issueKey}/attachments`)
+            .attach('file', fileContent, filename)
+            .expect(200);
+
+        expect(response.body).toEqual(mockAttachmentData); // Verify the response matches the mock data.
+        expect(mockCreate).toHaveBeenCalled();
     });
 });
