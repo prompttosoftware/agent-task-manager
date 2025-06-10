@@ -15,51 +15,51 @@ import { IssueLink } from './issue_link.entity';
 @Entity()
 export class Issue {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: number = 0;
 
   @Column({ unique: true })
-  issueKey: string;
+  issueKey: string = '';
 
   @Column()
-  summary: string;
+  summary: string = '';
 
   @Column({ type: 'text' })
-  description: string;
+  description: string = '';
 
   @Column()
-  statusId: number;
+  statusId: number = 0;
 
   @Column()
-  issueTypeId: number;
+  issueTypeId: number = 0;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt: Date = new Date();
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt: Date = new Date();
 
   @ManyToOne(() => User)
   @JoinColumn()
-  assignee: User;
+  assignee: User | null = null;
 
   @ManyToOne(() => User)
   @JoinColumn()
-  reporter: User;
+  reporter: User | null = null;
 
   @ManyToOne(() => Issue, issue => issue.children, { nullable: true })
   @JoinColumn()
-  parent: Issue;
+  parent: Issue | null = null;
 
   @ManyToOne(() => Issue, issue => issue.epic, { nullable: true })
   @JoinColumn()
-  epic: Issue;
+  epic: Issue | null = null;
 
   @OneToMany(() => Issue, issue => issue.parent)
-  children: Issue[];
+  children: Issue[] = [];
 
   @OneToMany(() => Attachment, attachment => attachment.issue)
-  attachments: Attachment[];
+  attachments: Attachment[] = [];
 
   @OneToMany(() => IssueLink, link => link.outwardIssue)
-  issueLinks: IssueLink[];
+  issueLinks: IssueLink[] = [];
 }

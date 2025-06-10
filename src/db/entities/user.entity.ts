@@ -3,22 +3,22 @@ import { Entity, PrimaryGeneratedColumn, Column, Index, CreateDateColumn, Update
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: number = 0;
 
   @Column()
   @Index({ unique: true })
-  userKey: string;
+  userKey: string = '';
 
   @Column()
-  displayName: string;
+  displayName: string = '';
 
   @Column()
   @Index({ unique: true })
-  emailAddress: string;
+  emailAddress: string = '';
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt: Date = new Date();
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt: Date = new Date();
 }
