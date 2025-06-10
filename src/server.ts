@@ -1,4 +1,4 @@
-import express, { Application } from 'express';
+import { Application } from 'express';
 import app from './app';
 
 // Placeholder for configuration - will be implemented in a later step.
