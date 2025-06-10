@@ -10,6 +10,7 @@
     "esModuleInterop": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/db/data-source.ts"
   ]
 }
