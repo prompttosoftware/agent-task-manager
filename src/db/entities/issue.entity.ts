@@ -21,16 +21,16 @@ export class Issue {
     issueKey: string;
 
     @Column()
-    summary: string;
+    title: string;
 
     @Column({ type: 'text' })
     description: string;
 
-    @Column()
+    @Column({ default: 1 })
     statusId: number;
 
     @Column()
-    issueTypeId: number;
+    priority: string;
 
     @CreateDateColumn()
     createdAt: Date;
