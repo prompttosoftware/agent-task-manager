@@ -8,7 +8,7 @@ import { User } from "./db/entities/user.entity";
 const AppDataSource = new DataSource({
     type: "postgres",
     host: config.DB_HOST || 'localhost',
-    port: config.DB_PORT ? parseInt(config.DB_PORT, 10) : 5432,
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT as string, 10) : 5432,
     username: config.DB_USER || 'postgres',
     password: config.DB_PASS || 'password',
     database: config.DB_NAME || 'agent_task_db',
