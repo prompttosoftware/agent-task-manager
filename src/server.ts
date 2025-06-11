@@ -1,7 +1,9 @@
 import app from './app';
 // import config from './config'; // TODO: Implement config
 
-const PORT = process.env.PORT || 3000;
+import config from './config';
+
+const PORT = config.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
