@@ -40,4 +40,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+node_modules
+dist
+.env
+*.sqlite
+
 Desktop/
