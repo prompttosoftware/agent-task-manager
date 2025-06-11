@@ -1,9 +1,9 @@
-import { AppDataSource } from "./data-source";
+import { AppDataSource } from "../data-source";
 import { User } from "./entities/user.entity";
 import { Issue } from "./entities/issue.entity";
 
-async function seedDatabase() {
-    const dataSource = await AppDataSource.initialize();
+export async function seedDatabase() {
+    const dataSource = AppDataSource;
 
     const userRepository = dataSource.getRepository(User);
     const issueRepository = dataSource.getRepository(Issue);
@@ -39,20 +39,18 @@ async function seedDatabase() {
     const existingIssue1 = await issueRepository.findOneBy({ issueKey: "issue-1" });
     if (!existingIssue1) {
         const issue1 = issueRepository.create({
-            issueKey: "issue-1",
-            summary: "Sample Issue",
+            issueKey: "ISSUE-1",
+            title: "Sample Issue",
             description: "This is a sample issue.",
             reporter: user1,
             statusId: 1,
             issueTypeId: 1,
+            priority: "1",
         });
         await issueRepository.save(issue1);
     }
 
     console.log("Database seeded successfully!");
-    await AppDataSource.destroy();
 }
 
-seedDatabase().catch(error => {
-    console.error("Error seeding database:", error);
-});
+

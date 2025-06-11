@@ -1,40 +1,30 @@
 import { Request, Response } from 'express';
 import { IssueController } from '../src/controllers/issue.controller';
 import { IssueService } from '../src/services/issue.service';
-import { createIssueSchema } from '../src/controllers/schemas/issue.schema';
+import { createIssueBodySchema as createIssueSchema } from '../src/controllers/schemas/issue.schema';
 import logger from '../src/utils/logger';
-import { ZodError } from 'zod';
-
-const mockIssueService = {
-  create: jest.fn(),
-  findByKey: jest.fn(),
-  deleteByKey: jest.fn(),
-};
-
-jest.mock('../src/services/issue.service', () => {
-  return {
-    IssueService: jest.fn(() => mockIssueService),
-  };
-});
 
 // Mock the logger
 jest.mock('../src/utils/logger');
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
+let issueController: IssueController;
+let req: Request;
+let res: Response;
+let issueService: IssueService;
+
 describe('IssueController', () => {
-  let issueController: IssueController;
-  let req: Request;
-  let res: Response;
-  let mockedIssueService: any;
 
   beforeEach(() => {
+    issueService = new IssueService();
+    issueController = new IssueController(issueService);
+    jest.spyOn(issueService, 'create');
+    jest.spyOn(issueService, 'findByKey');
+    jest.spyOn(issueService, 'deleteByKey');
+
     // Ensure mocks are clear before each test
-    (mockIssueService.create as jest.Mock).mockClear();
-    (mockIssueService.findByKey as jest.Mock).mockClear();
-    (mockIssueService.deleteByKey as jest.Mock).mockClear();
     mockedLogger.error.mockClear();
 
-    issueController = new IssueController(mockIssueService as any);
     req = {} as Request;
     res = {
       status: jest.fn().mockReturnThis(),
@@ -43,44 +33,51 @@ describe('IssueController', () => {
     } as any as Response;
   });
 
-  describe('createIssue', () => {
+  describe('create', () => {
     it('should create an issue with valid data and return 201', async () => {
-      // Data as it would be received in req.body
       const validReqBody = {
-        title: 'Test Issue',
-        description: 'Test Description',
-        issueType: 'Bug', // This will be ignored by the schema
-        priority: 'HIGH', // Corrected enum value
+        fields: {
+          summary: 'Test Issue',
+          description: 'Test Description',
+          issuetype: {
+            id: '1',
+          },
+        },
       };
-      // Data after being parsed by createIssueSchema
-      const expectedParsedData = {
-        title: 'Test Issue',
-        description: 'Test Description',
-        priority: 'HIGH',
-        statusId: 1, // Defaulted by schema
-      };
+      const expectedParsedData = validReqBody;
       req.body = validReqBody;
-      (mockIssueService.create as jest.Mock).mockResolvedValue(expectedParsedData);
+      (issueService.create as jest.Mock).mockResolvedValue({
+        id: 1,
+        issueKey: 'TEST-1',
+        self: '/rest/api/2/issue/TEST-1',
+      });
 
-      await issueController.createIssue(req, res);
+      await issueController.create(req, res);
 
-      expect(mockIssueService.create).toHaveBeenCalledWith(expectedParsedData);
+      expect(issueService.create).toHaveBeenCalledWith(expectedParsedData);
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Issue created', data: expectedParsedData });
+      expect(res.json).toHaveBeenCalledWith({
+        id: 1,
+        key: 'TEST-1',
+        self: '/rest/api/2/issue/TEST-1',
+      });
     });
 
     it('should return a 400 error with invalid data', async () => {
       const invalidData = {
-        title: 'in',
-        description: 'Test Description',
-        issueType: 'Bug',
-        priority: 'HIGH',
+        fields: {
+          summary: 'in',
+          description: 'Test Description',
+          issuetype: {
+            id: '1',
+          },
+        },
       };
       req.body = invalidData;
 
-      await issueController.createIssue(req, res);
+      await issueController.create(req, res);
 
-      expect(mockIssueService.create).not.toHaveBeenCalled();
+      expect(issueService.create).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         message: 'Validation error',
@@ -91,7 +88,7 @@ describe('IssueController', () => {
             minimum: 3,
             inclusive: true,
             message: 'String must contain at least 3 character(s)',
-            path: ['title'],
+            path: ['fields', 'summary'],
             type: 'string',
           },
         ],
@@ -100,41 +97,38 @@ describe('IssueController', () => {
 
     it('should handle unexpected errors and return 500', async () => {
       const validReqBody = {
-        title: 'Test Issue',
-        description: 'Test Description',
-        issueType: 'Bug',
-        priority: 'HIGH',
-      };
-      const expectedParsedData = {
-        title: 'Test Issue',
-        description: 'Test Description',
-        priority: 'HIGH',
-        statusId: 1, // Defaulted by schema
+        fields: {
+          summary: 'Test Issue',
+          description: 'Test Description',
+          issuetype: {
+            id: '1',
+          },
+        },
       };
 
       req.body = validReqBody;
       const errorMessage = 'Unexpected error';
-      (mockIssueService.create as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (issueService.create as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-      await issueController.createIssue(req, res);
+      await issueController.create(req, res);
 
-      expect(mockIssueService.create).toHaveBeenCalledWith(expectedParsedData);
+      expect(issueService.create).toHaveBeenCalledWith(validReqBody);
       expect(mockedLogger.error).toHaveBeenCalledWith('Error creating issue:', new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error', error: errorMessage });
     });
   });
 
-  describe('getIssue', () => {
+  describe('findByKey', () => {
     it('should get an issue with a valid issue key and return 200', async () => {
       const issueKey = 'TEST-123';
-      const issueData = { issueKey: issueKey, title: 'Test Issue' };
+      const issueData = { issueKey: issueKey, title: 'Test Issue', self: `/rest/api/2/issue/${issueKey}` };
       req.params = { issueKey: issueKey };
-      (mockIssueService.findByKey as jest.Mock).mockResolvedValue(issueData);
+      (issueService.findByKey as jest.Mock).mockResolvedValue(issueData);
 
-      await issueController.getIssue(req, res);
+      await issueController.findByKey(req, res);
 
-      expect(mockIssueService.findByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.findByKey).toHaveBeenCalledWith(issueKey);
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ data: issueData });
     });
@@ -142,39 +136,39 @@ describe('IssueController', () => {
     it('should return a 404 error if the issue is not found', async () => {
       const issueKey = 'NONEXISTENT-123';
       req.params = { issueKey: issueKey };
-      (mockIssueService.findByKey as jest.Mock).mockResolvedValue(null);
+      (issueService.findByKey as jest.Mock).mockResolvedValue(null);
 
-      await issueController.getIssue(req, res);
+      await issueController.findByKey(req, res);
 
-      expect(mockIssueService.findByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.findByKey).toHaveBeenCalledWith(issueKey);
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ message: 'Issue not found' });
     });
 
-    it('should handle unexpected errors during getIssue and return 500', async () => {
+    it('should handle unexpected errors during findByKey and return 500', async () => {
       const issueKey = 'TEST-123';
       req.params = { issueKey: issueKey };
       const errorMessage = 'Unexpected error';
-      (mockIssueService.findByKey as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (issueService.findByKey as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-      await issueController.getIssue(req, res);
+      await issueController.findByKey(req, res);
 
-      expect(mockIssueService.findByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.findByKey).toHaveBeenCalledWith(issueKey);
       expect(mockedLogger.error).toHaveBeenCalledWith(`Error getting issue with key ${issueKey}:`, new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
     });
   });
 
-  describe('deleteIssue', () => {
+  describe('delete', () => {
     it('should delete an issue with a valid issue key and return 204', async () => {
       const issueKey = 'TEST-123';
       req.params = { issueKey: issueKey };
-      (mockIssueService.deleteByKey as jest.Mock).mockResolvedValue(true);
+      (issueService.deleteByKey as jest.Mock).mockResolvedValue(true);
 
-      await issueController.deleteIssue(req, res);
+      await issueController.delete(req, res);
 
-      expect(mockIssueService.deleteByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.deleteByKey).toHaveBeenCalledWith(issueKey);
       expect(res.status).toHaveBeenCalledWith(204);
       expect(res.send).toHaveBeenCalled();
     });
@@ -182,24 +176,24 @@ describe('IssueController', () => {
     it('should return a 404 error if the issue to delete is not found', async () => {
       const issueKey = 'NONEXISTENT-123';
       req.params = { issueKey: issueKey };
-      (mockIssueService.deleteByKey as jest.Mock).mockResolvedValue(false);
+      (issueService.deleteByKey as jest.Mock).mockResolvedValue(false);
 
-      await issueController.deleteIssue(req, res);
+      await issueController.delete(req, res);
 
-      expect(mockIssueService.deleteByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.deleteByKey).toHaveBeenCalledWith(issueKey);
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ message: 'Issue not found' });
     });
 
-    it('should handle unexpected errors during deleteIssue and return 500', async () => {
+    it('should handle unexpected errors during delete and return 500', async () => {
       const issueKey = 'TEST-123';
       req.params = { issueKey: issueKey };
       const errorMessage = 'Unexpected error';
-      (mockIssueService.deleteByKey as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (issueService.deleteByKey as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
-      await issueController.deleteIssue(req, res);
+      await issueController.delete(req, res);
 
-      expect(mockIssueService.deleteByKey).toHaveBeenCalledWith(issueKey);
+      expect(issueService.deleteByKey).toHaveBeenCalledWith(issueKey);
       expect(mockedLogger.error).toHaveBeenCalledWith(`Error deleting issue with key ${issueKey}:`, new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });

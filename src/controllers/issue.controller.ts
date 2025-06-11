@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
-import { createIssueSchema, CreateIssueInput } from './schemas/issue.schema';
+import { createIssueBodySchema, CreateIssueInput } from './schemas/issue.schema';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
-import util from 'util';
 
 export class IssueController {
   private issueService: IssueService;
@@ -11,23 +10,33 @@ export class IssueController {
     this.issueService = issueService;
   }
 
-  async createIssue(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response): Promise<Response<any, Record<string, any>>> {
     try {
-      const validatedData: CreateIssueInput = createIssueSchema.parse(req.body);
-      console.log('validatedData:', validatedData); // Add this line
+      const validatedData: CreateIssueInput = createIssueBodySchema.parse(req.body);
       const issue = await this.issueService.create(validatedData);
-      res.status(201).json({ message: 'Issue created', data: issue });
+
+      console.log("Issue object in controller:", issue);
+
+      // Assuming issueService.create returns an object with id, key, and self
+      res.status(201).json({
+        id: issue.id,
+        key: issue.issueKey,
+        self: `/rest/api/2/issue/${issue.issueKey}`,
+      });
     } catch (error: any) {
       if (error.name === 'ZodError') {
-        res.status(400).json({ message: 'Validation error', errors: error.errors });
+        return res.status(400).json({ message: 'Validation error', errors: error.errors });
+      } else if (error instanceof Error && (error.message === 'Reporter not found' || error.message === 'Assignee not found')) {
+        return res.status(404).json({ message: 'Reporter or Assignee not found' });
       } else {
         logger.error('Error creating issue:', error);
+        console.log('Caught error:', error);
         res.status(500).json({ message: 'Internal server error', error: error.message });
       }
     }
   }
 
-  async getIssue(req: Request, res: Response): Promise<void> {
+  async findByKey(req: Request, res: Response): Promise<void> {
     try {
       const issueKey = req.params.issueKey;
       const issue = await this.issueService.findByKey(issueKey);
@@ -37,14 +46,19 @@ export class IssueController {
         return;
       }
 
-      res.status(200).json({ data: issue });
+      res.status(200).json({
+        data: {
+          ...issue,
+          self: `/rest/api/2/issue/${issue.issueKey}`,
+        },
+      });
     } catch (error: any) {
       logger.error(`Error getting issue with key ${req.params.issueKey}:`, error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }
 
-  async deleteIssue(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response): Promise<void> {
     try {
       const issueKey = req.params.issueKey;
       const deleted = await this.issueService.deleteByKey(issueKey);
@@ -54,7 +68,7 @@ export class IssueController {
         return;
       }
 
-      res.status(204).send(); // No content needed for successful deletion
+      res.status(204).send();
     } catch (error: any) {
       logger.error(`Error deleting issue with key ${req.params.issueKey}:`, error);
       res.status(500).json({ message: 'Internal server error' });

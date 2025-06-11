@@ -1,15 +1,30 @@
+const tsconfig = require('./tsconfig.json');
+const tsconfigPaths = require('tsconfig-paths');
+
+tsconfigPaths.register({
+  baseUrl: './',
+  paths: tsconfig.compilerOptions.paths,
+});
+
 process.env.NODE_ENV = 'test';
 console.log("Setting NODE_ENV to test in jest.setup.ts");
 
 import app from './src/app';
-import { AppDataSource } from './src/db/data-source';
+import { AppDataSource } from '@/data-source';
 import { jest } from '@jest/globals';
 
+import { seedDatabase } from './src/db/seed';
+
 beforeAll(async () => {
+  console.log("Initializing AppDataSource...");
   await AppDataSource.initialize();
+  console.log("Running migrations...");
   await AppDataSource.runMigrations();
+  console.log("Seeding database...");
+  await seedDatabase();
 });
 
 afterAll(async () => {
+  console.log("Destroying AppDataSource...");
   await AppDataSource.destroy();
 });

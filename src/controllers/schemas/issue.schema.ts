@@ -1,10 +1,15 @@
 import { z } from 'zod';
 
-export const createIssueSchema = z.object({
-  title: z.string().min(3).max(255),
-  description: z.string().min(3),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']),
-  statusId: z.number().default(1),
+export const createIssueBodySchema = z.object({
+  fields: z.object({
+    summary: z.string().min(3).max(255),
+    issuetype: z.object({
+      id: z.string(),
+    }),
+    reporterKey: z.string().optional(),
+    assigneeKey: z.string().optional(),
+    description: z.string().optional(),
+  }),
 });
 
-export type CreateIssueInput = z.infer<typeof createIssueSchema>;
+export type CreateIssueInput = z.infer<typeof createIssueBodySchema>;
