@@ -2,6 +2,26 @@ import request from 'supertest';
 import app from '../src/app';
 
 describe('Issue API Integration Tests', () => {
+  let issueKey: string;
+
+  beforeAll(async () => {
+    // Create an issue before running attachment tests
+    const createResponse = await request(app)
+      .post('/rest/api/2/issue')
+      .send({
+        fields: {
+          summary: 'Issue for Attachments',
+          description: 'Issue to attach files to',
+          reporterKey: 'user-1',
+          assigneeKey: 'user-1',
+          issuetype: { id: '1' }
+        }
+      });
+
+    expect(createResponse.status).toBe(201);
+    issueKey = createResponse.body.key;
+  });
+
   it('should create a new issue', async () => {
     const response = await request(app)
       .post('/rest/api/2/issue')
@@ -92,5 +112,24 @@ describe('Issue API Integration Tests', () => {
       .delete('/rest/api/2/issue/NONEXISTENT-123');
 
     expect(deleteResponse.status).toBe(404);
+  });
+
+  it('should return 413 Payload Too Large when uploading a file larger than 10MB', async () => {
+    const largeFileBuffer = Buffer.alloc(11 * 1024 * 1024, 'a'); // 11MB
+    const response = await request(app)
+      .post(`/rest/api/2/issue/${issueKey}/attachments`)
+      .attach('file', largeFileBuffer, 'large_file.txt');
+
+    expect(response.status).toBe(413);
+  });
+
+  it('should pass through multer middleware when uploading a valid file', async () => {
+    const smallFileBuffer = Buffer.alloc(1024, 'a'); // 1KB
+    const response = await request(app)
+      .post(`/rest/api/2/issue/${issueKey}/attachments`)
+      .attach('file', smallFileBuffer, 'small_file.txt');
+
+    // Expect a 200 OK, assuming the placeholder controller handles the request
+    expect(response.status).toBe(200);
   });
 });
