@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { UploadedFile } from '../middleware/upload.config';
 import { createIssueBodySchema, CreateIssueInput } from './schemas/issue.schema';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
@@ -72,6 +73,42 @@ export class IssueController {
     } catch (error: any) {
       logger.error(`Error deleting issue with key ${req.params.issueKey}:`, error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  public async createAttachment(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
+    console.log("Attachment upload route hit in controller.");
+
+    try {
+      // Check if req.files exists before attempting to access it
+      if (!req.files) {
+        console.log("req.files is undefined or null");
+        return res.status(400).json({ message: 'No files uploaded.' });
+      }
+
+      // Attempt to cast req.files to UploadedFile[] and log any errors
+      let files: UploadedFile[];
+      try {
+        files = req.files as UploadedFile[];
+      } catch (castError: any) {
+        console.error("Error casting req.files to UploadedFile[]:", castError);
+        return res.status(500).json({ message: 'Error processing uploaded files.', error: castError.message });
+      }
+
+      try {
+        if (!files || files.length === 0) {
+          logger.error("No files found after middleware execution.");
+          return res.status(500).json({ message: 'Files missing after upload middleware.' });
+        }
+        res.status(200).send({ message: 'Attachment upload successful.' });
+      } catch (fileError: any) {
+        logger.error('Error processing files:', fileError);
+        return res.status(500).json({ message: 'Error processing uploaded files.', error: fileError.message });
+      }
+
+    } catch (error: any) {
+      logger.error('Error creating attachment:', error);
+      next(error);
     }
   }
 }
