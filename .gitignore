@@ -1,4 +1,4 @@
-data/seeds/*.sqlAdd commentMore actions
+data/seeds/*.sql
 src/**/logs/*.log
 src/**/tmp/*.tmp
 
@@ -32,7 +32,7 @@ test/logs/*.log
 *.bak
 .DS_Store
 .AppleDouble
-LSOverrideAdd commentMore actions
+LSOverride
 *~
 .fuse_hidden*
 .directory
