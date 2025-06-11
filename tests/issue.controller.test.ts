@@ -57,7 +57,7 @@ describe('IssueController', () => {
         title: 'Test Issue',
         description: 'Test Description',
         priority: 'HIGH',
-        status: 'OPEN', // Defaulted by schema
+        statusId: 1, // Defaulted by schema
       };
       req.body = validReqBody;
       (mockIssueService.create as jest.Mock).mockResolvedValue(expectedParsedData);
@@ -104,14 +104,12 @@ describe('IssueController', () => {
         description: 'Test Description',
         issueType: 'Bug',
         priority: 'HIGH',
-        reporterId: '123e4567-e89b-12d3-a456-426614174000', //example uuid
       };
       const expectedParsedData = {
         title: 'Test Issue',
         description: 'Test Description',
         priority: 'HIGH',
-        reporterId: '123e4567-e89b-12d3-a456-426614174000',
-        status: 'OPEN', // Defaulted by schema
+        statusId: 1, // Defaulted by schema
       };
 
       req.body = validReqBody;
@@ -123,7 +121,7 @@ describe('IssueController', () => {
       expect(mockIssueService.create).toHaveBeenCalledWith(expectedParsedData);
       expect(mockedLogger.error).toHaveBeenCalledWith('Error creating issue:', new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error', error: errorMessage });
     });
   });
 

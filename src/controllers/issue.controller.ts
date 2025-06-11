@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { createIssueSchema, CreateIssueInput } from './schemas/issue.schema';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
+import util from 'util';
 
 export class IssueController {
   private issueService: IssueService;
@@ -21,7 +22,7 @@ export class IssueController {
         res.status(400).json({ message: 'Validation error', errors: error.errors });
       } else {
         logger.error('Error creating issue:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: 'Internal server error', error: error.message });
       }
     }
   }

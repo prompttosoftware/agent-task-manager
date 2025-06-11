@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import loggingMiddleware from './middleware/logging.middleware';
+import issueRoutes from './routes/issue.routes';
 import logger from './utils/logger';
 
 const app = express();
@@ -7,5 +8,7 @@ const app = express();
 app.use(express.json());
 
 app.use(loggingMiddleware);
+
+app.use(issueRoutes);
 
 export default app;
