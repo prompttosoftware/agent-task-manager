@@ -11,6 +11,9 @@ const config = {
   DB_USER: process.env.DB_USER || 'postgres',
   DB_PASS: process.env.DB_PASS || 'password',
   DB_NAME: process.env.DB_NAME || 'agent_task_manager',
+  db: {
+    logging: process.env.DB_LOGGING === 'true',
+  },
 };
 
 // Freeze the configuration object to prevent modifications

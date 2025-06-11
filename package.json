@@ -7,7 +7,11 @@
     "test": "jest",
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "typeorm": "typeorm-ts-node-commonjs",
+    "db:generate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:generate src/db/migrations/InitialSchema -d src/db/data-source.ts",
+    "db:migrate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:run -d src/db/data-source.ts",
+    "db:drop": "rm -f src/db/agent-task-manager.sqlite"
   },
   "repository": {
     "type": "git",
@@ -37,6 +41,7 @@
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^8.34.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9.28.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.1",
