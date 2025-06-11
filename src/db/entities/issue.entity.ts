@@ -17,7 +17,7 @@ export class Issue {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ unique: true })
+    @Column({ unique: true, nullable: true })
     issueKey: string;
 
     @Column()
@@ -26,7 +26,7 @@ export class Issue {
     @Column({ type: 'text' })
     description: string;
 
-    @Column({ default: 1 })
+    @Column({ default: 11 })
     statusId: number;
 
     @Column()
@@ -37,6 +37,9 @@ export class Issue {
 
     @UpdateDateColumn()
     updatedAt: Date;
+
+    @Column({ name: 'issue_type_id' })
+    issueTypeId: number;
 
     @ManyToOne(() => User, (user) => user.assignedIssues)
     @JoinColumn({ name: 'assigneeId' })

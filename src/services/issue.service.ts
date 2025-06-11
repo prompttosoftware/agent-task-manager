@@ -1,6 +1,7 @@
-import { AppDataSource } from '../db/data-source';
+import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
+import { User } from '../db/entities/user.entity';
 
 export class IssueService {
   private issueRepository = AppDataSource.getRepository(Issue);
@@ -14,22 +15,48 @@ export class IssueService {
 
   async create(data: CreateIssueInput): Promise<Issue> {
     try {
+      // Fetch reporter and assignee
+      const userRepository = AppDataSource.getRepository(User);
+      const reporter = data.fields?.reporterKey ? await userRepository.findOne({ where: { userKey: data.fields.reporterKey } }) : null;
+      const assignee = data.fields?.assigneeKey ? await userRepository.findOne({ where: { userKey: data.fields.assigneeKey } }) : null;
+
+      // Validate reporter and assignee
+      if (data.fields?.reporterKey && !reporter) {
+        throw new Error('Reporter not found');
+      }
+
+      if (data.fields?.assigneeKey && !assignee) {
+        throw new Error('Assignee not found');
+      }
+
       const issue = this.issueRepository.create({
-        title: data.title,
-        description: data.description,
-        priority: data.priority,
-        statusId: data.statusId,
+        title: data.fields?.summary,
+        description: data.fields?.description,
+        reporter: reporter,
+        assignee: assignee,
+        statusId: 11, // Default status
+        priority: 'Medium', // Default priority
+        issueTypeId: data.fields?.issuetype?.id ? parseInt(data.fields.issuetype.id) : 1
       });
-      issue.issueKey = this.generateIssueKey(); // Generate issue key before saving
       await this.issueRepository.save(issue);
+      console.log("Issue after first save:", issue);
+      issue.issueKey = this.generateIssueKey(issue.id);
+      await this.issueRepository.save(issue);
+      console.log("Issue after second save:", issue);
       return issue;
     } catch (error) {
       console.error('Error in IssueService.create:', error);
-      throw error; // Re-throw the error to be caught in the controller
+      // Ensure the specific error message is thrown for user not found
+      if (error.message === 'Reporter not found' || error.message === 'Assignee not found') {
+        throw error; // Re-throw the specific error
+      }
+      // Re-throw the error so the controller can handle it
+      throw error;
     }
   }
 
   async findByKey(issueKey: string): Promise<Issue | null> {
+    console.log("Finding issue by key:", issueKey);
     return this.issueRepository.findOneBy({ issueKey });
   }
 
@@ -38,9 +65,7 @@ export class IssueService {
     return result.affected > 0;
   }
 
-  private generateIssueKey(): string {
-    const timestamp = Date.now().toString(36); // Use base36 for shorter keys
-    const randomId = Math.random().toString(36).substring(2, 7); // Generate a random alphanumeric string
-    return `ISSUE-${timestamp}-${randomId}`.toUpperCase();
+  private generateIssueKey(issueId: number): string {
+    return `TASK-${issueId}`;
   }
 }
