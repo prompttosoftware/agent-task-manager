@@ -5,13 +5,16 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "typeorm": "typeorm-ts-node-commonjs",
-    "db:generate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:generate src/db/migrations/InitialSchema -d src/db/data-source.ts",
+    "db:migration:generate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:generate src/db/migrations/InitialSchema -d src/db/data-source.ts",
     "db:migrate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:run -d src/db/data-source.ts",
-    "db:drop": "rm -f src/db/agent-task-manager.sqlite"
+    "db:drop": "rm -f src/db/agent-task-manager.sqlite",
+    "db:seed": "ts-node src/db/seed.ts"
   },
   "repository": {
     "type": "git",
