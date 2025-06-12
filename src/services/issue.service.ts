@@ -1,5 +1,19 @@
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
+
+export class BadRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BadRequestError';
+  }
+}
+
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
 
