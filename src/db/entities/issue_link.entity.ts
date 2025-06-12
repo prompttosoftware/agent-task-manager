@@ -13,7 +13,13 @@ export class IssueLink {
     @JoinColumn({ name: 'inwardIssueId' })
     inwardIssue: Issue;
 
+    @Column({ name: 'inwardIssueId' })
+    inwardIssueId: number;
+
     @ManyToOne(() => Issue, issue => issue.outwardLinks)
     @JoinColumn({ name: 'outwardIssueId' })
     outwardIssue: Issue;
+
+    @Column({ name: 'outwardIssueId' })
+    outwardIssueId: number;
 }

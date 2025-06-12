@@ -22,6 +22,8 @@ beforeAll(async () => {
   await AppDataSource.runMigrations();
   console.log("Seeding database...");
   await seedDatabase();
+  console.log("Synchronizing database schema...");
+  await AppDataSource.synchronize();
 });
 
 afterAll(async () => {
