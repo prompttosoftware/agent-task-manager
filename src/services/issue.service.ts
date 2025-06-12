@@ -56,8 +56,29 @@ export class IssueService {
   }
 
   async findByKey(issueKey: string): Promise<Issue | null> {
-    console.log("Finding issue by key:", issueKey);
-    return this.issueRepository.findOneBy({ issueKey });
+    try {
+      console.log(`Finding issue by key: ${issueKey}`);
+      const issue = await this.issueRepository
+        .createQueryBuilder('issue')
+        .leftJoinAndSelect('issue.reporter', 'reporter')
+        .leftJoinAndSelect('issue.assignee', 'assignee')
+        .leftJoinAndSelect('issue.attachments', 'attachment')
+        .leftJoinAndSelect('issue.inwardLinks', 'inwardIssueLink')
+        .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
+        .where('issue.issueKey = :issueKey', { issueKey })
+        .getOne();
+
+      if (!issue) {
+        console.log(`Issue with key ${issueKey} not found`);
+        return null;
+      }
+
+      console.log(`Issue with key ${issueKey} found`);
+      return issue;
+    } catch (error) {
+      console.error(`Error finding issue by key ${issueKey}:`, error);
+      throw error;
+    }
   }
 
   async deleteByKey(issueKey: string): Promise<boolean> {

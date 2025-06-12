@@ -100,6 +100,8 @@ describe('IssueController', () => {
         fields: {
           summary: 'Test Issue',
           description: 'Test Description',
+          reporterKey: 'user-1',
+          assigneeKey: 'user-1',
           issuetype: {
             id: '1',
           },
@@ -122,7 +124,7 @@ describe('IssueController', () => {
   describe('findByKey', () => {
     it('should get an issue with a valid issue key and return 200', async () => {
       const issueKey = 'TEST-123';
-      const issueData = { issueKey: issueKey, title: 'Test Issue', self: `/rest/api/2/issue/${issueKey}` };
+      const issueData = { issueKey: issueKey, title: 'Test Issue', self: `/rest/api/2/issue/${issueKey}`, summary: 'Test Issue', description: 'Test Description' };
       req.params = { issueKey: issueKey };
       (issueService.findByKey as jest.Mock).mockResolvedValue(issueData);
 
