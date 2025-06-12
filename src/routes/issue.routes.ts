@@ -17,24 +17,20 @@ router.post(
   '/rest/api/2/issue/:issueKey/attachments',
   (req: Request, res: Response, next: NextFunction) => {
     console.log("Attachment upload route hit in route definition.");
-    const uploadMiddleware = upload.array('file', 10);
-
-    uploadMiddleware(req, res, (err) => {
-      if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ message: 'File size exceeds the limit (10MB)' });
+    console.log("req in route definition", req);
+    next();
+  },
+  (req: Request, res: Response, next: NextFunction) => {
+    upload.array('file', 10)(req, res, (err) => {
+      if (err) {
+        console.error("Error from upload.array middleware:", err);
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ message: `File size exceeds the limit of 10MB.` });
         }
-        return res.status(400).json({ message: `Multer error: ${err.message}` });
-      } else if (err) {
-        return res.status(500).json({ message: `Internal server error: ${err.message}` });
+        return res.status(500).json({ message: `File upload failed: ${err.message}` });
       }
-
-      if (!req.files || (req.files as UploadedFile[]).length === 0) {
-        return res.status(400).json({ message: 'No files uploaded.' });
-      }
-      else {
-        next();
-      }
+      console.log("req.files in route definition after middleware", req.files);
+      next();
     });
   },
   issueController.createAttachment.bind(issueController)

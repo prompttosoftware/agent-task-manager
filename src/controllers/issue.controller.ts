@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { UploadedFile } from '../middleware/upload.config';
 import { createIssueBodySchema, CreateIssueInput } from './schemas/issue.schema';
 import { IssueService } from '../services/issue.service';
@@ -49,8 +50,11 @@ export class IssueController {
 
       res.status(200).json({
         data: {
-          ...issue,
+          issueKey: issue.issueKey,
           self: `/rest/api/2/issue/${issue.issueKey}`,
+          summary: issue.title,
+          description: issue.description,
+          ...issue,
         },
       });
     } catch (error: any) {
@@ -78,6 +82,7 @@ export class IssueController {
 
   public async createAttachment(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
     console.log("Attachment upload route hit in controller.");
+    console.log("req.files after hitting route:", req.files);
 
     try {
       // Check if req.files exists before attempting to access it
@@ -95,19 +100,26 @@ export class IssueController {
         return res.status(500).json({ message: 'Error processing uploaded files.', error: castError.message });
       }
 
-      try {
-        if (!files || files.length === 0) {
-          logger.error("No files found after middleware execution.");
-          return res.status(500).json({ message: 'Files missing after upload middleware.' });
-        }
-        res.status(200).send({ message: 'Attachment upload successful.' });
-      } catch (fileError: any) {
-        logger.error('Error processing files:', fileError);
-        return res.status(500).json({ message: 'Error processing uploaded files.', error: fileError.message });
+      if (!files || files.length === 0) {
+        logger.error("No files found after middleware execution.");
+        return res.status(500).json({ message: 'Files missing after upload middleware.' });
       }
+      res.status(200).send({ message: 'Attachment upload successful.' });
 
     } catch (error: any) {
       logger.error('Error creating attachment:', error);
+      console.error('req.files:', req.files);
+      console.error('Error object:', error);
+      console.error('Error code:', error.code);
+      console.error('Error name:', error.name);
+
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File size exceeds the limit of 10MB.' });
+      }
+
+      if (error instanceof multer.MulterError) {
+        return res.status(400).json({ message: error.message });
+      }
       next(error);
     }
   }
