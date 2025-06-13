@@ -4,7 +4,8 @@
   "description": "## Introduction",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
+    "test": "npm run test:drop && jest",
+    "test:drop": "rm -f src/db/agent-task-manager.sqlite src/db/test.sqlite",
     "clean": "rimraf dist",
     "test:unit": "jest --testPathPattern=tests/unit",
     "test:integration": "jest",
@@ -15,7 +16,8 @@
     "db:migration:generate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:generate src/db/migrations/AddIssueTypeIdToIssueTable -d src/db/data-source.ts",
     "db:migrate": "cross-env TS_NODE_PROJECT=./src/db/tsconfig.json npm run typeorm -- migration:run -d src/db/data-source.ts",
     "db:drop": "rm -f src/db/agent-task-manager.sqlite",
-    "db:seed": "ts-node src/db/seed.ts"
+    "db:seed": "ts-node src/db/seed.ts",
+    "seed": "ts-node src/index.ts"
   },
   "repository": {
     "type": "git",

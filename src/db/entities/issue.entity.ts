@@ -72,4 +72,7 @@ export class Issue {
 
     @OneToMany(() => IssueLink, (issueLink) => issueLink.outwardIssue)
     outwardLinks: IssueLink[];
+
+    @Column({ type: 'json', nullable: true })
+    links: any[];
 }

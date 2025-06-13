@@ -3,6 +3,7 @@ import multer from 'multer';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
+import { IssueLinkService } from '../services/issueLink.service';
 import { createIssueBodySchema } from './schemas/issue.schema'; // Import AttachmentService
 
 const isNumber = (value: any): boolean => {
@@ -20,11 +21,13 @@ export interface SearchParams {
 
 export class IssueController {
   private issueService: IssueService;
-  private attachmentService: AttachmentService; // Add AttachmentService
+  private attachmentService: AttachmentService;
+  private issueLinkService: IssueLinkService;
 
-  constructor(issueService: IssueService, attachmentService: AttachmentService) {
+  constructor(issueService: IssueService, attachmentService: AttachmentService, issueLinkService: IssueLinkService) {
     this.issueService = issueService;
-    this.attachmentService = attachmentService; // Initialize AttachmentService
+    this.attachmentService = attachmentService;
+    this.issueLinkService = issueLinkService;
   }
 
   async create(req: Request, res: Response): Promise<Response<any, Record<string, any>>> {
@@ -62,7 +65,7 @@ export class IssueController {
         res.status(404).json({ message: 'Issue not found' });
         return;
       }
-
+      
       res.status(200).json({
         data: {
           issueKey: issue.issueKey,
@@ -70,6 +73,7 @@ export class IssueController {
           summary: issue.title,
           description: issue.description,
           ...issue,
+          links: issue.links,
         },
       });
     } catch (error: any) {

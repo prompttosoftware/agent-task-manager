@@ -252,4 +252,72 @@ describe('Issue API Integration Tests', () => {
       expect(Array.isArray(response.body.issues)).toBe(true);
     });
   });
+
+  it('should return 200 OK with an empty links array when GET /issue/{issueKey} is called for an issue that has no links', async () => {
+    // Create an issue
+    const createResponse = await request(app)
+      .post('/rest/api/2/issue')
+      .send({
+        fields: {
+          summary: 'Issue with no links',
+          description: 'Issue to test no links',
+          reporterKey: 'user-1',
+          assigneeKey: 'user-1',
+          issuetype: { id: '1' }
+        }
+      });
+
+    expect(createResponse.status).toBe(201);
+    const issueKey = createResponse.body.key;
+
+    // Get the issue
+    const getResponse = await request(app)
+      .get(`/rest/api/2/issue/${issueKey}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body).toBeDefined();
+    expect(getResponse.body.data.links).toBeDefined();
+    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
+    expect(getResponse.body.data.links.length).toBe(0);
+  });
+
+  it('should return 200 OK with link information when GET /issue/{issueKey} is called for an issue that is the outwardIssue in a link', async () => {
+    const outwardIssueKey = 'SEED-2';
+    const inwardIssueKey = 'SEED-1';
+
+    const getResponse = await request(app)
+      .get(`/rest/api/2/issue/${outwardIssueKey}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body).toBeDefined();
+    expect(getResponse.body.data.links).toBeDefined();
+    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
+    expect(getResponse.body.data.links.length).toBe(1);
+
+    const link = getResponse.body.data.links[0];
+    expect(link.id).toBeDefined();
+    expect(link.type).toBeDefined();
+    expect(link.inwardIssue).toBeDefined();
+    expect(link.inwardIssue.key).toBe(inwardIssueKey);
+  });
+
+  it('should return 200 OK with link information when GET /issue/{issueKey} is called for an issue that is the inwardIssue in a link', async () => {
+    const inwardIssueKey = 'SEED-1';
+    const outwardIssueKey = 'SEED-2';
+
+    const getResponse = await request(app)
+      .get(`/rest/api/2/issue/${inwardIssueKey}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body).toBeDefined();
+    expect(getResponse.body.data.links).toBeDefined();
+    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
+    expect(getResponse.body.data.links.length).toBe(1);
+
+    const link = getResponse.body.data.links[0];
+    expect(link.id).toBeDefined();
+    expect(link.type).toBeDefined();
+    expect(link.outwardIssue).toBeDefined();
+    expect(link.outwardIssue.key).toBe(outwardIssueKey);
+  });
 });

@@ -2,7 +2,7 @@ import { AppDataSource } from "../data-source";
 import { User } from "./entities/user.entity";
 import { Issue } from "./entities/issue.entity";
 import { IssueLink } from "./entities/issue_link.entity";
-import { IssueLinkType } from "./entities/issue_link_type.entity"; // Import IssueLinkType
+import { IssueLinkType } from "./entities/issue_link_type.entity";
 
 export async function seedDatabase() {
     const dataSource = AppDataSource;
@@ -10,7 +10,7 @@ export async function seedDatabase() {
     const userRepository = dataSource.getRepository(User);
     const issueRepository = dataSource.getRepository(Issue);
     const issueLinkRepository = dataSource.getRepository(IssueLink);
-    const issueLinkTypeRepository = dataSource.getRepository(IssueLinkType); // Get IssueLinkType repository
+    const issueLinkTypeRepository = dataSource.getRepository(IssueLinkType);
 
     // Create sample users
     let user1: User;
@@ -26,75 +26,83 @@ export async function seedDatabase() {
         user1 = existingUser1;
     }
 
-    let user2: User;
-    const existingUser2 = await userRepository.findOneBy({ userKey: "user-2" });
-    if (!existingUser2) {
-        user2 = userRepository.create({
-            userKey: "user-2",
-            displayName: "Jane Smith",
-            emailAddress: "jane.smith@example.com",
+    // Create issues TASK-4 and TASK-5
+    let issue4: Issue;
+    const existingIssue4 = await issueRepository.findOneBy({ issueKey: "TASK-4" });
+    if (!existingIssue4) {
+        issue4 = issueRepository.create({
+            issueKey: "SEED-1",
+            title: "Task 4",
+            description: "This is task 4.",
+            reporter: user1,
+            statusId: 1,
+            issueTypeId: 1,
+            priority: "1",
         });
-        await userRepository.save(user2);
+        await issueRepository.save(issue4);
     } else {
-        user2 = existingUser2;
+        issue4 = existingIssue4;
     }
 
-    // Create a sample issue
-    const existingIssue1 = await issueRepository.findOneBy({ issueKey: "ISSUE-1" });
-    if (!existingIssue1) {
-        const issue1 = issueRepository.create({
-            issueKey: "ISSUE-1",
-            title: "Sample Issue",
-            description: "This is a sample issue.",
+    let issue5: Issue;
+    const existingIssue5 = await issueRepository.findOneBy({ issueKey: "TASK-5" });
+    if (!existingIssue5) {
+        issue5 = issueRepository.create({
+            issueKey: "SEED-2",
+            title: "Task 5",
+            description: "This is task 5.",
             reporter: user1,
             statusId: 1,
             issueTypeId: 1,
             priority: "1",
         });
-        await issueRepository.save(issue1);
+        await issueRepository.save(issue5);
+    } else {
+        issue5 = existingIssue5;
     }
 
-    const existingIssue2 = await issueRepository.findOneBy({ issueKey: "ISSUE-2" });
-    if (!existingIssue2) {
-        const issue2 = issueRepository.create({
-            issueKey: "ISSUE-2",
-            title: "Sample Issue 2",
-            description: "This is a sample issue 2.",
-            reporter: user1,
-            statusId: 1,
-            issueTypeId: 1,
-            priority: "1",
+
+    // Create link type "Blocks"
+    let blocksLinkType: IssueLinkType;
+    const existingBlocksLinkType = await issueLinkTypeRepository.findOneBy({ name: "Blocks" });
+    if (!existingBlocksLinkType) {
+        blocksLinkType = issueLinkTypeRepository.create({
+            name: "Blocks",
+            inward: "is blocked by",
+            outward: "blocks",
         });
-        await issueRepository.save(issue2);
+        await issueLinkTypeRepository.save(blocksLinkType);
+    } else {
+        blocksLinkType = existingBlocksLinkType;
     }
 
     // Create link type "Relates"
     let relatesLinkType: IssueLinkType;
-    const existingLinkType = await issueLinkTypeRepository.findOneBy({ name: "Relates" });
-    if (!existingLinkType) {
-        relatesLinkType = issueLinkTypeRepository.create({ name: "Relates" });
+    const existingRelatesLinkType = await issueLinkTypeRepository.findOneBy({ name: "Relates" });
+    if (!existingRelatesLinkType) {
+        relatesLinkType = issueLinkTypeRepository.create({
+            name: "Relates",
+            inward: "relates to",
+            outward: "relates to",
+        });
         await issueLinkTypeRepository.save(relatesLinkType);
     } else {
-        relatesLinkType = existingLinkType;
+        relatesLinkType = existingRelatesLinkType;
     }
 
     // Create IssueLink
-    // Assuming issue1 and issue2 were created successfully
-    const issue1 = await issueRepository.findOneBy({ issueKey: "ISSUE-1" });
-    const issue2 = await issueRepository.findOneBy({ issueKey: "ISSUE-2" });
-
-    if (issue1 && issue2 && relatesLinkType) {
+    if (issue4 && issue5 && blocksLinkType) {
         const existingIssueLink = await issueLinkRepository.findOneBy({
-            inwardIssueId: issue1.id,
-            outwardIssueId: issue2.id,
-            linkTypeId: relatesLinkType.id,
+            inwardIssueId: issue4.id,
+            outwardIssueId: issue5.id,
+            linkTypeId: blocksLinkType.id,
         });
 
         if (!existingIssueLink) {
             const issueLink = issueLinkRepository.create({
-                inwardIssueId: issue1.id,
-                outwardIssueId: issue2.id,
-                linkTypeId: relatesLinkType.id,
+                inwardIssueId: issue4.id,
+                outwardIssueId: issue5.id,
+                linkTypeId: blocksLinkType.id,
             });
             await issueLinkRepository.save(issueLink);
         }
@@ -102,5 +110,3 @@ export async function seedDatabase() {
 
     console.log("Database seeded successfully!");
 }
-
-
