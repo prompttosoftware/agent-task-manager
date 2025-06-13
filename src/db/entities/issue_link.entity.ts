@@ -1,10 +1,15 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
 import { Issue } from "./issue.entity";
+import { IssueLinkType } from "./issue_link_type.entity";
 
 @Entity('issue_link')
 export class IssueLink {
     @PrimaryGeneratedColumn()
     id: number;
+
+    @ManyToOne(() => IssueLinkType)
+    @JoinColumn({ name: 'linkTypeId' })
+    linkType: IssueLinkType;
 
     @Column()
     linkTypeId: number;

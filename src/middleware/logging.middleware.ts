@@ -21,4 +21,11 @@ const loggingMiddleware = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+const authenticate = (req: Request, res: Response, next: NextFunction) => {
+  // TODO: Implement actual authentication logic
+  console.warn('Authentication middleware is a placeholder!');
+  next();
+};
+
+export { authenticate };
 export default loggingMiddleware;

@@ -5,6 +5,7 @@ import { IssueLink } from "./db/entities/issue_link.entity";
 import { Issue } from "./db/entities/issue.entity";
 import { IssueType } from "./db/entities/issue_type.entity";
 import { User } from "./db/entities/user.entity";
+import { IssueLinkType } from "./db/entities/issue_link_type.entity";
 
 const AppDataSource = new DataSource({
     type: config.NODE_ENV === 'test' ? "sqlite" : "postgres",
@@ -16,7 +17,7 @@ const AppDataSource = new DataSource({
     synchronize: config.NODE_ENV === 'test', // Enable auto schema sync for tests
     logging: config.NODE_ENV === 'development',
     migrationsRun: config.NODE_ENV === 'test',
-    entities: [Attachment, IssueLink, Issue, User, IssueType],
+    entities: [Attachment, IssueLink, Issue, User, IssueType, IssueLinkType],
     migrations: [],
     subscribers: [],
 });

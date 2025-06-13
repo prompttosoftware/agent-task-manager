@@ -1,7 +1,9 @@
 import { Issue } from '../db/entities/issue.entity';
-import { IssueLinkType } from '../config/static-data';
+import { IssueLinkType } from '../db/entities/issue_link_type.entity';
+import { IssueLink } from '../db/entities/issue_link.entity';
+
 import { z } from 'zod';
-import { BadRequestError, NotFoundError } from './issue.service';
+import { BadRequestError, NotFoundError } from '../utils/http-errors';
 import { AppDataSource } from '../data-source';
 
 const issueLinkCreateSchema = z.object({
@@ -29,7 +31,10 @@ export class IssueLinkService {
       throw error;
     }
 
-    if (!(data.type.name in IssueLinkType)) {
+    const issueLinkTypeRepository = AppDataSource.getRepository(IssueLinkType);
+    const issueLinkType = await issueLinkTypeRepository.findOneBy({ name: data.type.name });
+
+    if (!issueLinkType) {
       throw new BadRequestError('Invalid link type.');
     }
 
@@ -46,11 +51,11 @@ export class IssueLinkService {
     }
 
     // Persist the IssueLink entity to the database.
-    const issueLinkRepository = AppDataSource.getRepository('IssueLink'); // Assuming 'IssueLink' is the name used in AppDataSource
+    const issueLinkRepository = AppDataSource.getRepository(IssueLink);
     const issueLink = issueLinkRepository.create({
-      linkTypeId: IssueLinkType[data.type.name],
-      inwardIssueId: inwardIssue.id,
-      outwardIssueId: outwardIssue.id,
+      linkType: issueLinkType,
+      inwardIssue: inwardIssue,
+      outwardIssue: outwardIssue,
     });
 
     await issueLinkRepository.save(issueLink);
