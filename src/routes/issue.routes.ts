@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { IssueController } from '../controllers/issue.controller';
 import { IssueService } from '../services/issue.service';
 import { AttachmentService } from '../services/attachment.service';
+import { IssueLinkService } from '../services/issueLink.service'; // Import IssueLinkService
 import upload from '../middleware/upload.config';
 import multer from 'multer';
 
@@ -9,7 +10,8 @@ export const router = express.Router();
 
 const issueService = new IssueService();
 const attachmentService = new AttachmentService();
-const issueController = new IssueController(issueService, attachmentService);
+const issueLinkService = new IssueLinkService(); // Instantiate IssueLinkService
+const issueController = new IssueController(issueService, attachmentService, issueLinkService);
 
 router.post('/rest/api/2/issue', issueController.create.bind(issueController));
 router.get('/rest/api/2/issue/:issueKey', issueController.findByKey.bind(issueController));

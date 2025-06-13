@@ -7,4 +7,10 @@ export class IssueLinkType {
 
   @Column({ unique: true })
   name: string;
+
+  @Column()
+  inward: string;
+
+  @Column()
+  outward: string;
 }

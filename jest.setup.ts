@@ -16,15 +16,23 @@ beforeAll(async () => {
   console.log('Initializing AppDataSource...');
   await AppDataSource.initialize();
 
+  console.log('Truncating tables...');
+  const entities = AppDataSource.entityMetadatas;
+
+  for (const entity of entities) {
+    const repository = AppDataSource.getRepository(entity.name);
+    await repository.query(`DELETE FROM "${entity.tableName}";`);
+  }
+
+  console.log('Synchronizing database schema...');
+  await AppDataSource.synchronize();
+
   console.log('Running migrations...');
   await AppDataSource.runMigrations();
 
   console.log('Seeding database...');
   await seedDatabase();
   console.log('Database seeded successfully!');
-
-  console.log('Synchronizing database schema...');
-  await AppDataSource.synchronize();
 });
 
 afterAll(async () => {

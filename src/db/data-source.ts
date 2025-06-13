@@ -26,6 +26,6 @@ export const AppDataSource = new CustomDataSource({
   database: path.join(__dirname, database),
   entities: [Attachment, IssueLink, Issue, User],
   migrations: [path.join(__dirname, "migrations", "*.ts")],
-  synchronize: false, // Enable synchronize in development!
+  synchronize: true, // Enable synchronize in development!
   logging: config.db.logging,
 });

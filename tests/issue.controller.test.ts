@@ -16,6 +16,7 @@ let req: Request;
 let res: Response;
 let issueService: IssueService;
 let attachmentService: AttachmentService;
+let issueLinkService: any;
 
 // Define TMP_UPLOAD_DIR for creating temporary files in tests
 const TMP_UPLOAD_DIR = path.join(tmpdir(), 'uploads_test_tmp');
@@ -26,7 +27,8 @@ describe('IssueController', () => {
   beforeEach(() => {
     issueService = new IssueService();
     attachmentService = new AttachmentService();
-    issueController = new IssueController(issueService, attachmentService);
+    issueLinkService = {};
+    issueController = new IssueController(issueService, attachmentService, issueLinkService);
     jest.spyOn(issueService, 'create');
     jest.spyOn(issueService, 'findByKey');
     jest.spyOn(issueService, 'deleteByKey');
@@ -188,6 +190,104 @@ describe('IssueController', () => {
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
       (console.error as jest.Mock).mockRestore();
     });
+
+describe('links', () => {
+  it('should get an issue with a valid issue key and return 200 with an empty links array', async () => {
+    const issueKey = 'TEST-123';
+    const issueData = { issueKey: issueKey, title: 'Test Issue', self: `/rest/api/2/issue/${issueKey}`, summary: 'Test Issue', description: 'Test Description', links: [] };
+    req.params = { issueKey: issueKey };
+    (issueService.findByKey as jest.Mock).mockResolvedValue(issueData);
+
+    await issueController.findByKey(req, res);
+
+    expect(issueService.findByKey).toHaveBeenCalledWith(issueKey);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ data: issueData });
+    expect(res.json).toHaveBeenCalledWith({ data: { ...issueData, links: [] } });
+  });
+
+    it('should get an issue that is the outwardIssue in a link and return 200 with the correct link information', async () => {
+      const outwardIssueKey = 'TASK-1';
+      const inwardIssueKey = 'TASK-2';
+      const linkType = 'blocks';
+
+      const issueData = {
+        issueKey: outwardIssueKey,
+        title: 'Task 1',
+        self: `/rest/api/2/issue/${outwardIssueKey}`,
+        summary: 'Task 1 Summary',
+        description: 'Task 1 Description',
+        links: [
+          {
+            id: 1,
+            self: '/rest/api/2/issueLink/1',
+            type: {
+              id: 1,
+              name: linkType,
+              inward: `${linkType} by`,
+              outward: `${linkType}`,
+              self: '/rest/api/2/issueLinkType/1',
+            },
+            inwardIssue: {
+              issueKey: inwardIssueKey,
+              self: `/rest/api/2/issue/${inwardIssueKey}`,
+              title: 'Task 2',
+            },
+          },
+        ],
+      };
+
+      req.params = { issueKey: outwardIssueKey };
+      (issueService.findByKey as jest.Mock).mockResolvedValue(issueData);
+
+      await issueController.findByKey(req, res);
+
+      expect(issueService.findByKey).toHaveBeenCalledWith(outwardIssueKey);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ data: issueData });
+    });
+
+    it('should get an issue that is the inwardIssue in a link and return 200 with the correct link information', async () => {
+      const outwardIssueKey = 'TASK-1';
+      const inwardIssueKey = 'TASK-2';
+      const linkType = 'blocks';
+
+      const issueData = {
+        issueKey: inwardIssueKey,
+        title: 'Task 2',
+        self: `/rest/api/2/issue/${inwardIssueKey}`,
+        summary: 'Task 2 Summary',
+        description: 'Task 2 Description',
+        links: [
+          {
+            id: 1,
+            self: '/rest/api/2/issueLink/1',
+            type: {
+              id: 1,
+              name: linkType,
+              inward: `${linkType} by`,
+              outward: `${linkType}`,
+              self: '/rest/api/2/issueLinkType/1',
+            },
+            outwardIssue: {
+              issueKey: outwardIssueKey,
+              self: `/rest/api/2/issue/${outwardIssueKey}`,
+              title: 'Task 1',
+            },
+          },
+        ],
+      };
+
+      req.params = { issueKey: inwardIssueKey };
+      (issueService.findByKey as jest.Mock).mockResolvedValue(issueData);
+
+      await issueController.findByKey(req, res);
+
+      expect(issueService.findByKey).toHaveBeenCalledWith(inwardIssueKey);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ data: issueData });
+    });
+});
   });
 
   describe('delete', () => {

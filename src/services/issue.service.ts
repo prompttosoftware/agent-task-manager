@@ -1,3 +1,4 @@
+import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
 import { SearchParams } from '../controllers/issue.controller';
@@ -82,6 +83,9 @@ export class IssueService {
         .leftJoinAndSelect('inwardIssueLink.linkType', 'inwardLinkType')
         .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
         .leftJoinAndSelect('outwardIssueLink.linkType', 'outwardLinkType')
+        .leftJoinAndSelect('inwardIssueLink.outwardIssue', 'inwardOutwardIssue')
+        .leftJoinAndSelect('outwardIssueLink.inwardIssue', 'outwardInwardIssue')
+        .addSelect(['inwardOutwardIssue.issueKey', 'outwardInwardIssue.issueKey', 'inwardOutwardIssue.id', 'outwardInwardIssue.id'])
         .where('issue.issueKey = :issueKey', { issueKey })
         .getOne();
 
@@ -90,8 +94,57 @@ export class IssueService {
         return null;
       }
 
+      console.log("Issue:", JSON.stringify(issue, null, 2));
+      console.error("Issue:", util.inspect(issue, { depth: null, colors: true }));
+
+      const links = [];
+
+      if (issue.inwardLinks) {
+        issue.inwardLinks.forEach(link => {
+          if (link.outwardIssue) {
+            links.push({
+              id: link.id,
+              type: {
+                name: link.linkType.name,
+                inward: link.linkType.inward,
+                outward: link.linkType.outward,
+              },
+              outwardIssue: {
+                key: link.outwardIssue.issueKey,
+              },
+            });
+          }
+        });
+      }
+
+      if (issue.outwardLinks) {
+        issue.outwardLinks.forEach(link => {
+          if (link.inwardIssue) {
+            links.push({
+              id: link.id,
+              type: {
+                name: link.linkType.name,
+                inward: link.linkType.inward,
+                outward: link.linkType.outward,
+              },
+              inwardIssue: {
+                key: link.inwardIssue.issueKey,
+              },
+            });
+          }
+        });
+      }
+
+      console.log("Links:", JSON.stringify(links, null, 2));
+      console.error("Links:", util.inspect(links, { depth: null, colors: true }));
+
+      const issueWithLinks = {
+        ...issue,
+        links: links,
+      };
+
       console.log(`Issue with key ${issueKey} found`);
-      return issue;
+      return issueWithLinks;
     } catch (error) {
       console.error(`Error finding issue by key ${issueKey}:`, error);
       throw error;

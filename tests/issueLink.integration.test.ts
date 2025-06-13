@@ -5,6 +5,7 @@ import { IssueLinkType } from "../src/db/entities/issue_link_type.entity";
 
 describe('IssueLink Integration Tests', () => {
   let relatesLinkTypeId: number;
+  let blocksLinkTypeId: number;
 
   beforeAll(async () => {
     const relatesLinkType = await AppDataSource.getRepository(IssueLinkType).findOneBy({ name: "Relates" });
@@ -12,9 +13,15 @@ describe('IssueLink Integration Tests', () => {
       throw new Error("Relates link type not found. Ensure database is seeded correctly.");
     }
     relatesLinkTypeId = relatesLinkType.id;
+
+    const blocksLinkType = await AppDataSource.getRepository(IssueLinkType).findOneBy({ name: "Blocks" });
+    if (!blocksLinkType) {
+      throw new Error("Blocks link type not found. Ensure database is seeded correctly.");
+    }
+    blocksLinkTypeId = blocksLinkType.id;
   });
 
-  it('should successfully create an issue link and return 201 Created', async () => {
+  it('should successfully create an issue link with type Relates and return 201 Created', async () => {
     const response = await request(app)
       .post('/issueLink')
       .send({
@@ -22,14 +29,39 @@ describe('IssueLink Integration Tests', () => {
           "name": "Relates"
         },
         "inwardIssue": {
-          "key": "ISSUE-1"
+          "key": "SEED-1"
         },
         "outwardIssue": {
-          "key": "ISSUE-2"
+          "key": "SEED-2"
         }
       });
     expect(response.status).toBe(201);
   });
+
+  it('should successfully create an issue link with type Blocks and return 201 Created', async () => {
+    const payload = {
+      "type": {
+        "name": "Blocks"
+      },
+      "inwardIssue": {
+        "key": "SEED-1"
+      },
+      "outwardIssue": {
+        "key": "SEED-2"
+      }
+    };
+
+    console.log("Sending payload:", payload);
+
+    const response = await request(app)
+      .post('/issueLink')
+      .send(payload);
+
+    console.log("Received response:", response.status, response.body);
+
+    expect(response.status).toBe(201);
+  });
+
 
   it('should return 404 Not Found when inward issue does not exist', async () => {
     const response = await request(app)
@@ -42,7 +74,7 @@ describe('IssueLink Integration Tests', () => {
           "key": "NONEXISTENT-1"
         },
         "outwardIssue": {
-          "key": "ISSUE-2"
+          "key": "TASK-5"
         }
       });
     expect(response.status).toBe(404);
@@ -56,10 +88,10 @@ describe('IssueLink Integration Tests', () => {
           "name": "InvalidLinkType"
         },
         "inwardIssue": {
-          "key": "ISSUE-1"
+          "key": "TASK-4"
         },
         "outwardIssue": {
-          "key": "ISSUE-2"
+          "key": "TASK-5"
         }
       });
     expect(response.status).toBe(400);
@@ -73,7 +105,7 @@ describe('IssueLink Integration Tests', () => {
           "name": "Relates"
         },
         "inwardIssue": {
-          "key": "ISSUE-1"
+          "key": "TASK-4"
         },
         "outwardIssue": {} // Malformed: outwardIssue.key is missing
       });
