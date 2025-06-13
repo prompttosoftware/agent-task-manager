@@ -5,6 +5,19 @@ import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
 import { createIssueBodySchema } from './schemas/issue.schema'; // Import AttachmentService
 
+const isNumber = (value: any): boolean => {
+  if (typeof value === 'string') {
+    return /^\d+$/.test(value); // Check if the string contains only digits
+  }
+  return typeof value === 'number' && !isNaN(value);
+};
+
+export interface SearchParams {
+  status?: number;
+  issuetype?: number;
+  assignee?: string;
+}
+
 export class IssueController {
   private issueService: IssueService;
   private attachmentService: AttachmentService; // Add AttachmentService
@@ -81,7 +94,6 @@ export class IssueController {
       res.status(500).json({ message: 'Internal server error' });
     }
   }
-
   public async createAttachment(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
     console.log("Attachment upload route hit in controller.");
     console.log("req.files after hitting route:", req.files);
@@ -135,6 +147,41 @@ export class IssueController {
         return res.status(400).json({ message: req.fileValidationError });
       }
       next(error);
+    }
+  }
+
+  async search(req: Request, res: Response): Promise<void> {
+    try {
+      const { status, issuetype, assignee } = req.query;
+
+      // Validate parameters
+      if (status !== undefined && !isNumber(status)) {
+        res.status(400).json({ message: 'Invalid status parameter: must be a number' });
+        return;
+      }
+
+      if (issuetype !== undefined && !isNumber(issuetype)) {
+        res.status(400).json({ message: 'Invalid issuetype parameter: must be a number' });
+        return;
+      }
+
+      if (assignee !== undefined && typeof assignee !== 'string') {
+        res.status(400).json({ message: 'Invalid assignee parameter' });
+        return;
+      }
+
+      const searchParams: SearchParams = {
+        status: status ? Number(status) : undefined,
+        issuetype: issuetype ? Number(issuetype) : undefined,
+        assignee: assignee ? String(assignee) : undefined,
+      };
+
+      const issues = await this.issueService.search(searchParams);
+
+      res.status(200).json({ total: issues.total, issues: issues.issues });
+    } catch (error: any) {
+      logger.error('Error searching issues:', error);
+      res.status(500).json({ message: 'Internal server error', error: error.message });
     }
   }
 }

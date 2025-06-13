@@ -5,8 +5,8 @@ import { AttachmentService } from '../services/attachment.service';
 import upload from '../middleware/upload.config';
 import multer from 'multer';
 
+export const router = express.Router();
 
-const router = express.Router();
 const issueService = new IssueService();
 const attachmentService = new AttachmentService();
 const issueController = new IssueController(issueService, attachmentService);
@@ -25,7 +25,7 @@ router.post(
   (req: Request, res: Response, next: NextFunction) => {
     upload.array('file', 10)(req, res, (err) => {
       if (err) {
-        console.error("Error from upload.array middleware:", err);
+        
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
           return res.status(413).json({ message: `File size exceeds the limit of 10MB.` });
         } else if (err.message.includes('Multipart: Boundary not found')) {
@@ -39,5 +39,7 @@ router.post(
   },
   issueController.createAttachment.bind(issueController)
 );
+
+router.get('/rest/api/2/search', issueController.search.bind(issueController));
 
 export default router;
