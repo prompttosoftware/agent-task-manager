@@ -38,6 +38,7 @@
     "reflect-metadata": "^0.2.2",
     "routing-controllers": "^0.11.2",
     "sqlite3": "^5.1.7",
+    "tsyringe": "^4.10.0",
     "typeorm": "^0.3.24",
     "zod": "^3.25.61"
   },

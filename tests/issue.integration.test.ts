@@ -3,6 +3,7 @@ import { app } from '../src/app';
 
 import * as fs from 'fs';
 import * as path from 'path';
+// import { UploadedFile } from '../middleware/upload.config'; // No longer needed.
 
 describe('Issue API Integration Tests', () => {
   let issueKey: string;

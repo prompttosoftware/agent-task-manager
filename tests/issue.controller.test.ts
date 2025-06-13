@@ -4,6 +4,8 @@ import { IssueService } from '../src/services/issue.service';
 import { AttachmentService } from '../src/services/attachment.service';
 import { createIssueBodySchema as createIssueSchema } from '../src/controllers/schemas/issue.schema';
 import logger from '../src/utils/logger';
+import * as path from 'path';
+import { tmpdir } from 'os';
 
 // Mock the logger
 jest.mock('../src/utils/logger');
@@ -15,6 +17,10 @@ let res: Response;
 let issueService: IssueService;
 let attachmentService: AttachmentService;
 
+// Define TMP_UPLOAD_DIR for creating temporary files in tests
+const TMP_UPLOAD_DIR = path.join(tmpdir(), 'uploads_test_tmp');
+
+
 describe('IssueController', () => {
 
   beforeEach(() => {
@@ -24,6 +30,8 @@ describe('IssueController', () => {
     jest.spyOn(issueService, 'create');
     jest.spyOn(issueService, 'findByKey');
     jest.spyOn(issueService, 'deleteByKey');
+    jest.spyOn(attachmentService, 'create');
+
 
     // Ensure mocks are clear before each test
     mockedLogger.error.mockClear();
@@ -34,6 +42,18 @@ describe('IssueController', () => {
       json: jest.fn(),
       send: jest.fn(),
     } as any as Response;
+  });
+
+  afterEach(async () => {
+    const fs = require('fs').promises;
+    const tempFilePath = path.join(TMP_UPLOAD_DIR, 'test.txt');
+
+    try {
+      // Clean up the temporary file after the test
+      await fs.unlink(tempFilePath);
+    } catch (error) {
+      //Ignore the error if the file does not exist
+    }
   });
 
   describe('create', () => {
@@ -97,6 +117,9 @@ describe('IssueController', () => {
         ],
       });
     });
+
+
+
 
     it('should handle unexpected errors and return 500', async () => {
       const validReqBody = {
