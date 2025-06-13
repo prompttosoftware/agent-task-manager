@@ -137,14 +137,44 @@ describe('Issue API Integration Tests', () => {
   });
 
   it('should pass through multer middleware when uploading a valid file', async () => {
+    const filePath = path.resolve(__dirname, './uploads_test/test.pdf');
+    const fileStream = fs.createReadStream(filePath);
+
+    const response = await request(app)
+      .post(`/rest/api/2/issue/${issueKey}/attachments`)
+      .set('Content-Type', 'multipart/form-data').attach('file', filePath);
+
+    expect(response.statusCode).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true); // Expect an array in the response body
+    expect(response.body.length).toBeGreaterThan(0); // Expect at least one attachment metadata
+    expect(response.body[0]).toHaveProperty('filename'); //Expect the first element to have filename property
+  });
+
+  it('should return 200 OK with an array of attachment metadata on successful upload', async () => {
     const smallFileBuffer = Buffer.alloc(1024, 'a'); // 1KB
     const response = await request(app)
       .post(`/rest/api/2/issue/${issueKey}/attachments`)
       .set('Content-Type', 'multipart/form-data')
-      .attach('file', smallFileBuffer, 'small_file.txt');
+      .attach('file', smallFileBuffer, 'test_file.txt');
 
-    // Expect a 200 OK, assuming the placeholder controller handles the request
     expect(response.status).toBe(200);
-    expect(response.body.message).toBe('Attachment upload successful.');
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBe(1);
+
+    const attachment = response.body[0];
+    expect(attachment.id).toBeDefined();
+    expect(attachment.issue.id).toBeDefined();
+    expect(attachment.filename).toBe('test_file.txt');
+    expect(attachment.storedFilename).toBeDefined();
+    expect(attachment.mimetype).toBe('text/plain');
+    expect(attachment.size).toBe(1024);
+  });
+
+  it('should return 400 Bad Request when no files are attached', async () => {
+    const response = await request(app)
+      .post(`/rest/api/2/issue/${issueKey}/attachments`)
+      .set('Content-Type', 'multipart/form-data');
+
+    expect(response.status).toBe(400);
   });
 });

@@ -1,9 +1,10 @@
-import { UploadedFile } from '../../middleware/upload.config';
+import { Multer } from 'multer';
+import { Request } from 'express';
 
 declare global {
-  namespace Express {
-    interface Request {
-      files: UploadedFile[];
+    namespace Express {
+        interface Request {
+            fileValidationError?: string;
+        }
     }
-  }
 }

@@ -31,7 +31,8 @@ const upload = multer({
     if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf' || file.mimetype === 'text/plain' || file.mimetype === 'application/msword' || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only images, PDF, text and Word documents are allowed.'), false);
+      req.fileValidationError = 'Invalid file type. Only images, PDF, text and Word documents are allowed.';
+      cb(null, false);
     }
   },
 });

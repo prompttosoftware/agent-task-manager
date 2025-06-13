@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { IssueController } from '../src/controllers/issue.controller';
 import { IssueService } from '../src/services/issue.service';
+import { AttachmentService } from '../src/services/attachment.service';
 import { createIssueBodySchema as createIssueSchema } from '../src/controllers/schemas/issue.schema';
 import logger from '../src/utils/logger';
 
@@ -12,12 +13,14 @@ let issueController: IssueController;
 let req: Request;
 let res: Response;
 let issueService: IssueService;
+let attachmentService: AttachmentService;
 
 describe('IssueController', () => {
 
   beforeEach(() => {
     issueService = new IssueService();
-    issueController = new IssueController(issueService);
+    attachmentService = new AttachmentService();
+    issueController = new IssueController(issueService, attachmentService);
     jest.spyOn(issueService, 'create');
     jest.spyOn(issueService, 'findByKey');
     jest.spyOn(issueService, 'deleteByKey');

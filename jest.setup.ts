@@ -17,16 +17,20 @@ import { seedDatabase } from './src/db/seed';
 
 beforeAll(async () => {
   console.log("Initializing AppDataSource...");
-  await AppDataSource.initialize();
-  console.log("Running migrations...");
-  await AppDataSource.runMigrations();
-  console.log("Seeding database...");
-  await seedDatabase();
-  console.log("Synchronizing database schema...");
-  await AppDataSource.synchronize();
+  if (!AppDataSource.isInitialized) {
+    await AppDataSource.initialize();
+    console.log("Running migrations...");
+    await AppDataSource.runMigrations();
+    console.log("Seeding database...");
+    await seedDatabase();
+    console.log("Synchronizing database schema...");
+    await AppDataSource.synchronize();
+  }
 });
 
 afterAll(async () => {
   console.log("Destroying AppDataSource...");
-  await AppDataSource.destroy();
+  if (AppDataSource.isInitialized) {
+    await AppDataSource.destroy();
+  }
 });

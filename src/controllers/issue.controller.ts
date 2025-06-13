@@ -1,20 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { UploadedFile } from '../middleware/upload.config';
-import { createIssueBodySchema, CreateIssueInput } from './schemas/issue.schema';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
+import { AttachmentService } from '../services/attachment.service';
+import { createIssueBodySchema } from './schemas/issue.schema'; // Import AttachmentService
 
 export class IssueController {
   private issueService: IssueService;
+  private attachmentService: AttachmentService; // Add AttachmentService
 
-  constructor(issueService: IssueService) {
+  constructor(issueService: IssueService, attachmentService: AttachmentService) {
     this.issueService = issueService;
+    this.attachmentService = attachmentService; // Initialize AttachmentService
   }
 
   async create(req: Request, res: Response): Promise<Response<any, Record<string, any>>> {
     try {
-      const validatedData: CreateIssueInput = createIssueBodySchema.parse(req.body);
+      const validatedData = createIssueBodySchema.parse(req.body);
       const issue = await this.issueService.create(validatedData);
 
       console.log("Issue object in controller:", issue);
@@ -84,27 +86,35 @@ export class IssueController {
     console.log("Attachment upload route hit in controller.");
     console.log("req.files after hitting route:", req.files);
 
+    let files: Express.Multer.File[] = [];
+
     try {
       // Check if req.files exists before attempting to access it
-      if (!req.files) {
+      if (req.files) {
+        files = req.files as Express.Multer.File[];
+      } else {
         console.log("req.files is undefined or null");
         return res.status(400).json({ message: 'No files uploaded.' });
       }
 
-      // Attempt to cast req.files to UploadedFile[] and log any errors
-      let files: UploadedFile[];
-      try {
-        files = req.files as UploadedFile[];
-      } catch (castError: any) {
-        console.error("Error casting req.files to UploadedFile[]:", castError);
-        return res.status(500).json({ message: 'Error processing uploaded files.', error: castError.message });
+      if (!files || files.length === 0) {
+        console.log("No files found after middleware execution.");
+        return res.status(400).json({ message: 'No files uploaded.' });
       }
 
-      if (!files || files.length === 0) {
-        logger.error("No files found after middleware execution.");
-        return res.status(500).json({ message: 'Files missing after upload middleware.' });
+      const issueKey = req.params.issueKey;
+
+      try {
+        const attachmentMetadata = await this.attachmentService.create(issueKey, files);
+        return res.status(200).json(attachmentMetadata);
+      } catch (serviceError: any) {
+        logger.error('Error creating attachment:', serviceError);
+        if (serviceError.message === 'Issue not found') {
+          return res.status(404).json({ message: 'Issue not found' });
+        } else {
+          return res.status(500).json({ message: 'Internal server error', error: serviceError.message });
+        }
       }
-      res.status(200).send({ message: 'Attachment upload successful.' });
 
     } catch (error: any) {
       logger.error('Error creating attachment:', error);
@@ -119,6 +129,10 @@ export class IssueController {
 
       if (error instanceof multer.MulterError) {
         return res.status(400).json({ message: error.message });
+      }
+
+      if (req.fileValidationError) {
+        return res.status(400).json({ message: req.fileValidationError });
       }
       next(error);
     }
