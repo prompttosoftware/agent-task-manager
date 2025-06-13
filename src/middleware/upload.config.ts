@@ -1,21 +1,12 @@
 import multer from 'multer';
 import path from 'path';
 
-export interface UploadedFile {
-  fieldname: string;
-  originalname: string;
-  encoding: string;
-  mimetype: string;
-  destination: string;
-  filename: string;
-  path: string;
-  size: number;
-}
+// Define upload directory
+const UPLOAD_DIR = path.join(__dirname, '../../uploads');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // TODO: The final destination (`./uploads/`) will be handled by the `AttachmentService`.
-    cb(null, path.join(__dirname, '../../uploads/tmp')); // Temporary directory
+    cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);

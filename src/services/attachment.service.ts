@@ -35,27 +35,19 @@ export class AttachmentService {
 
         for (const file of files) {
             const storedFilename = uuidv4();
-            const destinationPath = path.join('./uploads', storedFilename);
+            const fileExtension = path.extname(file.originalname);
+            const finalFilename = storedFilename + fileExtension;
 
-            try {
-                await fs.rename(file.path, destinationPath);
+            const attachment = new Attachment();
+            attachment.issue = issue;
+            attachment.filename = file.originalname;
+            attachment.storedFilename = finalFilename;
+            attachment.mimetype = file.mimetype;
+            attachment.size = file.size;
+            attachment.author = null;
 
-                const attachment = new Attachment();
-                attachment.issue = issue;
-                attachment.filename = file.originalname;
-                attachment.storedFilename = storedFilename;
-                attachment.mimetype = file.mimetype;
-                attachment.size = file.size;
-                attachment.author = null; // As specified in the Epic
-
-                const savedAttachment = await this.attachmentRepository.save(attachment);
-                attachments.push(savedAttachment);
-            } catch (error) {
-                // Handle file system or database errors here
-                console.error(`Error processing file ${file.originalname}:`, error);
-                // Re-throw the error to be handled by the controller
-                throw error;
-            }
+            const savedAttachment = await this.attachmentRepository.save(attachment);
+            attachments.push(savedAttachment);
         }
 
         return attachments;

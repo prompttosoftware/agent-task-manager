@@ -1,13 +1,14 @@
-import express from 'express';
-import { authenticate } from '../middleware/logging.middleware';
+import express, { Router } from 'express';
 import { IssueLinkController } from '../controllers/issueLink.controller';
-import { IssueLinkService } from '../services/issueLink.service'; // Import IssueLinkService
+import { container } from 'tsyringe';
+import { authenticate } from '../middleware/logging.middleware';
 
-const router = express.Router();
+const router: Router = express.Router();
+const issueLinkController = container.resolve(IssueLinkController);
 
-const issueLinkService = new IssueLinkService(); // Create an instance of IssueLinkService
-const issueLinkController = new IssueLinkController(issueLinkService); // Create an instance of IssueLinkController
-
-router.post('/issueLink', authenticate, (req, res, next) => issueLinkController.create(req, res, next)); // Use the create method
+router.post('/issueLink', authenticate, async (req, res, next) => {
+  await issueLinkController.create(req, res, next);
+  // Do not return the response object
+});
 
 export default router;

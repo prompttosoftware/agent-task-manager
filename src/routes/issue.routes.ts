@@ -4,7 +4,7 @@ import { IssueService } from '../services/issue.service';
 import { AttachmentService } from '../services/attachment.service';
 import upload from '../middleware/upload.config';
 import multer from 'multer';
-import { UploadedFile } from '../middleware/upload.config';
+
 
 const router = express.Router();
 const issueService = new IssueService();

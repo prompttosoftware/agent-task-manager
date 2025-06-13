@@ -78,7 +78,9 @@ export class IssueService {
         .leftJoinAndSelect('issue.assignee', 'assignee')
         .leftJoinAndSelect('issue.attachments', 'attachment')
         .leftJoinAndSelect('issue.inwardLinks', 'inwardIssueLink')
+        .leftJoinAndSelect('inwardIssueLink.linkType', 'inwardLinkType')
         .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
+        .leftJoinAndSelect('outwardIssueLink.linkType', 'outwardLinkType')
         .where('issue.issueKey = :issueKey', { issueKey })
         .getOne();
 

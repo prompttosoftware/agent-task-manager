@@ -20,6 +20,9 @@ const issueLinkCreateSchema = z.object({
 
 type IssueLinkCreateDTO = z.infer<typeof issueLinkCreateSchema>;
 
+import { injectable } from 'tsyringe';
+
+@injectable()
 export class IssueLinkService {
   async create(data: IssueLinkCreateDTO) {
     try {
