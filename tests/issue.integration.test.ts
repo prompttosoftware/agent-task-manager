@@ -174,8 +174,82 @@ describe('Issue API Integration Tests', () => {
   it('should return 400 Bad Request when no files are attached', async () => {
     const response = await request(app)
       .post(`/rest/api/2/issue/${issueKey}/attachments`)
-      .set('Content-Type', 'multipart/form-data');
-
+      .set('Content-Type', 'multipart/form-data')
+      .send();
+  
     expect(response.status).toBe(400);
+  });
+
+  describe('GET /rest/api/2/search', () => {
+    it('should return 200 OK and a list of all issues with a correct total count when no query parameters are provided', async () => {
+      const response = await request(app).get('/rest/api/2/search');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+      // You might want to add more specific checks here, like verifying the total count matches the number of issues returned,
+      // and that the number matches the actual number of issues in the database.
+    });
+
+    it('should return a 200 OK and a list of issues matching the provided status ID', async () => {
+      // Assuming status ID '1' exists in your seed data. Adjust accordingly.
+      const response = await request(app).get('/rest/api/2/search?status=1');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+      response.body.issues.forEach((issue: any) => {
+        expect(issue.statusId).toBe(1);
+      });
+    });
+
+    it('should return a 200 OK and a list of issues matching the provided issue type ID', async () => {
+      // Assuming issue type ID '1' exists in your seed data. Adjust accordingly.
+      const response = await request(app).get('/rest/api/2/search?issuetype=1');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+      response.body.issues.forEach((issue: any) => {
+        expect(issue.issueTypeId).toBe(1);
+      });
+    });
+
+    it('should return a 200 OK and a list of issues matching the provided assignee user key', async () => {
+      // Assuming assignee user key 'user-1' exists in your seed data. Adjust accordingly.
+      const response = await request(app).get('/rest/api/2/search?assignee=user-1');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+      response.body.issues.forEach((issue: any) => {
+        expect(issue.assignee.userKey).toBe('user-1');
+      });
+    });
+
+    it('should return a 200 OK and a correctly filtered list of issues that satisfy all criteria when multiple parameters are provided', async () => {
+      // Assuming status ID '2', issue type ID '1', and assignee 'user-1' exists in your seed data. Adjust accordingly.
+      const response = await request(app).get('/rest/api/2/search?status=2&issuetype=1&assignee=user-1');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+      response.body.issues.forEach((issue: any) => {
+        expect(issue.statusId).toBe(2);
+        expect(issue.issueTypeId).toBe(1);
+        expect(issue.assignee.userKey).toBe('user-1');
+      });
+    });
+
+    it('should return the JSON response in the correct format', async () => {
+      const response = await request(app).get('/rest/api/2/search');
+      expect(response.status).toBe(200);
+      expect(response.body).toBeDefined();
+      expect(typeof response.body).toBe('object');
+      expect(response.body).toHaveProperty('total');
+      expect(typeof response.body.total).toBe('number');
+      expect(response.body).toHaveProperty('issues');
+      expect(Array.isArray(response.body.issues)).toBe(true);
+    });
   });
 });

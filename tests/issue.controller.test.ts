@@ -177,6 +177,7 @@ describe('IssueController', () => {
       const issueKey = 'TEST-123';
       req.params = { issueKey: issueKey };
       const errorMessage = 'Unexpected error';
+      jest.spyOn(console, 'error').mockImplementation(() => {});
       (issueService.findByKey as jest.Mock).mockRejectedValue(new Error(errorMessage));
 
       await issueController.findByKey(req, res);
@@ -185,6 +186,7 @@ describe('IssueController', () => {
       expect(mockedLogger.error).toHaveBeenCalledWith(`Error getting issue with key ${issueKey}:`, new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+      (console.error as jest.Mock).mockRestore();
     });
   });
 

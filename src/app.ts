@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import loggingMiddleware from './middleware/logging.middleware';
-import issueRoutes from './routes/issue.routes';
+import { router as issueRoutes } from './routes/issue.routes';
 import issueLinkRoutes from './routes/issueLink.routes'; // Import issueLinkRoutes
 import logger from './utils/logger';
 

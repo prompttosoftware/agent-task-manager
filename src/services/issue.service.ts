@@ -1,5 +1,6 @@
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
+import { SearchParams } from '../controllers/issue.controller';
 
 export class BadRequestError extends Error {
   constructor(message: string) {
@@ -104,5 +105,28 @@ export class IssueService {
 
   private generateIssueKey(issueId: number): string {
     return `TASK-${issueId}`;
+  }
+
+  async search(searchParams: SearchParams): Promise<{ total: number; issues: Issue[] }> {
+    const queryBuilder = this.issueRepository.createQueryBuilder('issue')
+      .leftJoinAndSelect('issue.reporter', 'reporter')
+      .leftJoinAndSelect('issue.assignee', 'assignee');
+
+    if (searchParams.status !== undefined) {
+      queryBuilder.andWhere('issue.statusId = :status', { status: searchParams.status });
+    }
+
+    if (searchParams.issuetype !== undefined) {
+      queryBuilder.andWhere('issue.issueTypeId = :issuetype', { issuetype: searchParams.issuetype });
+    }
+
+    if (searchParams.assignee !== undefined) {
+      queryBuilder.leftJoin('issue.assignee', 'user')
+        .andWhere('user.userKey = :assignee', { assignee: searchParams.assignee });
+    }
+
+    const [issues, total] = await queryBuilder.getManyAndCount();
+
+    return { total, issues };
   }
 }
