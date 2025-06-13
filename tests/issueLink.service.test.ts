@@ -1,8 +1,9 @@
 import { IssueLinkService } from '../src/services/issueLink.service';
 import { AppDataSource } from '../src/data-source';
 import { Issue } from '../src/db/entities/issue.entity';
-import { BadRequestError, NotFoundError } from '../src/services/issue.service';
-import { IssueLinkType } from '../src/config/static-data';
+import { IssueLink } from '../src/db/entities/issue_link.entity';
+import { IssueLinkType } from '../src/db/entities/issue_link_type.entity';
+import { BadRequestError, NotFoundError } from '../src/utils/http-errors';
 
 beforeAll(async () => {
   // await AppDataSource.initialize(); // Initialized in global setup
@@ -21,8 +22,9 @@ describe('IssueLinkService', () => {
 
   afterEach(async () => {
     // Clean up the database after each test
-    const issueLinkRepository = AppDataSource.getRepository('IssueLink');
+    const issueLinkRepository = AppDataSource.getRepository(IssueLink);
     const issueRepository = AppDataSource.getRepository(Issue);
+    const issueLinkTypeRepository = AppDataSource.getRepository(IssueLinkType);
 
     // Remove any existing issue links
     const inwardIssue = await issueRepository.findOne({ where: { issueKey: 'IN-123' } });
@@ -30,10 +32,12 @@ describe('IssueLinkService', () => {
     const existingInwardIssue = await issueRepository.findOne({ where: { issueKey: 'EXISTING-IN' } });
 
     if (inwardIssue && outwardIssue) {
+      const issueLinkType = await issueLinkTypeRepository.findOneBy({ name: 'Relates' });
       const issueLink = await issueLinkRepository.findOne({
         where: {
-          inwardIssueId: inwardIssue.id,
-          outwardIssueId: outwardIssue.id,
+          inwardIssue: { id: inwardIssue.id },
+          outwardIssue: { id: outwardIssue.id },
+          linkType: { id: issueLinkType.id },
         },
       });
 
@@ -95,12 +99,14 @@ describe('IssueLinkService', () => {
       expect(result.outwardIssue.issueKey).toBe(outwardIssueKey);
 
       // Verify that a new record is created in the issue_link table
-      const issueLinkRepository = AppDataSource.getRepository('IssueLink');
+      const issueLinkRepository = AppDataSource.getRepository(IssueLink);
+      const issueLinkTypeRepository = AppDataSource.getRepository(IssueLinkType);
+      const issueLinkType = await issueLinkTypeRepository.findOneBy({ name: linkTypeName });
       const newIssueLink = await issueLinkRepository.findOne({
         where: {
-          inwardIssueId: inwardIssue.id,
-          outwardIssueId: outwardIssue.id,
-          linkTypeId: IssueLinkType[linkTypeName],
+          inwardIssue: { id: inwardIssue.id },
+          outwardIssue: { id: outwardIssue.id },
+          linkType: { id: issueLinkType.id },
         },
       });
       expect(newIssueLink).toBeDefined();
