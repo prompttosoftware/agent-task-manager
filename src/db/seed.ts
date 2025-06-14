@@ -3,6 +3,7 @@ import { User } from "./entities/user.entity";
 import { Issue } from "./entities/issue.entity";
 import { IssueLink } from "./entities/issue_link.entity";
 import { IssueLinkType } from "./entities/issue_link_type.entity";
+import { Transition } from "./entities/transition.entity";
 
 export async function seedDatabase() {
     const dataSource = AppDataSource;
@@ -108,6 +109,17 @@ export async function seedDatabase() {
             });
             await issueLinkRepository.save(issueLink);
         }
+    }
+
+    // Create a transition from status 11 to 12
+    const transitionRepository = dataSource.getRepository(Transition);
+    const existingTransition = await transitionRepository.findOneBy({ fromStatusId: 11, toStatusId: 12 });
+    if (!existingTransition) {
+        const transition = transitionRepository.create({
+            fromStatusId: 11,
+            toStatusId: 12,
+        });
+        await transitionRepository.save(transition);
     }
 
     console.log("Database seeded successfully!");

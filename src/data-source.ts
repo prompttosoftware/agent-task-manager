@@ -1,5 +1,6 @@
 import { DataSource } from "typeorm";
 import config from './config';
+import { Transition } from "./db/entities/transition.entity";
 import { Attachment } from "./db/entities/attachment.entity";
 import { IssueLink } from "./db/entities/issue_link.entity";
 import { Issue } from "./db/entities/issue.entity";
@@ -17,7 +18,7 @@ const AppDataSource = new DataSource({
     synchronize: config.NODE_ENV === 'test', // Enable auto schema sync for tests
     logging: config.NODE_ENV === 'development',
     migrationsRun: config.NODE_ENV === 'test',
-    entities: [Attachment, IssueLink, Issue, User, IssueType, IssueLinkType],
+    entities: [Attachment, IssueLink, Issue, User, IssueType, IssueLinkType, Transition],
     migrations: [],
     subscribers: [],
 });
