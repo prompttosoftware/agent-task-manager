@@ -78,7 +78,6 @@ export class IssueService {
         .createQueryBuilder('issue')
         .leftJoinAndSelect('issue.reporter', 'reporter')
         .leftJoinAndSelect('issue.assignee', 'assignee')
-        .leftJoinAndSelect('issue.attachments', 'attachment')
         .leftJoinAndSelect('issue.inwardLinks', 'inwardIssueLink')
         .leftJoinAndSelect('inwardIssueLink.linkType', 'inwardLinkType')
         .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
@@ -95,7 +94,7 @@ export class IssueService {
       }
 
       console.log("Issue:", JSON.stringify(issue, null, 2));
-      console.error("Issue:", util.inspect(issue, { depth: null, colors: true }));
+      //console.error("Issue:", util.inspect(issue, { depth: null, colors: true })); // Removing this line
 
       const links = [];
 
@@ -135,15 +134,10 @@ export class IssueService {
         });
       }
 
-      console.log("Links:", JSON.stringify(links, null, 2));
-      console.error("Links:", util.inspect(links, { depth: null, colors: true }));
-
       const issueWithLinks = {
         ...issue,
         links: links,
       };
-
-      console.log(`Issue with key ${issueKey} found`);
       return issueWithLinks;
     } catch (error) {
       console.error(`Error finding issue by key ${issueKey}:`, error);

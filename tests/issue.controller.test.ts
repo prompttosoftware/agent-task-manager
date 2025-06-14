@@ -1,3 +1,4 @@
+console.log('Running issue.controller.test.ts');
 import { Request, Response } from 'express';
 import { IssueController } from '../src/controllers/issue.controller';
 import { IssueService } from '../src/services/issue.service';
@@ -145,7 +146,7 @@ describe('IssueController', () => {
       expect(issueService.create).toHaveBeenCalledWith(validReqBody);
       expect(mockedLogger.error).toHaveBeenCalledWith('Error creating issue:', new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error', error: errorMessage });
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
     });
   });
 

@@ -26,7 +26,7 @@ export async function seedDatabase() {
         user1 = existingUser1;
     }
 
-    // Create issues TASK-4 and TASK-5
+    // Create issue for createmeta and other sample issues
     let issue4: Issue;
     const existingIssue4 = await issueRepository.findOneBy({ issueKey: "TASK-4" });
     if (!existingIssue4) {
@@ -60,6 +60,8 @@ export async function seedDatabase() {
     } else {
         issue5 = existingIssue5;
     }
+
+    
 
 
     // Create link type "Blocks"
