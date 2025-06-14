@@ -6,7 +6,7 @@ import { authenticate } from '../middleware/logging.middleware';
 const router: Router = express.Router();
 const issueLinkController = container.resolve(IssueLinkController);
 
-router.post('/issueLink', authenticate, async (req, res, next) => {
+router.post('/rest/api/2/issueLink', authenticate, async (req, res, next) => {
   await issueLinkController.create(req, res, next);
   // Do not return the response object
 });

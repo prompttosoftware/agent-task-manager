@@ -20,7 +20,7 @@ const issueLinkCreateSchema = z.object({
 
 type IssueLinkCreateDTO = z.infer<typeof issueLinkCreateSchema>;
 
-import { injectable } from 'tsyringe';
+import { injectable, container } from 'tsyringe';
 
 @injectable()
 export class IssueLinkService {
@@ -69,4 +69,39 @@ export class IssueLinkService {
       outwardIssue,
     };
   }
+
+  async deleteIssueLink(linkId: number): Promise<void> {
+    const issueLinkRepository = AppDataSource.getRepository(IssueLink);
+    const issueLink = await issueLinkRepository.findOneBy({ id: linkId });
+
+    if (!issueLink) {
+      throw new NotFoundError(`IssueLink with id ${linkId} not found`);
+    }
+
+    await issueLinkRepository.remove(issueLink);
+  }
+
+  async findByKey(id: number): Promise<IssueLink | null> {
+    const issueLinkRepository = AppDataSource.getRepository(IssueLink);
+    const issueLink = await issueLinkRepository.findOneBy({ id: id });
+
+    if (!issueLink) {
+      return null;
+    }
+
+    return issueLink;
+  }
+
+  async getIssueLinkById(linkId: number): Promise<IssueLink | null> {
+const issueLinkRepository = AppDataSource.getRepository(IssueLink);
+const issueLink = await issueLinkRepository.findOneBy({ id: linkId });
+
+if (!issueLink) {
+  return null;
 }
+
+return issueLink;
+  }
+}
+
+export const issueLinkService = container.resolve(IssueLinkService);

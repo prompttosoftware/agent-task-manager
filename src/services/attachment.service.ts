@@ -52,6 +52,43 @@ export class AttachmentService {
 
         return attachments;
     }
+
+    async getAttachmentsByIssueKey(issueKey: string): Promise<Attachment[]> {
+        const attachments = await this.attachmentRepository.find({
+            where: { issue: { issueKey: issueKey } },
+        });
+        return attachments;
+    }
+
+    async deleteAttachment(attachmentId: number): Promise<void> {
+        const attachment = await this.attachmentRepository.findOneBy({ id: attachmentId });
+
+        if (!attachment) {
+            throw new NotFoundError(`Attachment with ID ${attachmentId} not found`);
+        }
+
+        try {
+          // Delete the file from the filesystem
+          const filePath = path.join('uploads', attachment.storedFilename);
+          if (await fs.access(filePath).then(() => true).catch(() => false)) {
+            await fs.unlink(filePath);
+          } else {
+            console.warn(`File not found: ${filePath}`);
+          }
+          
+          // Delete the attachment record from the database
+          await this.attachmentRepository.remove(attachment);
+
+        } catch (err: any) {
+          console.error(`Error deleting attachment ${attachmentId}:`, err);
+          throw new Error(`Failed to delete attachment ${attachmentId}: ${err.message}`);
+        }
+    }
+
+    async getAttachmentById(attachmentId: number): Promise<Attachment | null> {
+      const attachment = await this.attachmentRepository.findOneBy({ id: attachmentId });
+      return attachment;
+    }
 }
 
 export const attachmentService = new AttachmentService();

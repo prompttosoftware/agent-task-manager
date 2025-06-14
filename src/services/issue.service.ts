@@ -8,11 +8,11 @@ import { SearchParams } from '../controllers/issue.controller';
 
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
+import { attachmentService } from "./attachment.service";
+import { issueLinkService } from "./issueLink.service";
 
 export class IssueService {
-  private issueRepository = AppDataSource.getRepository(Issue);
-
-  constructor(private transitionRepository: Repository<Transition>) {}
+  constructor(private issueRepository: Repository<Issue>) {}
 
   async getIssue(id: number): Promise<any> {
     // TODO: Implement getIssue logic
@@ -23,16 +23,20 @@ export class IssueService {
     try {
       // Fetch reporter and assignee
       const userRepository = AppDataSource.getRepository(User);
-      const reporter = data.fields?.reporterKey ? await userRepository.findOne({ where: { userKey: data.fields.reporterKey } }) : null;
-      const assignee = data.fields?.assigneeKey ? await userRepository.findOne({ where: { userKey: data.fields.assigneeKey } }) : null;
-
-      // Validate reporter and assignee
-      if (data.fields?.reporterKey && !reporter) {
-        throw new Error('Reporter not found');
+      let reporter: User | null = null;
+      if (data.fields?.reporterKey) {
+        reporter = await userRepository.findOne({ where: { userKey: data.fields.reporterKey } });
+        if (!reporter) {
+          throw new Error('Reporter not found');
+        }
       }
 
-      if (data.fields?.assigneeKey && !assignee) {
-        throw new Error('Assignee not found');
+      let assignee: User | null = null;
+      if (data.fields?.assigneeKey) {
+        assignee = await userRepository.findOne({ where: { userKey: data.fields.assigneeKey } });
+        if (!assignee) {
+          throw new Error('Assignee not found');
+        }
       }
 
       const issue = this.issueRepository.create({
@@ -74,6 +78,7 @@ export class IssueService {
         .leftJoinAndSelect('outwardIssueLink.linkType', 'outwardLinkType')
         .leftJoinAndSelect('inwardIssueLink.outwardIssue', 'inwardOutwardIssue')
         .leftJoinAndSelect('outwardIssueLink.inwardIssue', 'outwardInwardIssue')
+        .leftJoinAndSelect('issue.attachments', 'attachments')
         .addSelect(['inwardOutwardIssue.issueKey', 'outwardInwardIssue.issueKey', 'inwardOutwardIssue.id', 'outwardInwardIssue.id'])
         .where('issue.issueKey = :issueKey', { issueKey })
         .getOne();
@@ -138,12 +143,50 @@ export class IssueService {
   async deleteByKey(issueKey: string): Promise<boolean> {
     try {
       console.log(`Deleting issue with key: ${issueKey}`);
+
+      const issue = await this.issueRepository.findOne({
+        where: { issueKey },
+        relations: ['attachments', 'inwardLinks', 'outwardLinks']
+      });
+
+      if (!issue) {
+        throw new NotFoundError(`Issue with key ${issueKey} not found`);
+      }
+
+      // Delete attachments
+      try {
+        if (issue.attachments) {
+          for (const attachment of issue.attachments) {
+            await attachmentService.deleteAttachment(attachment.id);
+          }
+        }
+      } catch (error) {
+        console.error(`Error deleting attachments for issue ${issueKey}:`, error);
+      }
+
+      // Delete links
+      try {
+        if (issue.inwardLinks) {
+          for (const link of issue.inwardLinks) {
+            await issueLinkService.deleteIssueLink(link.id);
+          }
+        }
+
+        if (issue.outwardLinks) {
+          for (const link of issue.outwardLinks) {
+            await issueLinkService.deleteIssueLink(link.id);
+          }
+        }
+      } catch (error) {
+        console.error(`Error deleting issue links for issue ${issueKey}:`, error);
+      }
+
       const result = await this.issueRepository.delete({ issueKey });
       console.log(`Delete result: ${JSON.stringify(result)}`);
       return result.affected > 0;
     } catch (error) {
       console.error(`Error deleting issue with key ${issueKey}:`, error);
-      return false;
+      throw error;
     }
   }
 
