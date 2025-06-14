@@ -23,7 +23,7 @@ describe('IssueLink Integration Tests', () => {
 
   it('should successfully create an issue link with type Relates and return 201 Created', async () => {
     const response = await request(app)
-      .post('/issueLink')
+      .post('/rest/api/2/issueLink')
       .send({
         "type": {
           "name": "Relates"
@@ -54,7 +54,7 @@ describe('IssueLink Integration Tests', () => {
     console.log("Sending payload:", payload);
 
     const response = await request(app)
-      .post('/issueLink')
+      .post('/rest/api/2/issueLink')
       .send(payload);
 
     console.log("Received response:", response.status, response.body);
@@ -65,7 +65,7 @@ describe('IssueLink Integration Tests', () => {
 
   it('should return 404 Not Found when inward issue does not exist', async () => {
     const response = await request(app)
-      .post('/issueLink')
+      .post('/rest/api/2/issueLink')
       .send({
         "type": {
           "name": "Relates"
@@ -82,7 +82,7 @@ describe('IssueLink Integration Tests', () => {
 
   it('should return 400 Bad Request when link type is invalid', async () => {
     const response = await request(app)
-      .post('/issueLink')
+      .post('/rest/api/2/issueLink')
       .send({
         "type": {
           "name": "InvalidLinkType"
@@ -99,7 +99,7 @@ describe('IssueLink Integration Tests', () => {
 
   it('should return 400 Bad Request when payload is malformed', async () => {
     const response = await request(app)
-      .post('/issueLink')
+      .post('/rest/api/2/issueLink')
       .send({
         "type": {
           "name": "Relates"

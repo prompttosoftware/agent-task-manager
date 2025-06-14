@@ -4,14 +4,14 @@ import { IssueService } from '../services/issue.service';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service'; // Import IssueLinkService
 import { AppDataSource } from '../data-source';
-import { Transition } from '../db/entities/transition.entity';
 import upload from '../middleware/upload.config';
 import multer from 'multer';
+import { Issue } from '../db/entities/issue.entity';
 
 export const router = express.Router();
 
-const transitionRepository = AppDataSource.getRepository(Transition);
-const issueService = new IssueService(transitionRepository);
+const issueRepository = AppDataSource.getRepository(Issue);
+const issueService = new IssueService(issueRepository);
 const attachmentService = new AttachmentService();
 const issueLinkService = new IssueLinkService(); // Instantiate IssueLinkService
 const issueController = new IssueController(issueService, attachmentService, issueLinkService);

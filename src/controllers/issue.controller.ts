@@ -73,6 +73,7 @@ export class IssueController {
           self: `/rest/api/2/issue/${issue.issueKey}`,
           summary: issue.title,
           description: issue.description,
+          attachments: issue.attachments, // Include attachments
           ...issue,
           links: issue.links,
         },
