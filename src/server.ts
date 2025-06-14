@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { ParsedQs } from 'qs';
-import expressApp from './app';
+import { app as expressApp } from './app';
 // import config from './config'; // TODO: Implement config
 
 import config from './config';

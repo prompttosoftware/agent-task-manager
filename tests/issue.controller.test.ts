@@ -1,7 +1,8 @@
 console.log('Running issue.controller.test.ts');
 import { Request, Response } from 'express';
 import { IssueController } from '../src/controllers/issue.controller';
-import { IssueService } from '../src/services/issue.service';
+import { IssueService, NotFoundError } from '../src/services/issue.service';
+import { Issue } from '../src/db/entities/issue.entity';
 import { AttachmentService } from '../src/services/attachment.service';
 import { createIssueBodySchema as createIssueSchema } from '../src/controllers/schemas/issue.schema';
 import logger from '../src/utils/logger';
@@ -23,17 +24,65 @@ let issueLinkService: any;
 const TMP_UPLOAD_DIR = path.join(tmpdir(), 'uploads_test_tmp');
 
 
+import { AppDataSource } from '../src/data-source';
+import { Transition } from '../src/db/entities/transition.entity';
+
 describe('IssueController', () => {
+  let transitionRepository: any;
 
   beforeEach(() => {
-    issueService = new IssueService();
+    transitionRepository = AppDataSource.getRepository(Transition);
+    issueService = new IssueService(transitionRepository);
     attachmentService = new AttachmentService();
     issueLinkService = {};
     issueController = new IssueController(issueService, attachmentService, issueLinkService);
-    jest.spyOn(issueService, 'create');
-    jest.spyOn(issueService, 'findByKey');
-    jest.spyOn(issueService, 'deleteByKey');
-    jest.spyOn(attachmentService, 'create');
+    jest.spyOn(issueService, 'create').mockImplementation(() => Promise.resolve({
+      id: 1,
+      issueKey: 'TEST-1',
+      self: '/rest/api/2/issue/TEST-1',
+      title: 'Test Issue',
+      description: 'Test Description',
+      statusId: 1,
+      priority: 'High',
+      issueTypeId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      assignee: null,
+      reporter: null,
+      links: null,
+      inwardLinks: [],
+      outwardLinks: [],
+      attachments: [],
+      children: [],
+    } as Issue));
+    jest.spyOn(issueService, 'findByKey').mockImplementation(() => Promise.resolve({
+      id: 1,
+      issueKey: 'TEST-123',
+      title: 'Test Issue',
+      self: `/rest/api/2/issue/TEST-123`,
+      summary: 'Test Issue',
+      description: 'Test Description',
+      statusId: 1,
+      priority: 'High',
+      issueTypeId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      assignee: null,
+      reporter: null,
+      links: null,
+      inwardLinks: [],
+      outwardLinks: [],
+      attachments: [],
+      children: [],
+    } as Issue));
+    jest.spyOn(issueService, 'deleteByKey').mockImplementation(() => Promise.resolve(true));
+    jest.spyOn(attachmentService, 'create').mockImplementation(() => Promise.resolve(undefined));
+
+    (issueService.create as jest.Mock).mockClear();
+    (issueService.findByKey as jest.Mock).mockClear();
+    (issueService.deleteByKey as jest.Mock).mockClear();
+    (attachmentService.create as jest.Mock).mockClear();
+    jest.spyOn(issueService, 'getAvailableTransitions').mockImplementation(() => Promise.resolve([{ id: '11', name: 'ToDo' }]));
 
 
     // Ensure mocks are clear before each test
@@ -326,6 +375,47 @@ describe('links', () => {
 
       expect(issueService.deleteByKey).toHaveBeenCalledWith(issueKey);
       expect(mockedLogger.error).toHaveBeenCalledWith(`Error deleting issue with key ${issueKey}:`, new Error(errorMessage));
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
+    });
+  });
+
+  describe('getIssueTransitions', () => {
+    it('should get available transitions for a valid issue key and return 200', async () => {
+      const issueKey = 'TEST-123';
+      const transitions = [{ id: '1', name: 'To Do' }, { id: '2', name: 'In Progress' }];
+      req.params = { issueKey: issueKey };
+      (issueService.getAvailableTransitions as jest.Mock).mockReturnValue(transitions);
+
+      await issueController.getIssueTransitions(req, res);
+
+      expect(issueService.getAvailableTransitions).toHaveBeenCalledWith(issueKey);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ transitions });
+    });
+
+    it('should return a 404 error if the issue is not found', async () => {
+      const issueKey = 'NONEXISTENT-123';
+      req.params = { issueKey: issueKey };
+      (issueService.getAvailableTransitions as jest.Mock).mockRejectedValue(new NotFoundError('Issue not found'));
+
+      await issueController.getIssueTransitions(req, res);
+
+      expect(issueService.getAvailableTransitions).toHaveBeenCalledWith(issueKey);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Issue not found' });
+    });
+
+    it('should handle unexpected errors and return 500', async () => {
+      const issueKey = 'TEST-123';
+      req.params = { issueKey: issueKey };
+      const errorMessage = 'Unexpected error';
+      (issueService.getAvailableTransitions as jest.Mock).mockReturnValue(Promise.reject(new Error(errorMessage)));
+
+      await issueController.getIssueTransitions(req, res);
+
+      expect(issueService.getAvailableTransitions).toHaveBeenCalledWith(issueKey);
+      expect(mockedLogger.error).toHaveBeenCalledWith(`Error getting transitions for issue with key ${issueKey}:`, new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });
     });

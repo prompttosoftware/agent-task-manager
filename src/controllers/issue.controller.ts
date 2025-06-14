@@ -4,7 +4,8 @@ import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service';
-import { createIssueBodySchema } from './schemas/issue.schema'; // Import AttachmentService
+import { createIssueBodySchema } from './schemas/issue.schema';
+import { NotFoundError } from '../utils/http-errors'; // Import NotFoundError
 
 const isNumber = (value: any): boolean => {
   if (typeof value === 'string') {
@@ -77,14 +78,19 @@ export class IssueController {
         },
       });
     } catch (error: any) {
-      logger.error(`Error getting issue with key ${req.params.issueKey}:`, error);
-      res.status(500).json({ message: 'Internal server error' });
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue not found' });
+      } else {
+        logger.error(`Error getting issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
     }
   }
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const issueKey = req.params.issueKey;
+      console.log(`Deleting issue in controller with key: ${issueKey}`);
       const deleted = await this.issueService.deleteByKey(issueKey);
 
       if (!deleted) {
@@ -94,8 +100,12 @@ export class IssueController {
 
       res.status(204).send();
     } catch (error: any) {
-      logger.error(`Error deleting issue with key ${req.params.issueKey}:`, error);
-      res.status(500).json({ message: 'Internal server error' });
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue not found' });
+      } else {
+        logger.error(`Error deleting issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
     }
   }
   public async createAttachment(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
@@ -186,6 +196,21 @@ export class IssueController {
     } catch (error: any) {
       logger.error('Error searching issues:', error);
       res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+
+  async getIssueTransitions(req: Request, res: Response): Promise<void> {
+    try {
+      const issueKey = req.params.issueKey;
+      const transitions = await this.issueService.getAvailableTransitions(issueKey);
+      res.status(200).json({ transitions: transitions });
+    } catch (error: any) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue not found' });
+      } else {
+        logger.error(`Error getting transitions for issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
     }
   }
 }

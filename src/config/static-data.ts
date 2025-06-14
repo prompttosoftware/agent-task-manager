@@ -12,6 +12,12 @@ export enum IssueStatus {
   Done = 31,
 }
 
+export const IssueStatusMap: { [key: number]: string } = {
+  [IssueStatus.ToDo]: 'ToDo',
+  [IssueStatus.InProgress]: 'InProgress',
+  [IssueStatus.Done]: 'Done',
+};
+
 /**
  * Issue Types
  * 1: Bug

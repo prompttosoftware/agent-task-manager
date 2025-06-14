@@ -320,4 +320,38 @@ describe('Issue API Integration Tests', () => {
     expect(link.outwardIssue).toBeDefined();
     expect(link.outwardIssue.key).toBe(outwardIssueKey);
   });
+
+  describe('GET /issue/{issueKey}/transitions', () => {
+    it('should return 200 OK with a transitions array for a valid issue', async () => {
+      // First, create an issue
+      const createResponse = await request(app)
+        .post('/rest/api/2/issue')
+        .send({
+          fields: {
+            summary: 'Issue for Transitions',
+            description: 'Issue to test transitions',
+            reporterKey: 'user-1',
+            assigneeKey: 'user-1',
+            issuetype: { id: '1' }
+          }
+        });
+
+      expect(createResponse.status).toBe(201);
+      const issueKey = createResponse.body.key;
+
+      const getResponse = await request(app)
+        .get(`/rest/api/2/issue/${issueKey}/transitions`);
+
+      expect(getResponse.status).toBe(200);
+      expect(Array.isArray(getResponse.body.transitions)).toBe(true);
+    });
+
+    it('should return 404 Not Found for a non-existent issue', async () => {
+      const getResponse = await request(app)
+        .get('/rest/api/2/issue/NONEXISTENT-123/transitions');
+
+      expect(getResponse.status).toBe(404);
+      expect(getResponse.body.message).toBe('Issue not found');
+    });
+  });
 });

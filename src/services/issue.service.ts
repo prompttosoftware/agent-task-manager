@@ -1,28 +1,18 @@
+import { BadRequestError, NotFoundError } from '../utils/http-errors';
+export { NotFoundError };
 import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
 import { SearchParams } from '../controllers/issue.controller';
 
-export class BadRequestError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'BadRequestError';
-  }
-}
 
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
 
 export class IssueService {
   private issueRepository = AppDataSource.getRepository(Issue);
 
-  constructor() {}
+  constructor(private transitionRepository: Repository<Transition>) {}
 
   async getIssue(id: number): Promise<any> {
     // TODO: Implement getIssue logic
@@ -90,7 +80,7 @@ export class IssueService {
 
       if (!issue) {
         console.log(`Issue with key ${issueKey} not found`);
-        return null;
+        throw new NotFoundError('Issue not found');
       }
 
       console.log("Issue:", JSON.stringify(issue, null, 2));
@@ -146,8 +136,15 @@ export class IssueService {
   }
 
   async deleteByKey(issueKey: string): Promise<boolean> {
-    const result = await this.issueRepository.delete({ issueKey });
-    return result.affected > 0;
+    try {
+      console.log(`Deleting issue with key: ${issueKey}`);
+      const result = await this.issueRepository.delete({ issueKey });
+      console.log(`Delete result: ${JSON.stringify(result)}`);
+      return result.affected > 0;
+    } catch (error) {
+      console.error(`Error deleting issue with key ${issueKey}:`, error);
+      return false;
+    }
   }
 
   private generateIssueKey(issueId: number): string {
@@ -176,4 +173,28 @@ export class IssueService {
 
     return { total, issues };
   }
+
+  async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
+    try {
+      const issue = await this.findByKey(issueKey);
+      
+      const currentStatusId = issue.statusId;
+      const availableStatuses = IssueStatusMap;
+
+      const transitions = Object.entries(availableStatuses)
+        .filter(([statusId, statusName]) => parseInt(statusId) !== currentStatusId)
+        .map(([statusId, statusName]) => ({
+          id: statusId,
+          name: statusName,
+        }));
+
+      return transitions;
+    } catch (error) {
+      console.error(`Error getting available transitions for issue ${issueKey}:`, error);
+      throw error;
+    }
+  }
 }
+import { Repository } from 'typeorm';
+import { Transition } from '../db/entities/transition.entity';
+import { IssueStatusMap } from '../config/static-data';

@@ -7,6 +7,8 @@ import { MetadataController } from './api/metadata/metadata.controller';
 import { MetadataService } from './api/metadata/metadata.service';
 import { IssueService } from './services/issue.service';
 import logger from './utils/logger';
+import { AppDataSource } from './data-source';
+import { Transition } from './db/entities/transition.entity';
 
 const app = express();
 
@@ -14,7 +16,8 @@ app.use(express.json());
 
 app.use(loggingMiddleware);
 
-const issueService = new IssueService();
+const transitionRepository = AppDataSource.getRepository(Transition);
+const issueService = new IssueService(transitionRepository);
 const metadataService = new MetadataService();
 const metadataController = new MetadataController(metadataService, issueService);
 

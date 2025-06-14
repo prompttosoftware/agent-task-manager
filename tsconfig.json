@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es2020",
     "moduleResolution": "node",
-  "module": "commonjs",
+    "module": "commonjs",
     "sourceMap": true,
     "outDir": "dist",
     "baseUrl": "src",
@@ -15,8 +15,15 @@
         "data-source.ts"
       ]
     },
-  "skipLibCheck": true
-},
+    "skipLibCheck": true,
+    "lib": [
+      "esnext"
+    ]
+  },
+  "files": [
+    "src/services/issue.service.ts",
+    "src/app.ts"
+  ],
   "include": [
     "src/**/*"
   ],

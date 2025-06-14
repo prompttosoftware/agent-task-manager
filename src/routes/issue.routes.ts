@@ -3,12 +3,15 @@ import { IssueController } from '../controllers/issue.controller';
 import { IssueService } from '../services/issue.service';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service'; // Import IssueLinkService
+import { AppDataSource } from '../data-source';
+import { Transition } from '../db/entities/transition.entity';
 import upload from '../middleware/upload.config';
 import multer from 'multer';
 
 export const router = express.Router();
 
-const issueService = new IssueService();
+const transitionRepository = AppDataSource.getRepository(Transition);
+const issueService = new IssueService(transitionRepository);
 const attachmentService = new AttachmentService();
 const issueLinkService = new IssueLinkService(); // Instantiate IssueLinkService
 const issueController = new IssueController(issueService, attachmentService, issueLinkService);
@@ -42,6 +45,7 @@ router.post(
   issueController.createAttachment.bind(issueController)
 );
 
+router.get('/rest/api/2/issue/:issueKey/transitions', issueController.getIssueTransitions.bind(issueController));
 router.get('/rest/api/2/search', issueController.search.bind(issueController));
 
 export default router;
