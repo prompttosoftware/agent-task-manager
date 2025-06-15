@@ -122,5 +122,19 @@ export async function seedDatabase() {
         await transitionRepository.save(transition);
     }
 
+    // Create sample user 2
+    let user2: User;
+    const existingUser2 = await userRepository.findOneBy({ userKey: "user-2" });
+    if (!existingUser2) {
+        user2 = userRepository.create({
+            userKey: "user-2",
+            displayName: "Jane Smith",
+            emailAddress: "jane.smith@example.com",
+        });
+        await userRepository.save(user2);
+    } else {
+        user2 = existingUser2;
+    }
+
     console.log("Database seeded successfully!");
 }
