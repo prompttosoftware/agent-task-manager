@@ -32,8 +32,8 @@ describe('IssueController', () => {
 
   beforeEach(() => {
     transitionRepository = AppDataSource.getRepository(Transition);
-    issueService = new IssueService(transitionRepository);
     attachmentService = new AttachmentService();
+    issueService = new IssueService(transitionRepository, attachmentService);
     issueLinkService = {};
     issueController = new IssueController(issueService, attachmentService, issueLinkService);
     jest.spyOn(issueService, 'create').mockImplementation(() => Promise.resolve({

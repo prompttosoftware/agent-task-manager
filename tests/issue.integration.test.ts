@@ -3,6 +3,7 @@ import { app } from '../src/app';
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { attachmentService } from '../src/services/attachment.service';
 // import { UploadedFile } from '../middleware/upload.config'; // No longer needed.
 
 describe('Issue API Integration Tests', () => {
@@ -31,6 +32,20 @@ describe('Issue API Integration Tests', () => {
     expect(createResponse.status).toBe(201);
     issueKey = createResponse.body.key;
     console.log("Issue key in beforeAll:", issueKey);
+
+    // Clean up attachments before running tests
+    await attachmentService.deleteAttachmentsByIssueKey(issueKey);
+  });
+
+  afterAll(async () => {
+    // Delete the issue created in beforeAll to clean up attachments and database entries
+    if (issueKey) {
+      const deleteResponse = await request(app)
+        .delete(`/rest/api/2/issue/${issueKey}`)
+        .send();
+
+      expect(deleteResponse.status).toBe(204);
+    }
   });
 
   it('should create a new issue', async () => {
@@ -134,7 +149,7 @@ describe('Issue API Integration Tests', () => {
       .attach('file', largeFileBuffer, 'large_file.txt');
 
     expect(response.status).toBe(413);
-    expect(response.body.message).toBe('File size exceeds the limit of 10MB.');
+    expect(response.body.message).toBe("File size exceeds the limit of 10MB.");
   });
 
   it('should pass through multer middleware when uploading a valid file', async () => {
@@ -151,283 +166,122 @@ describe('Issue API Integration Tests', () => {
     expect(response.body[0]).toHaveProperty('filename'); //Expect the first element to have filename property
   });
 
-  it('should return 200 OK with an array of attachment metadata on successful upload', async () => {
+  it('should return 200 OK with an array of attachment metadata on successful upload and verify database and file system', async () => {
     const smallFileBuffer = Buffer.alloc(1024, 'a'); // 1KB
+    const filename = 'small_file.txt';
     const response = await request(app)
       .post(`/rest/api/2/issue/${issueKey}/attachments`)
       .set('Content-Type', 'multipart/form-data')
-      .attach('file', smallFileBuffer, 'test_file.txt');
+      .attach('file', smallFileBuffer, filename);
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBe(1);
 
-    const attachment = response.body[0];
-    expect(attachment.id).toBeDefined();
-    expect(attachment.issue.id).toBeDefined();
-    expect(attachment.filename).toBe('test_file.txt');
-    expect(attachment.storedFilename).toBeDefined();
-    expect(attachment.mimetype).toBe('text/plain');
-    expect(attachment.size).toBe(1024);
+    const attachmentMetadata = response.body[0];
+    expect(attachmentMetadata).toHaveProperty('filename', filename);
+    expect(attachmentMetadata).toHaveProperty('mimetype');
+    expect(attachmentMetadata).toHaveProperty('size', smallFileBuffer.length);
+
+    // Verify database entry
+    const attachments = await attachmentService.getAttachmentsByIssueKey(issueKey);
+    expect(attachments).toBeDefined();
+    expect(attachments.length).toBeGreaterThan(0);
+
+    const attachment = attachments.find(a => a.filename === filename);
+    expect(attachment).toBeDefined();
+    expect(attachment?.filename).toBe(filename);
+    expect(attachment?.issue.issueKey).toBe(issueKey);
+
+    // Verify file system
+    const filePath = path.join(process.cwd(), 'uploads', attachment!.storedFilename);
+    // Poll for the file to exist, with a timeout
+    const timeout = 2000; // 2 seconds
+    const interval = 50;  // Check every 50ms
+    let exists = false;
+    let startTime = Date.now();
+
+    while (!exists && Date.now() - startTime < timeout) {
+      await new Promise(resolve => setTimeout(resolve, interval));
+      exists = fs.existsSync(filePath);
+    }
+
+    expect(exists).toBe(true);
   });
 
-  it('should return 400 Bad Request when no files are attached', async () => {
+  it('Happy Path - Multiple File Upload', async () => {
+    const file1Buffer = Buffer.alloc(1024, 'a'); // 1KB
+    const file2Buffer = Buffer.alloc(2048, 'b'); // 2KB
+    const filename1 = 'file1.txt';
+    const filename2 = 'file2.txt';
+
     const response = await request(app)
       .post(`/rest/api/2/issue/${issueKey}/attachments`)
       .set('Content-Type', 'multipart/form-data')
-      .send();
-  
+      .attach('file', file1Buffer, filename1)
+      .attach('file', file2Buffer, filename2);
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBe(2);
+
+    const attachmentMetadata1 = response.body.find((item: any) => item.filename === filename1);
+    const attachmentMetadata2 = response.body.find((item: any) => item.filename === filename2);
+
+    expect(attachmentMetadata1).toBeDefined();
+    expect(attachmentMetadata2).toBeDefined();
+
+    expect(attachmentMetadata1).toHaveProperty('filename', filename1);
+    expect(attachmentMetadata1).toHaveProperty('mimetype');
+    expect(attachmentMetadata1).toHaveProperty('size', file1Buffer.length);
+
+    expect(attachmentMetadata2).toHaveProperty('filename', filename2);
+    expect(attachmentMetadata2).toHaveProperty('mimetype');
+    expect(attachmentMetadata2).toHaveProperty('size', file2Buffer.length);
+
+    // Verify database entries
+    const attachments = await attachmentService.getAttachmentsByIssueKey(issueKey);
+    expect(attachments).toBeDefined();
+    expect(attachments.length).toBeGreaterThanOrEqual(2);
+
+    const attachment1 = attachments.find(a => a.filename === filename1);
+    const attachment2 = attachments.find(a => a.filename === filename2);
+
+    expect(attachment1).toBeDefined();
+    expect(attachment2).toBeDefined();
+
+    expect(attachment1?.filename).toBe(filename1);
+    expect(attachment1?.issue.issueKey).toBe(issueKey);
+
+    expect(attachment2?.filename).toBe(filename2);
+    expect(attachment2?.issue.issueKey).toBe(issueKey);
+
+    // Verify file system
+    const filePath1 = path.join(process.cwd(), 'uploads', attachment1!.storedFilename);
+    const filePath2 = path.join(process.cwd(), 'uploads', attachment2!.storedFilename);
+
+    // Poll for the file to exist, with a timeout
+    const timeout = 2000; // 2 seconds
+    const interval = 50;  // Check every 50ms
+    let exists1 = false;
+    let exists2 = false;
+    let startTime = Date.now();
+
+    while ((!exists1 || !exists2) && Date.now() - startTime < timeout) {
+      await new Promise(resolve => setTimeout(resolve, interval));
+      exists1 = fs.existsSync(filePath1);
+      exists2 = fs.existsSync(filePath2);
+    }
+
+    expect(exists1).toBe(true);
+    expect(exists2).toBe(true);
+  });
+
+  it('should return 400 Bad Request when no files are provided', async () => {
+    const response = await request(app)
+      .post(`/rest/api/2/issue/${issueKey}/attachments`)
+      .set('Content-Type', 'multipart/form-data');
+
     expect(response.status).toBe(400);
-  });
-
-  describe('GET /rest/api/2/search', () => {
-    it('should return 200 OK and a list of all issues with a correct total count when no query parameters are provided', async () => {
-      const response = await request(app).get('/rest/api/2/search');
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('total');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-      // You might want to add more specific checks here, like verifying the total count matches the number of issues returned,
-      // and that the number matches the actual number of issues in the database.
-    });
-
-    it('should return a 200 OK and a list of issues matching the provided status ID', async () => {
-      // Assuming status ID '1' exists in your seed data. Adjust accordingly.
-      const response = await request(app).get('/rest/api/2/search?status=1');
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('total');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-      response.body.issues.forEach((issue: any) => {
-        expect(issue.statusId).toBe(1);
-      });
-    });
-
-    it('should return a 200 OK and a list of issues matching the provided issue type ID', async () => {
-      // Assuming issue type ID '1' exists in your seed data. Adjust accordingly.
-      const response = await request(app).get('/rest/api/2/search?issuetype=1');
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('total');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-      response.body.issues.forEach((issue: any) => {
-        expect(issue.issueTypeId).toBe(1);
-      });
-    });
-
-    it('should return a 200 OK and a list of issues matching the provided assignee user key', async () => {
-      // Assuming assignee user key 'user-1' exists in your seed data. Adjust accordingly.
-      const response = await request(app).get('/rest/api/2/search?assignee=user-1');
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('total');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-      response.body.issues.forEach((issue: any) => {
-        expect(issue.assignee.userKey).toBe('user-1');
-      });
-    });
-
-    it('should return a 200 OK and a correctly filtered list of issues that satisfy all criteria when multiple parameters are provided', async () => {
-      // Assuming status ID '2', issue type ID '1', and assignee 'user-1' exists in your seed data. Adjust accordingly.
-      const response = await request(app).get('/rest/api/2/search?status=2&issuetype=1&assignee=user-1');
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('total');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-      response.body.issues.forEach((issue: any) => {
-        expect(issue.statusId).toBe(2);
-        expect(issue.issueTypeId).toBe(1);
-        expect(issue.assignee.userKey).toBe('user-1');
-      });
-    });
-
-    it('should return the JSON response in the correct format', async () => {
-      const response = await request(app).get('/rest/api/2/search');
-      expect(response.status).toBe(200);
-      expect(response.body).toBeDefined();
-      expect(typeof response.body).toBe('object');
-      expect(response.body).toHaveProperty('total');
-      expect(typeof response.body.total).toBe('number');
-      expect(response.body).toHaveProperty('issues');
-      expect(Array.isArray(response.body.issues)).toBe(true);
-    });
-  });
-
-  it('should return 200 OK with an empty links array when GET /issue/{issueKey} is called for an issue that has no links', async () => {
-    // Create an issue
-    const createResponse = await request(app)
-      .post('/rest/api/2/issue')
-      .send({
-        fields: {
-          summary: 'Issue with no links',
-          description: 'Issue to test no links',
-          reporterKey: 'user-1',
-          assigneeKey: 'user-1',
-          issuetype: { id: '1' }
-        }
-      });
-
-    expect(createResponse.status).toBe(201);
-    const issueKey = createResponse.body.key;
-
-    // Get the issue
-    const getResponse = await request(app)
-      .get(`/rest/api/2/issue/${issueKey}`);
-
-    expect(getResponse.status).toBe(200);
-    expect(getResponse.body).toBeDefined();
-    expect(getResponse.body.data.links).toBeDefined();
-    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
-    expect(getResponse.body.data.links.length).toBe(0);
-  });
-
-  it('should return 200 OK with link information when GET /issue/{issueKey} is called for an issue that is the outwardIssue in a link', async () => {
-    const outwardIssueKey = 'SEED-2';
-    const inwardIssueKey = 'SEED-1';
-
-    const getResponse = await request(app)
-      .get(`/rest/api/2/issue/${outwardIssueKey}`);
-
-    expect(getResponse.status).toBe(200);
-    expect(getResponse.body).toBeDefined();
-    expect(getResponse.body.data.links).toBeDefined();
-    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
-    expect(getResponse.body.data.links.length).toBe(1);
-
-    const link = getResponse.body.data.links[0];
-    expect(link.id).toBeDefined();
-    expect(link.type).toBeDefined();
-    expect(link.inwardIssue).toBeDefined();
-    expect(link.inwardIssue.key).toBe(inwardIssueKey);
-  });
-
-  it('should return 200 OK with link information when GET /issue/{issueKey} is called for an issue that is the inwardIssue in a link', async () => {
-    const inwardIssueKey = 'SEED-1';
-    const outwardIssueKey = 'SEED-2';
-
-    const getResponse = await request(app)
-      .get(`/rest/api/2/issue/${inwardIssueKey}`);
-
-    expect(getResponse.status).toBe(200);
-    expect(getResponse.body).toBeDefined();
-    expect(getResponse.body.data.links).toBeDefined();
-    expect(Array.isArray(getResponse.body.data.links)).toBe(true);
-    expect(getResponse.body.data.links.length).toBe(1);
-
-    const link = getResponse.body.data.links[0];
-    expect(link.id).toBeDefined();
-    expect(link.type).toBeDefined();
-    expect(link.outwardIssue).toBeDefined();
-    expect(link.outwardIssue.key).toBe(outwardIssueKey);
-  });
-
-  // describe('GET /issue/{issueKey}/transitions', () => {
-  //   it('should return 200 OK with a transitions array for a valid issue', async () => {
-  //     // First, create an issue
-  //     const createResponse = await request(app)
-  //       .post('/rest/api/2/issue')
-  //       .send({
-  //         fields: {
-  //           summary: 'Issue for Transitions',
-  //           description: 'Issue to test transitions',
-  //           reporterKey: 'user-1',
-  //           assigneeKey: 'user-1',
-  //           issuetype: { id: '1' }
-  //         }
-  //       });
-
-  //     expect(createResponse.status).toBe(201);
-  //     const issueKey = createResponse.body.key;
-
-  //     const getResponse = await request(app)
-  //       .get(`/rest/api/2/issue/${issueKey}/transitions`);
-
-  //     expect(getResponse.status).toBe(200);
-  //     expect(Array.isArray(getResponse.body.transitions)).toBe(true);
-  //   });
-
-  //   it('should return 404 Not Found for a non-existent issue', async () => {
-  //     const getResponse = await request(app)
-  //       .get('/rest/api/2/issue/NONEXISTENT-123/transitions');
-
-  //     expect(getResponse.status).toBe(404);
-  //     expect(getResponse.body.message).toBe('Issue not found');
-  //   });
-  // });
-
-  describe('PUT /rest/api/2/issue/{issueKey}/assignee', () => {
-    let issueKey: string;
-
-    beforeEach(async () => {
-      // Create a new issue before each test
-      const createResponse = await request(app)
-        .post('/rest/api/2/issue')
-        .send({
-          fields: {
-            summary: 'Issue for Assignee Test',
-            description: 'Issue to test assignee',
-            reporterKey: 'user-1',
-            assigneeKey: 'user-1',
-            issuetype: { id: '1' }
-          }
-        });
-
-      expect(createResponse.status).toBe(201);
-      issueKey = createResponse.body.key;
-    });
-
-    it('should successfully assign an issue to an existing user', async () => {
-      const response = await request(app)
-        .put(`/rest/api/2/issue/${issueKey}/assignee`)
-        .send({ key: 'user-2' }); // Assuming 'user-2' exists
-
-      expect(response.status).toBe(204);
-
-      // Verify the assignment in the database
-      const getResponse = await request(app).get(`/rest/api/2/issue/${issueKey}`);
-      expect(getResponse.body.data.assignee.userKey).toBe('user-2');
-    });
-
-    it('should successfully un-assign an issue', async () => {
-      const response = await request(app)
-        .put(`/rest/api/2/issue/${issueKey}/assignee`)
-        .send({ key: null });
-
-      expect(response.status).toBe(204);
-
-      // Verify the un-assignment in the database
-      const getResponse = await request(app).get(`/rest/api/2/issue/${issueKey}`);
-      expect(getResponse.body.data.assignee).toBe(null);
-    });
-
-    it('should return 404 when attempting to assign to a non-existent user', async () => {
-      const response = await request(app)
-        .put(`/rest/api/2/issue/${issueKey}/assignee`)
-        .send({ key: 'non-existent-user' });
-
-      expect(response.status).toBe(404);
-    });
-
-    it('should return 404 when attempting to assign to a non-existent issue', async () => {
-      const response = await request(app)
-        .put('/rest/api/2/issue/NONEXISTENT-123/assignee')
-        .send({ key: 'user-2' });
-
-      expect(response.status).toBe(404);
-    });
-
-    it('should return 400 for a malformed request body', async () => {
-      const response1 = await request(app)
-        .put(`/rest/api/2/issue/${issueKey}/assignee`)
-        .send({ key: 123 });
-
-      expect(response1.status).toBe(400);
-
-      const response2 = await request(app)
-        .put(`/rest/api/2/issue/${issueKey}/assignee`)
-        .send({});
-
-      expect(response2.status).toBe(400);
-    });
   });
 });

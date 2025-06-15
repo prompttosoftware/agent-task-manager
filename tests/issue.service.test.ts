@@ -22,7 +22,8 @@ describe('IssueService', () => {
 
   beforeEach(() => {
     issueRepository = mockIssueRepository() as any;
-    issueService = new IssueService(issueRepository as any);
+    const mockAttachmentService = {};
+    issueService = new IssueService(issueRepository as any, mockAttachmentService as any);
   });
 
   describe('create', () => {
