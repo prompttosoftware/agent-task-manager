@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { transitionSchema } from './schemas/transition.schema';
 import multer from 'multer';
 import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service';
 import { createIssueBodySchema, updateAssigneeBodySchema } from './schemas/issue.schema';
-import { NotFoundError } from '../utils/http-errors'; // Import NotFoundError
+import { NotFoundError, BadRequestError } from '../utils/http-errors'; // Import NotFoundError
 
 const isNumber = (value: any): boolean => {
   if (typeof value === 'string') {
@@ -249,6 +250,31 @@ export class IssueController {
         logger.error(`Error updating assignee for issue with key ${req.params.issueKey}:`, error);
         res.status(500).json({ message: 'Internal server error' });
         return;
+      }
+    }
+
+  }
+
+  async transition(req: Request, res: Response): Promise<void> {
+    try {
+      const issueKey = req.params.issueKey;
+
+      // Validate the request body using the zod schema
+      const validatedData = transitionSchema.parse(req.body);
+
+      await this.issueService.transition(issueKey, { id: validatedData.transition.id });
+
+      res.status(204).send();
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        res.status(400).json({ message: 'Validation error', errors: error.errors });
+      } else if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue not found' });
+      } else if (error instanceof BadRequestError) {
+        res.status(400).json({ message: error.message });
+      } else {
+        logger.error(`Error transitioning issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
       }
     }
   }

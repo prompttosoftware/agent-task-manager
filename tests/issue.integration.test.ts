@@ -6,6 +6,10 @@ import * as path from 'path';
 import { attachmentService } from '../src/services/attachment.service';
 // import { UploadedFile } from '../middleware/upload.config'; // No longer needed.
 
+import { Issue } from '../src/db/entities/issue.entity';
+import { Transition } from '../src/db/entities/transition.entity';
+import { AppDataSource } from '../src/data-source';
+
 describe('Issue API Integration Tests', () => {
   let issueKey: string;
 
@@ -284,4 +288,111 @@ describe('Issue API Integration Tests', () => {
 
     expect(response.status).toBe(400);
   });
+});
+
+describe('Issue Transitions API Integration Tests', () => {
+let issueKeyForTransitions: string;
+let transitionId: number;
+
+beforeAll(async () => {
+  // Create an issue specifically for transitions
+  const createResponse = await request(app)
+    .post('/rest/api/2/issue')
+    .send({
+      fields: {
+        summary: 'Issue for Transitions',
+        description: 'Issue to test transitions',
+        reporterKey: 'user-1',
+        assigneeKey: 'user-1',
+        issuetype: { id: '1' }
+      }
+    });
+
+  expect(createResponse.status).toBe(201);
+  issueKeyForTransitions = createResponse.body.key;
+
+  // Fetch a valid status ID for the created issue, other than the initial status.
+  const initialStatusId = 11;
+  const availableStatuses = Object.keys(require('../src/config/static-data').IssueStatusMap)
+    .filter(statusId => parseInt(statusId) !== initialStatusId);
+
+  expect(availableStatuses.length).toBeGreaterThan(0);
+  transitionId = parseInt(availableStatuses[0]);
+});
+
+afterAll(async () => {
+  // Clean up: Delete the issue created for transitions
+  if (issueKeyForTransitions) {
+    const deleteResponse = await request(app)
+      .delete(`/rest/api/2/issue/${issueKeyForTransitions}`)
+      .send();
+
+    expect(deleteResponse.status).toBe(204);
+  }
+});
+
+it('should update issue status on successful transition', async () => {
+  // Fetch available transitions for the issue
+  const getTransitionsResponse = await request(app).get(`/rest/api/2/issue/${issueKeyForTransitions}/transitions`);
+  expect(getTransitionsResponse.status).toBe(200);
+  const availableTransitions = getTransitionsResponse.body.transitions;
+
+  // Ensure there are available transitions
+  expect(availableTransitions.length).toBeGreaterThan(0);
+
+  // Select the ID of the first available transition
+  const localTransitionId = availableTransitions[0].id;
+
+  const transitionResponse = await request(app)
+    .post(`/rest/api/2/issue/${issueKeyForTransitions}/transitions`)
+    .send({
+      transition: {
+        id: localTransitionId
+      }
+    });
+
+  expect(transitionResponse.status).toBe(204);
+
+  // Wait for a short period to allow the database to update
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Verify the statusId has been updated in the database
+  const issue = await AppDataSource.getRepository(Issue).findOne({ where: { issueKey: issueKeyForTransitions } });
+  expect(issue).toBeDefined();
+  expect(issue?.statusId).toBe(parseInt(localTransitionId)); // Ensure statusId is updated
+});
+
+it('should return 404 Not Found for a non-existent issueKey', async () => {
+  const transitionResponse = await request(app)
+    .post(`/rest/api/2/issue/NONEXISTENT-123/transitions`)
+    .send({
+      transition: {
+        id: '11'
+      }
+    });
+
+  expect(transitionResponse.status).toBe(404);
+});
+
+it('should return 400 Bad Request for an invalid transition.id', async () => {
+  const transitionResponse = await request(app)
+    .post(`/rest/api/2/issue/${issueKeyForTransitions}/transitions`)
+    .send({
+      transition: {
+        id: 99999 // Non-existent transition ID
+      }
+    });
+
+  expect(transitionResponse.status).toBe(400);
+});
+
+it('should return 400 Bad Request for a malformed body', async () => {
+  const transitionResponse = await request(app)
+    .post(`/rest/api/2/issue/${issueKeyForTransitions}/transitions`)
+    .send({
+      invalidField: 'invalidValue'
+    });
+
+  expect(transitionResponse.status).toBe(400);
+});
 });

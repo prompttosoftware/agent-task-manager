@@ -52,6 +52,7 @@
     "@types/node": "^24.0.0",
     "@types/sqlite3": "^3.1.11",
     "@types/supertest": "^6.0.3",
+    "@types/typescript": "^0.4.29",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^8.34.0",
     "cross-env": "^7.0.3",
@@ -65,6 +66,8 @@
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "tsconfig-paths": "^4.2.0"
+    "tsconfig-paths": "^4.2.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.3"
   }
 }
