@@ -3,7 +3,8 @@ import { Issue } from "../db/entities/issue.entity";
 import { AppDataSource } from "../data-source";
 import { NotFoundError } from "routing-controllers";
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs/promises';
+import * as fsPromises from 'fs/promises';
+import * as fs from 'fs';
 import * as path from 'path';
 import { Multer } from 'multer';
 
@@ -34,20 +35,30 @@ export class AttachmentService {
         const attachments: Attachment[] = [];
 
         for (const file of files) {
-            const storedFilename = uuidv4();
-            const fileExtension = path.extname(file.originalname);
-            const finalFilename = storedFilename + fileExtension;
+            console.log(`Processing file: ${file.originalname}`);
 
             const attachment = new Attachment();
+            if (!issue.issueKey) {
+                throw new Error("Issue key is null or undefined");
+            }
+
             attachment.issue = issue;
             attachment.filename = file.originalname;
-            attachment.storedFilename = finalFilename;
+            attachment.storedFilename = file.filename;
             attachment.mimetype = file.mimetype;
             attachment.size = file.size;
             attachment.author = null;
 
-            const savedAttachment = await this.attachmentRepository.save(attachment);
-            attachments.push(savedAttachment);
+            try {
+                const savedAttachment = await this.attachmentRepository.save(attachment);
+                console.log("Attachment saved successfully:", savedAttachment);
+                attachments.push(savedAttachment);
+            } catch (dbError: any) {
+                console.error("Error saving attachment to database:", dbError);
+                console.error("dbError.message", dbError.message);
+                console.error("dbError.stack", dbError.stack);
+                throw new Error(`Error saving attachment to database: ${dbError.message}`);
+            }
         }
 
         return attachments;
@@ -56,6 +67,7 @@ export class AttachmentService {
     async getAttachmentsByIssueKey(issueKey: string): Promise<Attachment[]> {
         const attachments = await this.attachmentRepository.find({
             where: { issue: { issueKey: issueKey } },
+            relations: ['issue']
         });
         return attachments;
     }
@@ -70,11 +82,13 @@ export class AttachmentService {
         try {
           // Delete the file from the filesystem
           const filePath = path.join('uploads', attachment.storedFilename);
-          if (await fs.access(filePath).then(() => true).catch(() => false)) {
-            await fs.unlink(filePath);
-          } else {
-            console.warn(`File not found: ${filePath}`);
-          }
+          fsPromises.access(filePath)
+            .then(() => {
+              fsPromises.unlink(filePath);
+            })
+            .catch(() => {
+              console.warn(`File not found: ${filePath}`);
+            });
           
           // Delete the attachment record from the database
           await this.attachmentRepository.remove(attachment);
@@ -86,9 +100,20 @@ export class AttachmentService {
     }
 
     async getAttachmentById(attachmentId: number): Promise<Attachment | null> {
-      const attachment = await this.attachmentRepository.findOneBy({ id: attachmentId });
+      const attachment = await this.attachmentRepository.findOne({
+        where: { id: attachmentId },
+        relations: ['issue'],
+      });
       return attachment;
     }
+
+  async deleteAttachmentsByIssueKey(issueKey: string): Promise<void> {
+    const attachments = await this.getAttachmentsByIssueKey(issueKey);
+
+    for (const attachment of attachments) {
+      await this.deleteAttachment(attachment.id);
+    }
+  }
 }
 
 export const attachmentService = new AttachmentService();

@@ -130,13 +130,17 @@ export class IssueController {
       }
 
       const issueKey = req.params.issueKey;
+      console.log(`issueKey in createAttachment: ${issueKey}`);
+      console.log(`files in createAttachment:`, files);
 
       try {
         const attachmentMetadata = await this.attachmentService.create(issueKey, files);
         return res.status(200).json(attachmentMetadata);
       } catch (serviceError: any) {
         logger.error('Error creating attachment:', serviceError);
-        if (serviceError.message === 'Issue not found') {
+        console.error("Service error message:", serviceError.message);
+        console.error("Service error stack:", serviceError.stack);
+        if (serviceError instanceof NotFoundError) {
           return res.status(404).json({ message: 'Issue not found' });
         } else {
           return res.status(500).json({ message: 'Internal server error', error: serviceError.message });

@@ -29,7 +29,7 @@ export class Attachment {
   @CreateDateColumn()
   createdAt: Date;
 
-  @ManyToOne(() => Issue, (issue) => issue.attachments)
+  @ManyToOne(() => Issue, (issue) => issue.attachments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'issueId' })
   issue: Issue;
 

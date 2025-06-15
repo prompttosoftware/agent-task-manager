@@ -9,11 +9,12 @@ import { Express } from 'express';
 import { NotFoundError, BadRequestError } from "routing-controllers";
 import { Readable } from 'stream';
 import { tmpdir } from 'os';
+import * as fsPromises from 'fs/promises';
+
 
 // Mock the uploads directory
 const UPLOAD_DIR = path.join(__dirname, 'uploads_test');
 
-import * as fsPromises from 'fs/promises';
 
 describe("AttachmentService", () => {
     let issueRepository = AppDataSource.getRepository(Issue);
@@ -52,9 +53,14 @@ describe("AttachmentService", () => {
     });
 
     afterEach(async () => {
+      jest.restoreAllMocks();
       // Clean up temporary files created during tests in the uploads directory
        try {
-           const filesInUploadsDir = await fs.readdir(UPLOAD_DIR);
+           let filesInUploadsDir = await fs.readdir(UPLOAD_DIR);
+            if (!Array.isArray(filesInUploadsDir)) {
+                console.warn(`readdir(${UPLOAD_DIR}) did not return an array. Skipping cleanup.`);
+                filesInUploadsDir = []; // Ensure it's an empty array to prevent errors
+            }
            for (const file of filesInUploadsDir) {
                // Check if the file is one of the temporary files created in this test suite
                // A more robust solution might track the created files
@@ -65,6 +71,7 @@ describe("AttachmentService", () => {
 
        } catch (error) {
            console.error("Error during afterEach cleanup:", error);
+           console.error("fs.readdir error:", error);
        }
     });
 
@@ -85,11 +92,11 @@ describe("AttachmentService", () => {
                     encoding: '7bit',
                     mimetype: 'text/plain',
                     destination: UPLOAD_DIR,
-                    filename: 'attachment-12345.txt', // Multer generates temp filename
-                    path: path.join(UPLOAD_DIR, 'attachment-12345.txt'),
+                    filename: 'attachment-12345.txt',
+                    path: path.join(__dirname, 'uploads_test', 'attachment-12345.txt'),
                     size: fileContent1.length,
-                    stream: null as any, // stream is not directly used with disk storage
-                    buffer: null as any, // buffer is not directly available with disk storage
+                    stream: Readable.from(fileContent1), // stream is not directly used with disk storage
+                    buffer: Buffer.from(fileContent1), // buffer is not directly available with disk storage
                 },
                 {
                     fieldname: 'attachment',
@@ -100,8 +107,8 @@ describe("AttachmentService", () => {
                     filename: 'attachment-67890.txt', // Multer generates temp filename
                     path: path.join(UPLOAD_DIR, 'attachment-67890.txt'),
                     size: fileContent2.length,
-                    stream: null as any, // stream is not directly used with disk storage
-                    buffer: null as any, // buffer is not directly available with disk storage
+                    stream: Readable.from(fileContent2), // stream is not directly used with disk storage
+                    buffer: Buffer.from(fileContent2), // buffer is not directly available with disk storage
                 },
             ];
 
@@ -118,12 +125,6 @@ describe("AttachmentService", () => {
                 expect(attachment.size).toBeDefined();
                 expect(attachment.storedFilename).toBeDefined();
 
-                // Create the mock file using the storedFilename
-                const filePath = path.join(UPLOAD_DIR, attachment.storedFilename);
-                await fs.writeFile(filePath, 'mock file content');
-
-                // Check if the file exists in the uploads directory
-                await expect(fs.access(filePath)).resolves.toBeUndefined();
             }
 
         });

@@ -16,8 +16,10 @@ app.use(express.json());
 
 app.use(loggingMiddleware);
 
+import { attachmentService } from './services/attachment.service';
+
 const issueRepository = AppDataSource.getRepository(Issue);
-const issueService = new IssueService(issueRepository);
+const issueService = new IssueService(issueRepository, attachmentService);
 const metadataService = new MetadataService();
 const metadataController = new MetadataController(metadataService, issueService);
 

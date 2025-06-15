@@ -8,11 +8,11 @@ import { SearchParams } from '../controllers/issue.controller';
 
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
-import { attachmentService } from "./attachment.service";
+import { AttachmentService, attachmentService } from "./attachment.service";
 import { issueLinkService } from "./issueLink.service";
 
 export class IssueService {
-  constructor(private issueRepository: Repository<Issue>) {}
+  constructor(private issueRepository: Repository<Issue>, private attachmentService: AttachmentService) {}
 
   async getIssue(id: number): Promise<any> {
     // TODO: Implement getIssue logic
