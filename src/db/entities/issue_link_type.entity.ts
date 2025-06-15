@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
-@Entity()
+@Entity('issue_link_type')
 export class IssueLinkType {
   @PrimaryGeneratedColumn()
   id: number;

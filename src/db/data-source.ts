@@ -1,5 +1,6 @@
 import { DataSource } from "typeorm";
 import config from "../config";
+import { IssueLinkType } from "./entities/issue_link_type.entity";
 import { Attachment } from "./entities/attachment.entity";
 import { IssueLink } from "./entities/issue_link.entity";
 import { Issue } from "./entities/issue.entity";
@@ -24,7 +25,7 @@ class CustomDataSource extends DataSource {
 export const AppDataSource = new CustomDataSource({
   type: "sqlite",
   database: path.join(__dirname, database),
-  entities: [Attachment, IssueLink, Issue, User],
+  entities: [Attachment, IssueLink, Issue, User, require('./entities/issue_link_type.entity').IssueLinkType],
   migrations: [path.join(__dirname, "migrations", "*.ts")],
   synchronize: true, // Enable synchronize in development!
   logging: config.db.logging,
