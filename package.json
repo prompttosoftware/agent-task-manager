@@ -4,7 +4,7 @@
   "description": "## Introduction",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:drop && jest --verbose",
+    "test": "npm run test:drop && npx jest --verbose",
     "test:drop": "rm -f src/db/agent-task-manager.sqlite src/db/test.sqlite",
     "clean": "rimraf dist",
     "test:unit": "jest --testPathPattern=tests/unit",

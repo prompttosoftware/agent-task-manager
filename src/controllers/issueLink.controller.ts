@@ -11,6 +11,7 @@ export class IssueLinkController {
   }
 
   async create(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
+    console.log('Request body:', req.body);
     try {
       await this.issueLinkService.create(req.body);
       return res.status(201).send();
