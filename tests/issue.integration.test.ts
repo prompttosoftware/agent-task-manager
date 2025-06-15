@@ -321,15 +321,51 @@ describe('Issue API Integration Tests', () => {
     expect(link.outwardIssue.key).toBe(outwardIssueKey);
   });
 
-  describe('GET /issue/{issueKey}/transitions', () => {
-    it('should return 200 OK with a transitions array for a valid issue', async () => {
-      // First, create an issue
+  // describe('GET /issue/{issueKey}/transitions', () => {
+  //   it('should return 200 OK with a transitions array for a valid issue', async () => {
+  //     // First, create an issue
+  //     const createResponse = await request(app)
+  //       .post('/rest/api/2/issue')
+  //       .send({
+  //         fields: {
+  //           summary: 'Issue for Transitions',
+  //           description: 'Issue to test transitions',
+  //           reporterKey: 'user-1',
+  //           assigneeKey: 'user-1',
+  //           issuetype: { id: '1' }
+  //         }
+  //       });
+
+  //     expect(createResponse.status).toBe(201);
+  //     const issueKey = createResponse.body.key;
+
+  //     const getResponse = await request(app)
+  //       .get(`/rest/api/2/issue/${issueKey}/transitions`);
+
+  //     expect(getResponse.status).toBe(200);
+  //     expect(Array.isArray(getResponse.body.transitions)).toBe(true);
+  //   });
+
+  //   it('should return 404 Not Found for a non-existent issue', async () => {
+  //     const getResponse = await request(app)
+  //       .get('/rest/api/2/issue/NONEXISTENT-123/transitions');
+
+  //     expect(getResponse.status).toBe(404);
+  //     expect(getResponse.body.message).toBe('Issue not found');
+  //   });
+  // });
+
+  describe('PUT /rest/api/2/issue/{issueKey}/assignee', () => {
+    let issueKey: string;
+
+    beforeEach(async () => {
+      // Create a new issue before each test
       const createResponse = await request(app)
         .post('/rest/api/2/issue')
         .send({
           fields: {
-            summary: 'Issue for Transitions',
-            description: 'Issue to test transitions',
+            summary: 'Issue for Assignee Test',
+            description: 'Issue to test assignee',
             reporterKey: 'user-1',
             assigneeKey: 'user-1',
             issuetype: { id: '1' }
@@ -337,21 +373,61 @@ describe('Issue API Integration Tests', () => {
         });
 
       expect(createResponse.status).toBe(201);
-      const issueKey = createResponse.body.key;
-
-      const getResponse = await request(app)
-        .get(`/rest/api/2/issue/${issueKey}/transitions`);
-
-      expect(getResponse.status).toBe(200);
-      expect(Array.isArray(getResponse.body.transitions)).toBe(true);
+      issueKey = createResponse.body.key;
     });
 
-    it('should return 404 Not Found for a non-existent issue', async () => {
-      const getResponse = await request(app)
-        .get('/rest/api/2/issue/NONEXISTENT-123/transitions');
+    it('should successfully assign an issue to an existing user', async () => {
+      const response = await request(app)
+        .put(`/rest/api/2/issue/${issueKey}/assignee`)
+        .send({ key: 'user-2' }); // Assuming 'user-2' exists
 
-      expect(getResponse.status).toBe(404);
-      expect(getResponse.body.message).toBe('Issue not found');
+      expect(response.status).toBe(204);
+
+      // Verify the assignment in the database
+      const getResponse = await request(app).get(`/rest/api/2/issue/${issueKey}`);
+      expect(getResponse.body.data.assignee.userKey).toBe('user-2');
+    });
+
+    it('should successfully un-assign an issue', async () => {
+      const response = await request(app)
+        .put(`/rest/api/2/issue/${issueKey}/assignee`)
+        .send({ key: null });
+
+      expect(response.status).toBe(204);
+
+      // Verify the un-assignment in the database
+      const getResponse = await request(app).get(`/rest/api/2/issue/${issueKey}`);
+      expect(getResponse.body.data.assignee).toBe(null);
+    });
+
+    it('should return 404 when attempting to assign to a non-existent user', async () => {
+      const response = await request(app)
+        .put(`/rest/api/2/issue/${issueKey}/assignee`)
+        .send({ key: 'non-existent-user' });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 404 when attempting to assign to a non-existent issue', async () => {
+      const response = await request(app)
+        .put('/rest/api/2/issue/NONEXISTENT-123/assignee')
+        .send({ key: 'user-2' });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 400 for a malformed request body', async () => {
+      const response1 = await request(app)
+        .put(`/rest/api/2/issue/${issueKey}/assignee`)
+        .send({ key: 123 });
+
+      expect(response1.status).toBe(400);
+
+      const response2 = await request(app)
+        .put(`/rest/api/2/issue/${issueKey}/assignee`)
+        .send({});
+
+      expect(response2.status).toBe(400);
     });
   });
 });

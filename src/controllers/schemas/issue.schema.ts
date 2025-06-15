@@ -13,3 +13,9 @@ export const createIssueBodySchema = z.object({
 });
 
 export type CreateIssueInput = z.infer<typeof createIssueBodySchema>;
+
+export const updateAssigneeBodySchema = z.object({
+  key: z.string().nullable(),
+});
+
+export type UpdateAssigneeInput = z.infer<typeof updateAssigneeBodySchema>;

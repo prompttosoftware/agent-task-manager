@@ -220,7 +220,7 @@ export class IssueService {
   async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
     try {
       const issue = await this.findByKey(issueKey);
-      
+
       const currentStatusId = issue.statusId;
       const availableStatuses = IssueStatusMap;
 
@@ -234,6 +234,32 @@ export class IssueService {
       return transitions;
     } catch (error) {
       console.error(`Error getting available transitions for issue ${issueKey}:`, error);
+      throw error;
+    }
+  }
+
+  async updateAssignee(issueKey: string, userKey: string | null): Promise<void> {
+    try {
+      const issue = await this.findByKey(issueKey);
+
+      if (!issue) {
+        throw new NotFoundError(`Issue with key ${issueKey} not found`);
+      }
+
+      const userRepository = AppDataSource.getRepository(User);
+
+      if (userKey) {
+        const user = await userRepository.findOne({ where: { userKey } });
+        if (!user) {
+          throw new NotFoundError(`User with key ${userKey} not found`);
+        }
+        issue.assignee = user;
+      } else {
+        issue.assignee = null;
+      }
+
+      await this.issueRepository.save(issue);
+    } catch (error) {
       throw error;
     }
   }

@@ -4,7 +4,7 @@ import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service';
-import { createIssueBodySchema } from './schemas/issue.schema';
+import { createIssueBodySchema, updateAssigneeBodySchema } from './schemas/issue.schema';
 import { NotFoundError } from '../utils/http-errors'; // Import NotFoundError
 
 const isNumber = (value: any): boolean => {
@@ -211,6 +211,40 @@ export class IssueController {
       } else {
         logger.error(`Error getting transitions for issue with key ${req.params.issueKey}:`, error);
         res.status(500).json({ message: 'Internal server error' });
+      }
+    }
+  }
+
+  async updateAssignee(req: Request, res: Response): Promise<void> {
+    try {
+      const issueKey = req.params.issueKey;
+      
+      try {
+        const validatedData = updateAssigneeBodySchema.parse(req.body);
+        await this.issueService.updateAssignee(issueKey, validatedData.key);
+        res.status(204).send();
+        return;
+      } catch (error: any) {
+        if (error.name === 'ZodError') {
+          res.status(400).json({ message: 'Validation error', errors: error.errors });
+          return;
+        } else if (error instanceof NotFoundError) {
+          res.status(404).json({ message: 'Issue or Assignee not found' });
+          return;
+        } else {
+           logger.error(`Error updating assignee for issue with key ${req.params.issueKey}:`, error);
+          res.status(500).json({ message: 'Internal server error' });
+          return;
+        }
+      }
+    } catch (error: any) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue or Assignee not found' });
+        return;
+      } else {
+        logger.error(`Error updating assignee for issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
+        return;
       }
     }
   }
