@@ -68,6 +68,7 @@ router.post(
 );
 
 router.get('/rest/api/2/issue/:issueKey/transitions', issueController.getIssueTransitions.bind(issueController));
+router.post('/rest/api/2/issue/:issueKey/transitions', issueController.transition.bind(issueController));
 router.get('/rest/api/2/search', issueController.search.bind(issueController));
 
 router.put('/rest/api/2/issue/:issueKey/assignee', issueController.updateAssignee.bind(issueController));

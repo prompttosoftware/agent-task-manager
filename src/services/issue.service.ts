@@ -3,6 +3,7 @@ export { NotFoundError };
 import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
+import { IssueStatusMap } from '../config/static-data';
 import { SearchParams } from '../controllers/issue.controller';
 
 
@@ -10,6 +11,7 @@ import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
 import { AttachmentService, attachmentService } from "./attachment.service";
 import { issueLinkService } from "./issueLink.service";
+import { Repository } from 'typeorm';
 
 export class IssueService {
   constructor(private issueRepository: Repository<Issue>, private attachmentService: AttachmentService) {}
@@ -217,16 +219,22 @@ export class IssueService {
     return { total, issues };
   }
 
-  async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
+async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
     try {
       const issue = await this.findByKey(issueKey);
+
+      if (!issue) {
+        throw new NotFoundError(`Issue with key ${issueKey} not found`);
+      }
 
       const currentStatusId = issue.statusId;
       const availableStatuses = IssueStatusMap;
 
+      // In real workflow this would use a status-transition table
+      // Instead we simply filter available statuses that is not current
       const transitions = Object.entries(availableStatuses)
         .filter(([statusId, statusName]) => parseInt(statusId) !== currentStatusId)
-        .map(([statusId, statusName]) => ({
+        .map(([statusId, statusName]: [string, string]) => ({
           id: statusId,
           name: statusName,
         }));
@@ -263,7 +271,35 @@ export class IssueService {
       throw error;
     }
   }
+
+
+  async transition(issueKey: string, transition: { id: string }): Promise<void> {
+    try {
+      const issue = await this.findByKey(issueKey);
+
+      if (!issue) {
+        throw new NotFoundError(`Issue with key ${issueKey} not found`);
+      }
+
+      const availableTransitions = await this.getAvailableTransitions(issueKey);
+      const isValidTransition = availableTransitions.some(t => t.id === transition.id);
+
+      if (!isValidTransition) {
+        throw new BadRequestError(`Invalid transition: ${transition.id} is not a valid transition from the current status`);
+      }
+      
+      const statusId = transition.id;
+
+      if (!IssueStatusMap[statusId]) {
+        throw new BadRequestError(`Invalid status ID: ${statusId}`);
+      }
+
+      issue.statusId = parseInt(statusId);
+      await this.issueRepository.save(issue);
+
+    } catch (error) {
+      console.error(`Error transitioning issue ${issueKey} to status ${transition.id}:`, error);
+      throw error;
+    }
+  }
 }
-import { Repository } from 'typeorm';
-import { Transition } from '../db/entities/transition.entity';
-import { IssueStatusMap } from '../config/static-data';
