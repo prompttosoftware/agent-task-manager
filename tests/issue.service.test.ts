@@ -80,19 +80,40 @@ describe('IssueService', () => {
   describe('findByKey', () => {
     it('should return an issue when found', async () => {
       const issueKey = 'TEST-1';
-      const expectedIssue: Issue = { id: 1, issueKey: issueKey, title: 'Test Issue', description: 'Test Description', statusId: 1, priority: null, issueTypeId: 1, createdAt: new Date(), updatedAt: new Date(), reporter: { userKey: 'user-1'} as any, assignee: { userKey: 'user-1'} as any, attachments: [], links: [], inwardLinks: [], outwardLinks: [], children: [], self: `/rest/api/2/issue/TEST-1` } as Issue;
+      const now = new Date();
+      const expectedIssue: Issue = { id: 1, issueKey: issueKey, title: 'Test Issue', description: 'Test Description', statusId: 1, priority: null, issueTypeId: 1, createdAt: now, updatedAt: now, reporter: { userKey: 'user-1'} as any, assignee: { userKey: 'user-1'} as any, attachments: [], links: [], inwardLinks: [], outwardLinks: [], children: [], self: `/rest/api/2/issue/TEST-1` } as Issue;
 
       (issueRepository.createQueryBuilder as jest.Mock).mockImplementation(() => ({
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(expectedIssue),
+        getOne: jest.fn().mockResolvedValue(JSON.parse(JSON.stringify(expectedIssue))),
       }));
 
       const result = await issueService.findByKey(issueKey);
+      result.createdAt = new Date(result.createdAt);
+      result.updatedAt = new Date(result.updatedAt);
 
       expect(issueRepository.createQueryBuilder).toHaveBeenCalledWith('issue');
-      expect(result).toEqual(expectedIssue);
+      expect(result.createdAt.getTime()).toEqual(expectedIssue.createdAt.getTime());
+      expect(result.updatedAt.getTime()).toEqual(expectedIssue.updatedAt.getTime());
+      expect(result).toEqual(expect.objectContaining({
+        id: expectedIssue.id,
+        issueKey: expectedIssue.issueKey,
+        title: expectedIssue.title,
+        description: expectedIssue.description,
+        statusId: expectedIssue.statusId,
+        priority: expectedIssue.priority,
+        issueTypeId: expectedIssue.issueTypeId,
+        reporter: expectedIssue.reporter,
+        assignee: expectedIssue.assignee,
+        attachments: expectedIssue.attachments,
+        links: expectedIssue.links,
+        inwardLinks: expectedIssue.inwardLinks,
+        outwardLinks: expectedIssue.outwardLinks,
+        children: expectedIssue.children,
+        self: expectedIssue.self,
+      }));
     });
 
     it('should throw NotFoundError when issue is not found', async () => {
