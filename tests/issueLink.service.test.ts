@@ -120,7 +120,7 @@ describe('IssueLinkService', () => {
       };
 
       await expect(issueLinkService.create(createData)).rejects.toThrowError(BadRequestError);
-      await expect(issueLinkService.create(createData)).rejects.toThrow('Invalid link type.');
+      await expect(issueLinkService.create(createData)).rejects.toThrow('Invalid link type: InvalidLinkType');
     });
 
     it('should throw an error if either the inward or outward issue key does not correspond to an existing issue', async () => {

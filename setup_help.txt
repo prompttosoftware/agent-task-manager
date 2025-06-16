@@ -1,0 +1,4 @@
+To set up the project:
+
+1.  Run `npm install` to install the project dependencies.
+2.  Run `npm test` to execute the project tests.

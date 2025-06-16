@@ -106,7 +106,12 @@ export class IssueService {
                 outward: link.linkType.outward,
               },
               outwardIssue: {
-                key: link.outwardIssue.issueKey,
+                id: link.outwardIssue.id,
+                issueKey: link.outwardIssue.issueKey,
+                title: link.outwardIssue.title,
+                description: link.outwardIssue.description,
+                statusId: link.outwardIssue.statusId,
+                priority: link.outwardIssue.priority,
               },
             });
           }
@@ -124,7 +129,12 @@ export class IssueService {
                 outward: link.linkType.outward,
               },
               inwardIssue: {
-                key: link.inwardIssue.issueKey,
+                id: link.inwardIssue.id,
+                issueKey: link.inwardIssue.issueKey,
+                title: link.inwardIssue.title,
+                description: link.inwardIssue.description,
+                statusId: link.inwardIssue.statusId,
+                priority: link.inwardIssue.priority,
               },
             });
           }
@@ -135,7 +145,7 @@ export class IssueService {
         ...issue,
         links: links,
       };
-      return issueWithLinks;
+      return JSON.parse(JSON.stringify(issueWithLinks));
     } catch (error) {
       console.error(`Error finding issue by key ${issueKey}:`, error);
       throw error;

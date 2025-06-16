@@ -21,10 +21,12 @@ const issueLinkCreateSchema = z.object({
 type IssueLinkCreateDTO = z.infer<typeof issueLinkCreateSchema>;
 
 import { injectable, container } from 'tsyringe';
+import { IssueLinkType as IssueLinkTypeEnum } from '../config/static-data';
 
 @injectable()
 export class IssueLinkService {
   async create(data: IssueLinkCreateDTO) {
+    console.log('IssueLinkService.create called with data:', data);
     try {
       issueLinkCreateSchema.parse(data);
     } catch (error) {
@@ -35,10 +37,15 @@ export class IssueLinkService {
     }
 
     const issueLinkTypeRepository = AppDataSource.getRepository(IssueLinkType);
-    const issueLinkType = await issueLinkTypeRepository.findOneBy({ name: data.type.name });
 
-    if (!issueLinkType) {
-      throw new BadRequestError('Invalid link type.');
+    let issueLinkType = await issueLinkTypeRepository.findOneBy({ name: data.type.name });
+
+    const isValidLinkType = Object.values(IssueLinkTypeEnum).some(
+      (linkTypeName) => linkTypeName === data.type.name,
+    );
+
+    if (!isValidLinkType) {
+      throw new BadRequestError(`Invalid link type: ${data.type.name}`);
     }
 
     const issueRepository = AppDataSource.getRepository(Issue);
@@ -56,10 +63,11 @@ export class IssueLinkService {
     // Persist the IssueLink entity to the database.
     const issueLinkRepository = AppDataSource.getRepository(IssueLink);
     const issueLink = issueLinkRepository.create({
-      linkType: issueLinkType,
-      inwardIssue: inwardIssue,
-      outwardIssue: outwardIssue,
+      linkTypeId: issueLinkType.id,
+      inwardIssueId: inwardIssue.id,
+      outwardIssueId: outwardIssue.id,
     });
+    console.log(`issueLink before save: ${JSON.stringify(issueLink, null, 2)}`);
 
     await issueLinkRepository.save(issueLink);
 

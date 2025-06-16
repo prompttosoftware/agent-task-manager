@@ -75,4 +75,7 @@ export class Issue {
 
     @Column({ type: 'json', nullable: true })
     links: any[];
+
+    @Column({ nullable: true })
+    self: string;
 }
