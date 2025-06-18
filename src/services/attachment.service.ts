@@ -2,11 +2,8 @@ import { Attachment } from "../db/entities/attachment.entity";
 import { Issue } from "../db/entities/issue.entity";
 import { AppDataSource } from "../data-source";
 import { NotFoundError } from "routing-controllers";
-import { v4 as uuidv4 } from 'uuid';
 import * as fsPromises from 'fs/promises';
-import * as fs from 'fs';
 import * as path from 'path';
-import { Multer } from 'multer';
 
 import { BadRequestError } from "routing-controllers";
 

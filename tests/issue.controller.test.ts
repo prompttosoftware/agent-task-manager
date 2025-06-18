@@ -115,11 +115,21 @@ describe('IssueController', () => {
           summary: 'Test Issue',
           description: 'Test Description',
           issuetype: {
+            name: 'Task',
+          },
+        },
+      };
+
+      const expectedParsedData = {
+        fields: {
+          summary: 'Test Issue',
+          description: 'Test Description',
+          issuetype: {
             id: '1',
           },
         },
       };
-      const expectedParsedData = validReqBody;
+      
       req.body = validReqBody;
       (issueService.create as jest.Mock).mockResolvedValue({
         id: 1,
@@ -144,7 +154,7 @@ describe('IssueController', () => {
           summary: 'in',
           description: 'Test Description',
           issuetype: {
-            id: '1',
+            name: 'Task',
           },
         },
       };
@@ -181,6 +191,18 @@ describe('IssueController', () => {
           reporterKey: 'user-1',
           assigneeKey: 'user-1',
           issuetype: {
+            name: 'Task',
+          },
+        },
+      };
+
+      const validReqBodyInternal = {
+        fields: {
+          summary: 'Test Issue',
+          description: 'Test Description',
+          reporterKey: 'user-1',
+          assigneeKey: 'user-1',
+          issuetype: {
             id: '1',
           },
         },
@@ -192,7 +214,7 @@ describe('IssueController', () => {
 
       await issueController.create(req, res);
 
-      expect(issueService.create).toHaveBeenCalledWith(validReqBody);
+      expect(issueService.create).toHaveBeenCalledWith(validReqBodyInternal);
       expect(mockedLogger.error).toHaveBeenCalledWith('Error creating issue:', new Error(errorMessage));
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: 'Internal server error' });

@@ -29,7 +29,7 @@ describe('Issue API Integration Tests', () => {
           description: 'Issue to attach files to',
           reporterKey: 'user-1',
           assigneeKey: 'user-1',
-          issuetype: { id: '1' }
+          issuetype: { name: 'Task' }
         }
       });
 
@@ -61,7 +61,7 @@ describe('Issue API Integration Tests', () => {
           description: 'Integration Test Description',
           reporterKey: 'user-1', // Assuming 'user-1' exists in your seed data
           assigneeKey: 'user-1', // Assuming 'user-1' exists in your seed data
-          issuetype: { id: '1' }
+          issuetype: { name: 'Task' }
         }
       });
 
@@ -81,7 +81,7 @@ describe('Issue API Integration Tests', () => {
           description: 'Description for the issue to get',
           reporterKey: 'user-1',
           assigneeKey: 'user-1',
-          issuetype: { id: '1' }
+          issuetype: { name: 'Task' }
         }
       });
 
@@ -118,7 +118,7 @@ describe('Issue API Integration Tests', () => {
           description: 'Description for the issue to delete',
           reporterKey: 'user-1', // Assuming 'user-1' exists in your seed data
           assigneeKey: 'user-1', // Assuming 'user-1' exists in your seed data
-          issuetype: { id: '1' }
+          issuetype: { name: 'Task' }
         }
       });
 
@@ -304,7 +304,7 @@ beforeAll(async () => {
         description: 'Issue to test transitions',
         reporterKey: 'user-1',
         assigneeKey: 'user-1',
-        issuetype: { id: '1' }
+        issuetype: { name: 'Task' }
       }
     });
 

@@ -9,15 +9,11 @@ import { User } from "./db/entities/user.entity";
 import { IssueLinkType } from "./db/entities/issue_link_type.entity";
 
 const AppDataSource = new DataSource({
-    type: config.NODE_ENV === 'test' ? "sqlite" : "postgres",
-    host: config.NODE_ENV === 'test' ? undefined : config.DB_HOST || 'localhost',
-    port: config.NODE_ENV === 'test' ? undefined : process.env.DB_PORT ? parseInt(process.env.DB_PORT as string, 10) : 5432,
-    username: config.NODE_ENV === 'test' ? undefined : config.DB_USER || 'postgres',
-    password: config.NODE_ENV === 'test' ? undefined : config.DB_PASS || 'password',
-    database: config.NODE_ENV === 'test' ? ":memory:" : config.DB_NAME || 'agent_task_db',
-    synchronize: config.NODE_ENV === 'test', // Enable auto schema sync for tests
+    type: "sqlite",
+    database: "src/db/agent-task-manager.sqlite", // or wherever you want the file
+    synchronize: true, // true only if you're okay with auto schema sync
     logging: config.NODE_ENV === 'development',
-    migrationsRun: config.NODE_ENV === 'test',
+    migrationsRun: false,
     entities: [Attachment, IssueLink, Issue, User, IssueType, IssueLinkType, Transition],
     migrations: [],
     subscribers: [],

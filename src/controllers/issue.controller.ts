@@ -7,6 +7,8 @@ import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service';
 import { createIssueBodySchema, updateAssigneeBodySchema } from './schemas/issue.schema';
 import { NotFoundError, BadRequestError } from '../utils/http-errors'; // Import NotFoundError
+import { getIssueTypeId, getIssueTypeName, IssueTypeMapping } from '../config/issue-type-mapping';
+import { Issue } from '../db/entities/issue.entity';
 
 const isNumber = (value: any): boolean => {
   if (typeof value === 'string') {
@@ -19,6 +21,20 @@ export interface SearchParams {
   status?: number;
   issuetype?: number;
   assignee?: string;
+}
+
+export interface GetIssuesForBoardParams {
+  boardId: string;
+  startAt?: number;
+  maxResults?: number;
+  fields?: string[];
+}
+
+export interface GetIssuesForBoardResponse {
+  startAt: number;
+  maxResults: number;
+  total: number;
+  issues: Issue[];
 }
 
 export class IssueController {
@@ -35,11 +51,32 @@ export class IssueController {
   async create(req: Request, res: Response): Promise<Response<any, Record<string, any>>> {
     try {
       const validatedData = createIssueBodySchema.parse(req.body);
-      const issue = await this.issueService.create(validatedData);
+      
+      // Convert issue type name to ID
+      let issueTypeId: number | undefined;
+      if (validatedData.fields?.issuetype?.name) {
+        issueTypeId = getIssueTypeId(validatedData.fields.issuetype.name);
+        if (!issueTypeId) {
+          return res.status(400).json({ 
+            message: 'Invalid issue type', 
+            validTypes: Object.keys(IssueTypeMapping.nameToId) 
+          });
+        }
+      }
+
+      // Create a modified data structure for the service
+      const serviceData = {
+        ...validatedData,
+        fields: {
+          ...validatedData.fields,
+          issuetype: issueTypeId ? { id: issueTypeId.toString() } : undefined
+        }
+      };
+
+      const issue = await this.issueService.create(serviceData);
 
       console.log("Issue object in controller:", issue);
 
-      // Assuming issueService.create returns an object with id, key, and self
       res.status(201).json({
         id: issue.id,
         key: issue.issueKey,
@@ -68,13 +105,17 @@ export class IssueController {
         return;
       }
       
+      // Convert issue type ID to name for response
+      const issueTypeName = getIssueTypeName(issue.issueTypeId);
+      
       res.status(200).json({
         data: {
           issueKey: issue.issueKey,
           self: `/rest/api/2/issue/${issue.issueKey}`,
           summary: issue.title,
           description: issue.description,
-          attachments: issue.attachments, // Include attachments
+          attachments: issue.attachments,
+          issuetype: issueTypeName ? { name: issueTypeName } : undefined,
           ...issue,
           links: issue.links,
         },
@@ -110,6 +151,7 @@ export class IssueController {
       }
     }
   }
+
   public async createAttachment(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>>> {
     console.log("Attachment upload route hit in controller.");
     console.log("req.files after hitting route:", req.files);
@@ -180,9 +222,22 @@ export class IssueController {
         return;
       }
 
-      if (issuetype !== undefined && !isNumber(issuetype)) {
-        res.status(400).json({ message: 'Invalid issuetype parameter: must be a number' });
-        return;
+      // Updated issuetype validation to accept name instead of ID
+      let issueTypeId: number | undefined;
+      if (issuetype !== undefined) {
+        if (typeof issuetype !== 'string') {
+          res.status(400).json({ message: 'Invalid issuetype parameter: must be a string' });
+          return;
+        }
+        
+        issueTypeId = getIssueTypeId(issuetype);
+        if (!issueTypeId) {
+          res.status(400).json({ 
+            message: 'Invalid issuetype parameter', 
+            validTypes: Object.keys(IssueTypeMapping.nameToId) 
+          });
+          return;
+        }
       }
 
       if (assignee !== undefined && typeof assignee !== 'string') {
@@ -192,13 +247,22 @@ export class IssueController {
 
       const searchParams: SearchParams = {
         status: status ? Number(status) : undefined,
-        issuetype: issuetype ? Number(issuetype) : undefined,
+        issuetype: issueTypeId,
         assignee: assignee ? String(assignee) : undefined,
       };
 
-      const issues = await this.issueService.search(searchParams);
+      const result = await this.issueService.search(searchParams);
 
-      res.status(200).json({ total: issues.total, issues: issues.issues });
+      // Convert issue type IDs to names in response
+      const issuesWithTypeNames = result.issues.map(issue => ({
+        ...issue,
+        issuetype: { name: getIssueTypeName(issue.issueTypeId) || 'Unknown' }
+      }));
+
+      res.status(200).json({ 
+        total: result.total, 
+        issues: issuesWithTypeNames 
+      });
     } catch (error: any) {
       logger.error('Error searching issues:', error);
       res.status(500).json({ message: 'Internal server error', error: error.message });
@@ -276,6 +340,57 @@ export class IssueController {
         logger.error(`Error transitioning issue with key ${req.params.issueKey}:`, error);
         res.status(500).json({ message: 'Internal server error' });
       }
+    }
+  }
+
+  async getIssuesForBoard(req: Request, res: Response): Promise<void> {
+    try {
+      const boardId = req.params.boardId;
+      const startAt = parseInt(req.query.startAt as string) || 0;
+      const maxResults = parseInt(req.query.maxResults as string) || 50;
+      const fields = req.query.fields ? (req.query.fields as string).split(',') : [];
+
+      const result = await this.issueService.getIssuesForBoard({
+        boardId,
+        startAt,
+        maxResults,
+        fields
+      });
+
+      // Convert issue type IDs to names in response
+      const issuesWithTypeNames = result.issues.map(issue => ({
+        ...issue,
+        issuetype: { name: getIssueTypeName(issue.issueTypeId) || 'Unknown' }
+      }));
+
+      res.status(200).json({
+        startAt: result.startAt,
+        maxResults: result.maxResults,
+        total: result.total,
+        issues: issuesWithTypeNames
+      });
+    } catch (error: any) {
+      logger.error('Error getting issues for board:', error);
+      res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+
+  async getEpics(req: Request, res: Response): Promise<void> {
+    try {
+      const epics = await this.issueService.getEpics();
+
+      // Convert issue type IDs to names in response
+      const epicsWithTypeNames = epics.map(epic => ({
+        ...epic,
+        issuetype: { name: getIssueTypeName(epic.issueTypeId) || 'Unknown' }
+      }));
+
+      res.status(200).json({ 
+        epics: epicsWithTypeNames 
+      });
+    } catch (error: any) {
+      logger.error('Error getting epics:', error);
+      res.status(500).json({ message: 'Internal server error', error: error.message });
     }
   }
 }

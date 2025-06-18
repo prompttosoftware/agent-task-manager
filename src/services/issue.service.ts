@@ -4,7 +4,7 @@ import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
 import { IssueStatusMap } from '../config/static-data';
-import { SearchParams } from '../controllers/issue.controller';
+import { GetIssuesForBoardParams, GetIssuesForBoardResponse, SearchParams } from '../controllers/issue.controller';
 
 
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
@@ -12,6 +12,7 @@ import { User } from '../db/entities/user.entity';
 import { AttachmentService, attachmentService } from "./attachment.service";
 import { issueLinkService } from "./issueLink.service";
 import { Repository } from 'typeorm';
+import { getIssueTypeId } from '../config/issue-type-mapping';
 
 export class IssueService {
   constructor(private issueRepository: Repository<Issue>, private attachmentService: AttachmentService) {}
@@ -229,7 +230,7 @@ export class IssueService {
     return { total, issues };
   }
 
-async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
+  async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: string }[]> {
     try {
       const issue = await this.findByKey(issueKey);
 
@@ -309,6 +310,209 @@ async getAvailableTransitions(issueKey: string): Promise<{ id: string; name: str
 
     } catch (error) {
       console.error(`Error transitioning issue ${issueKey} to status ${transition.id}:`, error);
+      throw error;
+    }
+  }
+
+  async getIssuesForBoard(params: GetIssuesForBoardParams): Promise<GetIssuesForBoardResponse> {
+    try {
+      const {
+        boardId,
+        startAt = 0,
+        maxResults = 50,
+        fields = []
+      } = params;
+
+      console.log(`Getting issues for board: ${boardId}, startAt: ${startAt}, maxResults: ${maxResults}`);
+
+      // Since the project doesn't use boards, we'll get all issues with pagination
+      const queryBuilder = this.issueRepository
+        .createQueryBuilder('issue')
+        .leftJoinAndSelect('issue.reporter', 'reporter')
+        .leftJoinAndSelect('issue.assignee', 'assignee');
+
+      // Add attachments if requested in fields
+      if (fields.includes('attachment') || fields.length === 0) {
+        queryBuilder.leftJoinAndSelect('issue.attachments', 'attachments');
+      }
+
+      // Add links if requested in fields
+      if (fields.includes('issuelinks') || fields.length === 0) {
+        queryBuilder
+          .leftJoinAndSelect('issue.inwardLinks', 'inwardIssueLink')
+          .leftJoinAndSelect('inwardIssueLink.linkType', 'inwardLinkType')
+          .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
+          .leftJoinAndSelect('outwardIssueLink.linkType', 'outwardLinkType')
+          .leftJoinAndSelect('inwardIssueLink.outwardIssue', 'inwardOutwardIssue')
+          .leftJoinAndSelect('outwardIssueLink.inwardIssue', 'outwardInwardIssue')
+          .addSelect(['inwardOutwardIssue.issueKey', 'outwardInwardIssue.issueKey', 'inwardOutwardIssue.id', 'outwardInwardIssue.id']);
+      }
+
+      // Apply pagination
+      queryBuilder
+        .skip(startAt)
+        .take(maxResults)
+        .orderBy('issue.id', 'ASC');
+
+      const [issues, total] = await queryBuilder.getManyAndCount();
+
+      // Process issues to include links if needed
+      const processedIssues = issues.map(issue => {
+        if (fields.includes('issuelinks') || fields.length === 0) {
+          const links = [];
+
+          if (issue.inwardLinks) {
+            issue.inwardLinks.forEach(link => {
+              if (link.outwardIssue) {
+                links.push({
+                  id: link.id,
+                  type: {
+                    name: link.linkType.name,
+                    inward: link.linkType.inward,
+                    outward: link.linkType.outward,
+                  },
+                  outwardIssue: {
+                    id: link.outwardIssue.id,
+                    issueKey: link.outwardIssue.issueKey,
+                    title: link.outwardIssue.title,
+                    description: link.outwardIssue.description,
+                    statusId: link.outwardIssue.statusId,
+                    priority: link.outwardIssue.priority,
+                  },
+                });
+              }
+            });
+          }
+
+          if (issue.outwardLinks) {
+            issue.outwardLinks.forEach(link => {
+              if (link.inwardIssue) {
+                links.push({
+                  id: link.id,
+                  type: {
+                    name: link.linkType.name,
+                    inward: link.linkType.inward,
+                    outward: link.linkType.outward,
+                  },
+                  inwardIssue: {
+                    id: link.inwardIssue.id,
+                    issueKey: link.inwardIssue.issueKey,
+                    title: link.inwardIssue.title,
+                    description: link.inwardIssue.description,
+                    statusId: link.inwardIssue.statusId,
+                    priority: link.inwardIssue.priority,
+                  },
+                });
+              }
+            });
+          }
+
+          return {
+            ...issue,
+            links: links,
+          };
+        }
+
+        return issue;
+      });
+
+      return {
+        startAt,
+        maxResults,
+        total,
+        issues: JSON.parse(JSON.stringify(processedIssues))
+      };
+    } catch (error) {
+      console.error(`Error getting issues for board ${params.boardId}:`, error);
+      throw error;
+    }
+  }
+
+  async getEpics(): Promise<Issue[]> {
+    try {
+      console.log('Getting epics');
+
+      const epicTypeId = getIssueTypeId('Epic'); // Get the Epic type ID
+      if (!epicTypeId) {
+        throw new Error('Epic issue type not configured');
+      }
+
+      const queryBuilder = this.issueRepository
+        .createQueryBuilder('issue')
+        .leftJoinAndSelect('issue.reporter', 'reporter')
+        .leftJoinAndSelect('issue.assignee', 'assignee')
+        .leftJoinAndSelect('issue.attachments', 'attachments')
+        .leftJoinAndSelect('issue.inwardLinks', 'inwardIssueLink')
+        .leftJoinAndSelect('inwardIssueLink.linkType', 'inwardLinkType')
+        .leftJoinAndSelect('issue.outwardLinks', 'outwardIssueLink')
+        .leftJoinAndSelect('outwardIssueLink.linkType', 'outwardLinkType')
+        .leftJoinAndSelect('inwardIssueLink.outwardIssue', 'inwardOutwardIssue')
+        .leftJoinAndSelect('outwardIssueLink.inwardIssue', 'outwardInwardIssue')
+        .addSelect(['inwardOutwardIssue.issueKey', 'outwardInwardIssue.issueKey', 'inwardOutwardIssue.id', 'outwardInwardIssue.id'])
+        .where('issue.issueTypeId = :epicTypeId', { epicTypeId })
+        .orderBy('issue.id', 'ASC');
+
+      const epics = await queryBuilder.getMany();
+
+      // Process epics to include links (same as before)
+      const processedEpics = epics.map(epic => {
+        const links = [];
+
+        if (epic.inwardLinks) {
+          epic.inwardLinks.forEach(link => {
+            if (link.outwardIssue) {
+              links.push({
+                id: link.id,
+                type: {
+                  name: link.linkType.name,
+                  inward: link.linkType.inward,
+                  outward: link.linkType.outward,
+                },
+                outwardIssue: {
+                  id: link.outwardIssue.id,
+                  issueKey: link.outwardIssue.issueKey,
+                  title: link.outwardIssue.title,
+                  description: link.outwardIssue.description,
+                  statusId: link.outwardIssue.statusId,
+                  priority: link.outwardIssue.priority,
+                },
+              });
+            }
+          });
+        }
+
+        if (epic.outwardLinks) {
+          epic.outwardLinks.forEach(link => {
+            if (link.inwardIssue) {
+              links.push({
+                id: link.id,
+                type: {
+                  name: link.linkType.name,
+                  inward: link.linkType.inward,
+                  outward: link.linkType.outward,
+                },
+                inwardIssue: {
+                  id: link.inwardIssue.id,
+                  issueKey: link.inwardIssue.issueKey,
+                  title: link.inwardIssue.title,
+                  description: link.inwardIssue.description,
+                  statusId: link.inwardIssue.statusId,
+                  priority: link.inwardIssue.priority,
+                },
+              });
+            }
+          });
+        }
+
+        return {
+          ...epic,
+          links: links,
+        };
+      });
+
+      return JSON.parse(JSON.stringify(processedEpics));
+    } catch (error) {
+      console.error('Error getting epics:', error);
       throw error;
     }
   }
