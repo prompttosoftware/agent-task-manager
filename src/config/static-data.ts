@@ -18,6 +18,18 @@ export const IssueStatusMap: { [key: number]: string } = {
   [IssueStatus.Done]: 'Done',
 };
 
+export enum StatusCategory {
+  TODO = "To Do",
+  IN_PROGRESS = "In Progress",
+  DONE = "Done"
+ }
+
+ export const IssueStatusCategoryMap: { [key: number]: StatusCategory } = {
+  [IssueStatus.ToDo]: StatusCategory.TODO,
+  [IssueStatus.InProgress]: StatusCategory.IN_PROGRESS,
+  [IssueStatus.Done]: StatusCategory.DONE,
+};
+
 /**
  * Issue Types
  * 1: Bug

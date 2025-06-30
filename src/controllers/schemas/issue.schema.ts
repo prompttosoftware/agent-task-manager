@@ -31,3 +31,16 @@ export const updateAssigneeBodySchema = z.object({
 });
 
 export type UpdateAssigneeInput = z.infer<typeof updateAssigneeBodySchema>;
+
+export const updateIssueBodySchema = z.object({
+  fields: z.object({
+    summary: z.string().optional(),
+    description: z.string().optional(),
+    reporterKey: z.string().optional(),
+    assigneeKey: z.string().optional(),
+    priority: z.string().optional(),
+    issuetype: z.object({
+      name: z.string()
+    }).optional()
+  }).optional()
+});

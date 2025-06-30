@@ -5,7 +5,7 @@ import { IssueService } from '../services/issue.service';
 import logger from '../utils/logger';
 import { AttachmentService } from '../services/attachment.service';
 import { IssueLinkService } from '../services/issueLink.service';
-import { createIssueBodySchema, updateAssigneeBodySchema } from './schemas/issue.schema';
+import { createIssueBodySchema, updateAssigneeBodySchema, updateIssueBodySchema } from './schemas/issue.schema';
 import { NotFoundError, BadRequestError } from '../utils/http-errors'; // Import NotFoundError
 import { getIssueTypeId, getIssueTypeName, IssueTypeMapping } from '../config/issue-type-mapping';
 import { Issue } from '../db/entities/issue.entity';
@@ -21,6 +21,7 @@ export interface SearchParams {
   status?: number;
   issuetype?: number;
   assignee?: string;
+  parent?: string;
 }
 
 export interface GetIssuesForBoardParams {
@@ -28,6 +29,8 @@ export interface GetIssuesForBoardParams {
   startAt?: number;
   maxResults?: number;
   fields?: string[];
+  issueTypes?: number[];
+  parentKey?: string;
 }
 
 export interface GetIssuesForBoardResponse {
@@ -214,7 +217,7 @@ export class IssueController {
 
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { status, issuetype, assignee } = req.query;
+      const { status, issuetype, assignee, parent } = req.query;
 
       // Validate parameters
       if (status !== undefined && !isNumber(status)) {
@@ -245,10 +248,17 @@ export class IssueController {
         return;
       }
 
+      // New parent parameter validation
+      if (parent !== undefined && typeof parent !== 'string') {
+        res.status(400).json({ message: 'Invalid parent parameter: must be a string' });
+        return;
+      }
+
       const searchParams: SearchParams = {
         status: status ? Number(status) : undefined,
         issuetype: issueTypeId,
         assignee: assignee ? String(assignee) : undefined,
+        parent: parent ? String(parent) : undefined, // New parent parameter
       };
 
       const result = await this.issueService.search(searchParams);
@@ -256,7 +266,11 @@ export class IssueController {
       // Convert issue type IDs to names in response
       const issuesWithTypeNames = result.issues.map(issue => ({
         ...issue,
-        issuetype: { name: getIssueTypeName(issue.issueTypeId) || 'Unknown' }
+        issuetype: { name: getIssueTypeName(issue.issueTypeId) || 'Unknown' },
+        parent: issue.parent ? { 
+          issueKey: issue.parent.issueKey,
+          title: issue.parent.title 
+        } : null // Include parent info in response
       }));
 
       res.status(200).json({ 
@@ -349,12 +363,22 @@ export class IssueController {
       const startAt = parseInt(req.query.startAt as string) || 0;
       const maxResults = parseInt(req.query.maxResults as string) || 50;
       const fields = req.query.fields ? (req.query.fields as string).split(',') : [];
+      
+      // Parse issue types from query parameter
+      const issueTypes = req.query.issueTypes 
+        ? (req.query.issueTypes as string).split(',').map(id => parseInt(id)).filter(id => !isNaN(id))
+        : [];
+      
+      // Get parent key from query parameter
+      const parentKey = req.query.parentKey as string;
 
       const result = await this.issueService.getIssuesForBoard({
         boardId,
         startAt,
         maxResults,
-        fields
+        fields,
+        issueTypes,
+        parentKey
       });
 
       // Convert issue type IDs to names in response
@@ -391,6 +415,60 @@ export class IssueController {
     } catch (error: any) {
       logger.error('Error getting epics:', error);
       res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+  }
+
+  async update(req: Request, res: Response): Promise<void> {
+    try {
+      const issueKey = req.params.issueKey;
+      const validatedData = updateIssueBodySchema.parse(req.body);
+
+      if (!validatedData.fields) {
+        res.status(400).json({ message: 'No fields provided for update' });
+        return;
+      }
+
+      // Convert issue type name to ID if provided
+      let updateFields: any = { ...validatedData.fields };
+      
+      if (validatedData.fields.issuetype?.name) {
+        const issueTypeId = getIssueTypeId(validatedData.fields.issuetype.name);
+        if (!issueTypeId) {
+          res.status(400).json({ 
+            message: 'Invalid issue type', 
+            validTypes: Object.keys(IssueTypeMapping.nameToId) 
+          });
+          return;
+        }
+        updateFields.issuetype = { id: issueTypeId.toString() };
+      }
+
+      const updatedIssue = await this.issueService.update(issueKey, updateFields);
+
+      // Convert issue type ID to name for response
+      const issueTypeName = getIssueTypeName(updatedIssue.issueTypeId);
+
+      res.status(200).json({
+        data: {
+          issueKey: updatedIssue.issueKey,
+          self: `/rest/api/2/issue/${updatedIssue.issueKey}`,
+          summary: updatedIssue.title,
+          description: updatedIssue.description,
+          attachments: updatedIssue.attachments,
+          issuetype: issueTypeName ? { name: issueTypeName } : undefined,
+          ...updatedIssue,
+          links: updatedIssue.links,
+        },
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        res.status(400).json({ message: 'Validation error', errors: error.errors });
+      } else if (error instanceof NotFoundError) {
+        res.status(404).json({ message: 'Issue not found' });
+      } else {
+        logger.error(`Error updating issue with key ${req.params.issueKey}:`, error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
     }
   }
 }

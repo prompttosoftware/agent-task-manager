@@ -3,9 +3,8 @@ export { NotFoundError };
 import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
-import { IssueStatusMap } from '../config/static-data';
+import { IssueStatusCategoryMap, IssueStatusMap } from '../config/static-data';
 import { GetIssuesForBoardParams, GetIssuesForBoardResponse, SearchParams } from '../controllers/issue.controller';
-
 
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
 import { User } from '../db/entities/user.entity';
@@ -14,13 +13,19 @@ import { issueLinkService } from "./issueLink.service";
 import { Repository } from 'typeorm';
 import { getIssueTypeId } from '../config/issue-type-mapping';
 
+export interface UpdateIssueFields {
+  summary?: string;
+  description?: string;
+  reporterKey?: string;
+  assigneeKey?: string;
+  priority?: string;
+  issuetype?: {
+    id: string;
+  };
+}
+
 export class IssueService {
   constructor(private issueRepository: Repository<Issue>, private attachmentService: AttachmentService) {}
-
-  async getIssue(id: number): Promise<any> {
-    // TODO: Implement getIssue logic
-    return { id, title: 'Test Issue', description: 'This is a test issue.' };
-  }
 
   async create(data: CreateIssueInput): Promise<Issue> {
     try {
@@ -64,6 +69,77 @@ export class IssueService {
         throw error; // Re-throw the specific error
       }
       // Re-throw the error so the controller can handle it
+      throw error;
+    }
+  }
+
+  async update(issueKey: string, fields: UpdateIssueFields): Promise<Issue> {
+    try {
+      console.log(`Updating issue with key: ${issueKey}`, fields);
+
+      // Find the existing issue
+      const issue = await this.issueRepository.findOne({
+        where: { issueKey },
+        relations: ['reporter', 'assignee']
+      });
+
+      if (!issue) {
+        throw new NotFoundError(`Issue with key ${issueKey} not found`);
+      }
+
+      const userRepository = AppDataSource.getRepository(User);
+
+      // Update fields if provided
+      if (fields.summary !== undefined) {
+        issue.title = fields.summary;
+      }
+
+      if (fields.description !== undefined) {
+        issue.description = fields.description;
+      }
+
+      if (fields.priority !== undefined) {
+        issue.priority = fields.priority;
+      }
+
+      if (fields.issuetype?.id !== undefined) {
+        issue.issueTypeId = parseInt(fields.issuetype.id);
+      }
+
+      // Handle reporter update
+      if (fields.reporterKey !== undefined) {
+        if (fields.reporterKey) {
+          const reporter = await userRepository.findOne({ where: { userKey: fields.reporterKey } });
+          if (!reporter) {
+            throw new NotFoundError(`Reporter with key ${fields.reporterKey} not found`);
+          }
+          issue.reporter = reporter;
+        } else {
+          issue.reporter = null;
+        }
+      }
+
+      // Handle assignee update
+      if (fields.assigneeKey !== undefined) {
+        if (fields.assigneeKey) {
+          const assignee = await userRepository.findOne({ where: { userKey: fields.assigneeKey } });
+          if (!assignee) {
+            throw new NotFoundError(`Assignee with key ${fields.assigneeKey} not found`);
+          }
+          issue.assignee = assignee;
+        } else {
+          issue.assignee = null;
+        }
+      }
+
+      // Save the updated issue
+      await this.issueRepository.save(issue);
+      console.log("Issue after update:", issue);
+
+      // Return the updated issue with relations
+      return await this.findByKey(issueKey);
+    } catch (error) {
+      console.error(`Error updating issue with key ${issueKey}:`, error);
       throw error;
     }
   }
@@ -210,7 +286,8 @@ export class IssueService {
   async search(searchParams: SearchParams): Promise<{ total: number; issues: Issue[] }> {
     const queryBuilder = this.issueRepository.createQueryBuilder('issue')
       .leftJoinAndSelect('issue.reporter', 'reporter')
-      .leftJoinAndSelect('issue.assignee', 'assignee');
+      .leftJoinAndSelect('issue.assignee', 'assignee')
+      .leftJoinAndSelect('issue.parent', 'parent');
 
     if (searchParams.status !== undefined) {
       queryBuilder.andWhere('issue.statusId = :status', { status: searchParams.status });
@@ -223,6 +300,17 @@ export class IssueService {
     if (searchParams.assignee !== undefined) {
       queryBuilder.leftJoin('issue.assignee', 'user')
         .andWhere('user.userKey = :assignee', { assignee: searchParams.assignee });
+    }
+
+    if (searchParams.parent !== undefined) {
+      if (searchParams.parent === 'null' || searchParams.parent === '') {
+        // Filter for issues with no parent (top-level issues)
+        queryBuilder.andWhere('issue.parentId IS NULL');
+      } else {
+        // Filter for issues with specific parent key
+        queryBuilder.leftJoin('issue.parent', 'parentIssue')
+          .andWhere('parentIssue.issueKey = :parent', { parent: searchParams.parent });
+      }
     }
 
     const [issues, total] = await queryBuilder.getManyAndCount();
@@ -244,10 +332,11 @@ export class IssueService {
       // In real workflow this would use a status-transition table
       // Instead we simply filter available statuses that is not current
       const transitions = Object.entries(availableStatuses)
-        .filter(([statusId, statusName]) => parseInt(statusId) !== currentStatusId)
+        .filter(([statusId]) => parseInt(statusId) !== currentStatusId)
         .map(([statusId, statusName]: [string, string]) => ({
           id: statusId,
           name: statusName,
+          category: IssueStatusCategoryMap[statusName]
         }));
 
       return transitions;
@@ -320,7 +409,9 @@ export class IssueService {
         boardId,
         startAt = 0,
         maxResults = 50,
-        fields = []
+        fields = [],
+        issueTypes = [],
+        parentKey
       } = params;
 
       console.log(`Getting issues for board: ${boardId}, startAt: ${startAt}, maxResults: ${maxResults}`);
@@ -346,6 +437,19 @@ export class IssueService {
           .leftJoinAndSelect('inwardIssueLink.outwardIssue', 'inwardOutwardIssue')
           .leftJoinAndSelect('outwardIssueLink.inwardIssue', 'outwardInwardIssue')
           .addSelect(['inwardOutwardIssue.issueKey', 'outwardInwardIssue.issueKey', 'inwardOutwardIssue.id', 'outwardInwardIssue.id']);
+      }
+
+      // Filter by issue types if provided
+      if (issueTypes.length > 0) {
+        queryBuilder.andWhere('issue.issueTypeId IN (:...issueTypes)', { issueTypes });
+      }
+
+      // Filter by parent key if provided
+      if (parentKey) {
+        // Join with parent issue to filter by parent key
+        queryBuilder
+          .leftJoin('issue.parent', 'parentIssue')
+          .andWhere('parentIssue.issueKey = :parentKey', { parentKey });
       }
 
       // Apply pagination
