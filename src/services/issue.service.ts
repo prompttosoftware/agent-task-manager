@@ -329,8 +329,6 @@ export class IssueService {
       const currentStatusId = issue.statusId;
       const availableStatuses = IssueStatusMap;
 
-      // In real workflow this would use a status-transition table
-      // Instead we simply filter available statuses that is not current
       const transitions = Object.entries(availableStatuses)
         .filter(([statusId]) => parseInt(statusId) !== currentStatusId)
         .map(([statusId, statusName]: [string, string]) => ({
@@ -406,7 +404,6 @@ export class IssueService {
   async getIssuesForBoard(params: GetIssuesForBoardParams): Promise<GetIssuesForBoardResponse> {
     try {
       const {
-        boardId,
         startAt = 0,
         maxResults = 50,
         fields = [],
@@ -414,7 +411,7 @@ export class IssueService {
         parentKey
       } = params;
 
-      console.log(`Getting issues for board: ${boardId}, startAt: ${startAt}, maxResults: ${maxResults}`);
+      console.log(`Getting issues for board, startAt: ${startAt}, maxResults: ${maxResults}`);
 
       // Since the project doesn't use boards, we'll get all issues with pagination
       const queryBuilder = this.issueRepository
@@ -527,7 +524,7 @@ export class IssueService {
         issues: JSON.parse(JSON.stringify(processedIssues))
       };
     } catch (error) {
-      console.error(`Error getting issues for board ${params.boardId}:`, error);
+      console.error(`Error getting issues for board`, error);
       throw error;
     }
   }

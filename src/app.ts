@@ -24,7 +24,7 @@ const metadataService = new MetadataService();
 const metadataController = new MetadataController(metadataService, issueService);
 
 // Override the metadata routes with the instantiated controller
-app.use('/rest/api/2', metadataRoutes(metadataController));
+app.use(metadataRoutes(metadataController));
 
 app.use(issueRoutes);
 app.use(issueLinkRoutes);

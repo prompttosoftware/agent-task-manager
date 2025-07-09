@@ -71,7 +71,7 @@ router.put('/rest/api/2/issue/:issueKey', issueController.update.bind(issueContr
 router.get('/rest/api/2/issue/:issueKey/transitions', issueController.getIssueTransitions.bind(issueController));
 router.post('/rest/api/2/issue/:issueKey/transitions', issueController.transition.bind(issueController));
 router.get('/rest/api/2/search', issueController.search.bind(issueController));
-router.get('/rest/api/2/board/:boardId/issues', issueController.getIssuesForBoard.bind(issueController));
+router.get('/rest/api/2/board/issues', issueController.getIssuesForBoard.bind(issueController));
 router.get('/rest/api/2/getepics', issueController.getEpics.bind(issueController));
 
 router.put('/rest/api/2/issue/:issueKey/assignee', issueController.updateAssignee.bind(issueController));

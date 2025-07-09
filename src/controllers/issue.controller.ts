@@ -25,7 +25,6 @@ export interface SearchParams {
 }
 
 export interface GetIssuesForBoardParams {
-  boardId: string;
   startAt?: number;
   maxResults?: number;
   fields?: string[];
@@ -112,16 +111,17 @@ export class IssueController {
       const issueTypeName = getIssueTypeName(issue.issueTypeId);
       
       res.status(200).json({
-        data: {
-          issueKey: issue.issueKey,
-          self: `/rest/api/2/issue/${issue.issueKey}`,
+        key: issue.issueKey,
+        self: `/rest/api/2/issue/${issue.issueKey}`,
+        id: issue.id,
+        fields: {
           summary: issue.title,
           description: issue.description,
           attachments: issue.attachments,
           issuetype: issueTypeName ? { name: issueTypeName } : undefined,
           ...issue,
           links: issue.links,
-        },
+        }
       });
     } catch (error: any) {
       if (error instanceof NotFoundError) {
@@ -359,7 +359,6 @@ export class IssueController {
 
   async getIssuesForBoard(req: Request, res: Response): Promise<void> {
     try {
-      const boardId = req.params.boardId;
       const startAt = parseInt(req.query.startAt as string) || 0;
       const maxResults = parseInt(req.query.maxResults as string) || 50;
       const fields = req.query.fields ? (req.query.fields as string).split(',') : [];
@@ -373,7 +372,6 @@ export class IssueController {
       const parentKey = req.query.parentKey as string;
 
       const result = await this.issueService.getIssuesForBoard({
-        boardId,
         startAt,
         maxResults,
         fields,
@@ -449,16 +447,14 @@ export class IssueController {
       const issueTypeName = getIssueTypeName(updatedIssue.issueTypeId);
 
       res.status(200).json({
-        data: {
-          issueKey: updatedIssue.issueKey,
-          self: `/rest/api/2/issue/${updatedIssue.issueKey}`,
-          summary: updatedIssue.title,
-          description: updatedIssue.description,
-          attachments: updatedIssue.attachments,
-          issuetype: issueTypeName ? { name: issueTypeName } : undefined,
-          ...updatedIssue,
-          links: updatedIssue.links,
-        },
+        issueKey: updatedIssue.issueKey,
+        self: `/rest/api/2/issue/${updatedIssue.issueKey}`,
+        summary: updatedIssue.title,
+        description: updatedIssue.description,
+        attachments: updatedIssue.attachments,
+        issuetype: issueTypeName ? { name: issueTypeName } : undefined,
+        ...updatedIssue,
+        links: updatedIssue.links,
       });
     } catch (error: any) {
       if (error.name === 'ZodError') {
