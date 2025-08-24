@@ -40,6 +40,10 @@ export class IssueLinkService {
 
     let issueLinkType = await issueLinkTypeRepository.findOneBy({ name: data.type.name });
 
+    if (!issueLinkType) {
+      throw new BadRequestError(`Issue link type "${data.type.name}" not found.`);
+    }
+
     const isValidLinkType = Object.values(IssueLinkTypeEnum).some(
       (linkTypeName) => linkTypeName === data.type.name,
     );

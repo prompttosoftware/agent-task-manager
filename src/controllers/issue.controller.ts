@@ -87,11 +87,17 @@ export class IssueController {
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Validation error', errors: error.errors });
-      } else if (error instanceof Error && (error.message === 'Reporter not found' || error.message === 'Assignee not found')) {
-        return res.status(404).json({ message: 'Reporter or Assignee not found' });
+      } else if (error instanceof NotFoundError) {
+        return res.status(404).json({ message: error.message });
+      } else if (
+          error instanceof Error && 
+          (error.message === 'Reporter not found' || 
+          error.message === 'Assignee not found' ||
+          error.message === 'Parent issue not found') // <-- ADD THIS CONDITION
+        ) {
+        return res.status(404).json({ message: error.message });
       } else {
         logger.error('Error creating issue:', error);
-        console.log('Caught error:', error);
         res.status(500).json({ message: 'Internal server error' });
       }
     }

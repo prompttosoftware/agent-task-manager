@@ -47,11 +47,23 @@ export class IssueService {
         }
       }
 
+      let parentIssue: Issue | null = null;
+      if (data.fields.parent?.key) {
+        parentIssue = await this.issueRepository.findOne({ 
+          where: { issueKey: data.fields.parent.key } 
+        });
+        if (!parentIssue) {
+          // This error will be caught by the controller
+          throw new Error('Parent issue not found');
+        }
+      }
+
       const issue = this.issueRepository.create({
         title: data.fields?.summary,
         description: data.fields?.description,
         reporter: reporter,
         assignee: assignee,
+        parent: parentIssue,
         statusId: 11, // Default status
         priority: 'Medium', // Default priority
         issueTypeId: data.fields?.issuetype?.id ? parseInt(data.fields.issuetype.id) : 1
@@ -61,6 +73,8 @@ export class IssueService {
       issue.issueKey = this.generateIssueKey(issue.id);
       await this.issueRepository.save(issue);
       console.log("Issue after second save:", issue);
+
+
       return issue;
     } catch (error) {
       console.error('Error in IssueService.create:', error);

@@ -6,6 +6,9 @@ export const createIssueBodySchema = z.object({
     issuetype: z.object({
       name: z.string(),
     }),
+    parent: z.object({
+      key: z.string(),
+    }).optional(),
     reporterKey: z.string().optional(),
     assigneeKey: z.string().optional(),
     description: z.string().optional(),
@@ -18,6 +21,9 @@ const createIssueBodySchemaInternal = z.object({
     issuetype: z.object({
       id: z.string(),
     }),
+    parent: z.object({
+      key: z.string(),
+    }).optional(),
     reporterKey: z.string().optional(),
     assigneeKey: z.string().optional(),
     description: z.string().optional(),

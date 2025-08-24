@@ -1,55 +1,34 @@
-import express, { Request, Response } from 'express';
-import { ParsedQs } from 'qs';
+import express from 'express';
 import { app as expressApp } from './app';
-// import config from './config'; // TODO: Implement config
-
 import config from './config';
-import logger from './utils/logger';
+import { AppDataSource } from "./data-source";
+import { seedDatabase } from "./db/seed"; // Make sure path is correct
 
 const PORT = config.PORT || 3000;
 
-import { AppDataSource } from "./data-source";
-
-async function logTableSchemas() {
-  try {
-    const userSchema = await AppDataSource.query("PRAGMA table_info('user');");
-    console.log("User Table Schema:", userSchema);
-
-    const issueSchema = await AppDataSource.query("PRAGMA table_info('issue');");
-    console.log("Issue Table Schema:", issueSchema);
-
-    const attachmentSchema = await AppDataSource.query("PRAGMA table_info('attachment');");
-    console.log("Attachment Table Schema:", attachmentSchema);
-
-    const issueLinkSchema = await AppDataSource.query("PRAGMA table_info('issue_link');");
-    console.log("Issue Link Table Schema:", issueLinkSchema);
-
-  } catch (error) {
-    console.error("Error retrieving table schemas:", error);
-  }
-}
-
+// Initialize Data Source and Seed Database
 AppDataSource.initialize()
-  .then(() => {
-    // Call the function to log table schemas
-    logTableSchemas();
-
+  .then(async () => {
     console.log("Data Source has been initialized!");
+
+    console.log("Synchronizing database schema...");
+    await AppDataSource.synchronize();
+    console.log("Database schema is ready.");
+
+    await seedDatabase(); 
+    console.log("Database has been seeded.");
+
+    // Now that the DB is ready, start the server
+    expressApp.get('/health', (req, res) => {
+      res.status(200).send('OK');
+    });
+
+    expressApp.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+
   })
   .catch((err) => {
-    console.error("Error during Data Source initialization:", err);
+    console.error("Error during application startup:", err);
+    process.exit(1); // Exit if DB connection fails
   });
-
-expressApp.get('/testlog', (req, res) => {
-  logger.info('Test log route hit');
-  res.send('Test log');
-});
-logger.info("Logging middleware attached");
-
-expressApp.get('/health', (req: Request, res: Response) => {
-  res.status(200).send('OK');
-});
-
-expressApp.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
