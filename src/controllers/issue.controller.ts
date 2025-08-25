@@ -9,6 +9,7 @@ import { createIssueBodySchema, updateAssigneeBodySchema, updateIssueBodySchema 
 import { NotFoundError, BadRequestError } from '../utils/http-errors'; // Import NotFoundError
 import { getIssueTypeId, getIssueTypeName, IssueTypeMapping } from '../config/issue-type-mapping';
 import { Issue } from '../db/entities/issue.entity';
+import { StatusCategory } from 'config/static-data';
 
 const isNumber = (value: any): boolean => {
   if (typeof value === 'string') {
@@ -22,6 +23,9 @@ export interface SearchParams {
   issuetype?: number;
   assignee?: string;
   parent?: string;
+  statusCategory?: 'Done' | 'Not Done';
+  excludeContainerEpics?: boolean;
+  maxResults?: number;
 }
 
 export interface GetIssuesForBoardParams {
@@ -223,7 +227,7 @@ export class IssueController {
 
   async search(req: Request, res: Response): Promise<void> {
     try {
-      const { status, issuetype, assignee, parent } = req.query;
+      const { status, issuetype, assignee, parent, statusCategory, excludeContainerEpics, maxResults } = req.query;
 
       // Validate parameters
       if (status !== undefined && !isNumber(status)) {
@@ -254,9 +258,23 @@ export class IssueController {
         return;
       }
 
-      // New parent parameter validation
       if (parent !== undefined && typeof parent !== 'string') {
         res.status(400).json({ message: 'Invalid parent parameter: must be a string' });
+        return;
+      }
+
+      if (statusCategory !== undefined && !['Done', 'Not Done'].includes(String(statusCategory))) {
+        res.status(400).json({ message: 'Invalid statusCategory parameter: must be "Done" or "Not Done"' });
+        return;
+      }
+      
+      if (excludeContainerEpics !== undefined && !['true', 'false'].includes(String(excludeContainerEpics))) {
+        res.status(400).json({ message: 'Invalid excludeContainerEpics parameter: must be "true" or "false"' });
+        return;
+      }
+
+      if (maxResults !== undefined && (isNaN(Number(maxResults)) || Number(maxResults) < 0)) {
+        res.status(400).json({ message: 'Invalid maxResults parameter: must be a non-negative number' });
         return;
       }
 
@@ -264,7 +282,10 @@ export class IssueController {
         status: status ? Number(status) : undefined,
         issuetype: issueTypeId,
         assignee: assignee ? String(assignee) : undefined,
-        parent: parent ? String(parent) : undefined, // New parent parameter
+        parent: parent ? String(parent) : undefined,
+        statusCategory: statusCategory as 'Done' | 'Not Done' | undefined,
+        excludeContainerEpics: excludeContainerEpics === 'true',
+        maxResults: maxResults !== undefined ? Number(maxResults) : undefined
       };
 
       const result = await this.issueService.search(searchParams);

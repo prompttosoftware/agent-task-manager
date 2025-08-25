@@ -3,7 +3,7 @@ export { NotFoundError };
 import util from 'util';
 import { AppDataSource } from '../data-source';
 import { Issue } from '../db/entities/issue.entity';
-import { IssueStatusCategoryMap, IssueStatusMap } from '../config/static-data';
+import { IssueStatus, IssueStatusCategoryMap, IssueStatusMap, IssueType } from '../config/static-data';
 import { GetIssuesForBoardParams, GetIssuesForBoardResponse, SearchParams } from '../controllers/issue.controller';
 
 import { CreateIssueInput } from '../controllers/schemas/issue.schema';
@@ -325,6 +325,32 @@ export class IssueService {
         queryBuilder.leftJoin('issue.parent', 'parentIssue')
           .andWhere('parentIssue.issueKey = :parent', { parent: searchParams.parent });
       }
+    }
+
+    // Handle statusCategory filter
+    if (searchParams.statusCategory) {
+        if (searchParams.statusCategory === 'Done') {
+            queryBuilder.andWhere('issue.statusId IN (:...statusIds)', { statusIds: [IssueStatus.Done] });
+        } else if (searchParams.statusCategory === 'Not Done') {
+            queryBuilder.andWhere('issue.statusId NOT IN (:...statusIds)', { statusIds: [IssueStatus.Done] });
+        }
+    }
+
+    // Handle the logic to exclude Epics that have children
+    if (searchParams.excludeContainerEpics) {
+        const subQuery = this.issueRepository.createQueryBuilder()
+            .select('DISTINCT sub_issue.parentId', 'parentId')
+            .from('issue', 'sub_issue')
+            .where('sub_issue.parentId IS NOT NULL');
+
+        queryBuilder.andWhere(
+          `(issue.issueTypeId != :epicTypeId OR issue.id NOT IN (${subQuery.getQuery()}))`, 
+          { epicTypeId: IssueType.Epic }
+        );
+    }
+
+    if (searchParams.maxResults !== undefined && searchParams.maxResults >= 0) {
+        queryBuilder.take(searchParams.maxResults);
     }
 
     const [issues, total] = await queryBuilder.getManyAndCount();
