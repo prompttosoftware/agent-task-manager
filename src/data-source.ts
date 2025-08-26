@@ -10,7 +10,7 @@ import { IssueLinkType } from "./db/entities/issue_link_type.entity";
 
 const AppDataSource = new DataSource({
     type: "sqlite",
-    database: "src/db/agent-task-manager.sqlite", // or wherever you want the file
+    database: "src/db/agent-task-manager.sqlite",
     synchronize: false, // true only if you're okay with auto schema sync
     logging: config.NODE_ENV === 'development',
     migrationsRun: false,
